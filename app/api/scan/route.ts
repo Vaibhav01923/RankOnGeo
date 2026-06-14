@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AIEngine, BrandData, ScanResult, VisibilityScore } from "@/lib/types";
-import { serverClient } from "@/lib/supabase";
+import { clientFromRequest } from "@/lib/supabase";
 import { scanGoogleAIMode } from "@/lib/browser-scanner";
 
 const getAnthropic = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
 
   // Persist to Supabase if brand has an id
   if (brand.id) {
-    const db = serverClient();
+    const db = clientFromRequest(req);
 
     const { data: runRow } = await db
       .from("scan_runs")

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import { BrandData, TrackedPrompt } from "@/lib/types";
-import { serverClient } from "@/lib/supabase";
+import { clientFromRequest } from "@/lib/supabase";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -119,7 +119,7 @@ ${content}`;
     return NextResponse.json({ error: "Failed to parse analysis. Try again." }, { status: 500 });
   }
 
-  const db = serverClient();
+  const db = clientFromRequest(req);
 
   // Upsert brand (reuse existing record if same domain)
   const { data: brandRow, error: brandErr } = await db

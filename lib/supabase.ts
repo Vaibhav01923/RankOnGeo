@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient, createServerClient } from "@supabase/ssr";
+import type { NextRequest } from "next/server";
 
 const url = () => process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anonKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -9,7 +10,17 @@ export function createSupabaseBrowserClient() {
   return createBrowserClient(url(), anonKey());
 }
 
-// Server-side client for API routes — uses service role key to bypass RLS
+// API route client — reads the user's session cookies from the request so auth.uid() works with RLS
+export function clientFromRequest(req: NextRequest) {
+  return createServerClient(url(), anonKey(), {
+    cookies: {
+      getAll() { return req.cookies.getAll(); },
+      setAll() {},
+    },
+  });
+}
+
+// Server-side client — uses service role key if configured, otherwise falls back to anon key
 export function serverClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const key = serviceKey?.startsWith("eyJ") ? serviceKey : anonKey();

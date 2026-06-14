@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverClient } from "@/lib/supabase";
+import { clientFromRequest } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return NextResponse.json({ error: "brandId is required" }, { status: 400 });
 
-  const db = serverClient();
+  const db = clientFromRequest(req);
 
   // Fetch last 20 scan runs with their scores
   const { data: runs, error } = await db
