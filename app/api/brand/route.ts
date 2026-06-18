@@ -7,10 +7,13 @@ export async function GET(req: NextRequest) {
 
   const db = clientFromRequest(req);
 
+  const { data: { user } } = await db.auth.getUser();
+
   const { data: brand, error } = await db
     .from("brands")
     .select("*")
     .eq("id", brandId)
+    .eq("user_id", user?.id)
     .single();
 
   if (error || !brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });

@@ -7,7 +7,18 @@ export async function GET(req: NextRequest) {
 
   const db = clientFromRequest(req);
 
-  // Fetch last 20 scan runs with their scores
+  const { data: { user } } = await db.auth.getUser();
+
+  // Verify the brand belongs to the requesting user before returning history
+  const { data: brand } = await db
+    .from("brands")
+    .select("id")
+    .eq("id", brandId)
+    .eq("user_id", user?.id)
+    .single();
+
+  if (!brand) return NextResponse.json({ runs: [] });
+
   const { data: runs, error } = await db
     .from("scan_runs")
     .select(`

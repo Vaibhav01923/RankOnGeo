@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandData, TrackedPrompt } from "@/lib/types";
-import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 type Step = "url" | "brand" | "prompts";
 
@@ -51,12 +50,10 @@ function SetupContent() {
     setLoading(true);
     setError("");
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
       const res = await fetch("/api/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: d.trim(), competitors: comps, userId: user?.id }),
+        body: JSON.stringify({ domain: d.trim(), competitors: comps }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");

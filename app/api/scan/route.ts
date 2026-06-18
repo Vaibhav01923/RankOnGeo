@@ -111,15 +111,47 @@ async function queryEngine(engine: AIEngine, prompt: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  const { brand, engines, promptIds }: { brand: BrandData; engines: AIEngine[]; promptIds?: string[] } = await req.json();
+  const { brandId, engines, promptIds }: { brandId: string; engines: AIEngine[]; promptIds?: string[] } = await req.json();
 
-  if (!brand || !engines?.length) {
-    return NextResponse.json({ error: "brand and engines are required" }, { status: 400 });
+  if (!brandId || !engines?.length) {
+    return NextResponse.json({ error: "brandId and engines are required" }, { status: 400 });
   }
 
+  const db = clientFromRequest(req);
+  const { data: { user } } = await db.auth.getUser();
+
+  // Fetch brand server-side and verify ownership
+  const { data: brandRow } = await db
+    .from("brands")
+    .select("*")
+    .eq("id", brandId)
+    .eq("user_id", user?.id)
+    .single();
+
+  if (!brandRow) {
+    return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  }
+
+  const { data: promptRows } = await db
+    .from("tracked_prompts")
+    .select("id, text, category")
+    .eq("brand_id", brandId);
+
+  const brand: BrandData = {
+    id: brandRow.id,
+    domain: brandRow.domain,
+    name: brandRow.name,
+    niche: brandRow.niche,
+    description: brandRow.description,
+    targetAudience: brandRow.target_audience,
+    competitors: brandRow.competitors,
+    trackedPrompts: (promptRows ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category })),
+  };
+
+  const allPrompts = brand.trackedPrompts;
   const prompts = promptIds
-    ? brand.trackedPrompts.filter((p) => promptIds.includes(p.id))
-    : brand.trackedPrompts;
+    ? allPrompts.filter((p) => promptIds.includes(p.id))
+    : allPrompts;
 
   const promptsToRun = prompts;
   const jobs: Array<{ prompt: typeof prompts[0]; engine: AIEngine }> = [];
@@ -175,9 +207,8 @@ export async function POST(req: NextRequest) {
     ? Math.round(scores.reduce((s, sc) => s + sc.score, 0) / scores.length)
     : 0;
 
-  // Persist to Supabase if brand has an id
+  // Persist to Supabase
   if (brand.id) {
-    const db = clientFromRequest(req);
 
     const { data: runRow } = await db
       .from("scan_runs")

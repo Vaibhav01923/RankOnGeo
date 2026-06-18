@@ -164,7 +164,7 @@ function DashboardPage() {
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brand, engines: selectedEngines }),
+        body: JSON.stringify({ brandId: brand.id, engines: selectedEngines }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Scan failed");
