@@ -275,7 +275,6 @@ export default function LandingPage() {
   const router = useRouter();
   const [domain, setDomain] = useState("");
   const [wordIdx, setWordIdx] = useState(0);
-  const [competitors, setCompetitors] = useState("");
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
@@ -287,10 +286,8 @@ export default function LandingPage() {
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
     const d = domain.trim();
-    const c = competitors.trim();
     const params = new URLSearchParams();
     if (d) params.set("domain", d);
-    if (c) params.set("competitors", c);
     router.push(`/audit${params.size ? `?${params}` : ""}`);
   }
 
@@ -387,16 +384,6 @@ export default function LandingPage() {
               >
                 Free analysis <span>→</span>
               </button>
-            </div>
-            <div className="flex items-center gap-2 bg-white/70 border border-[#d8cfc5] rounded-xl px-4 shadow-sm">
-              <svg className="w-4 h-4 text-[#bbb] shrink-0" fill="none" viewBox="0 0 16 16"><path d="M2 8h12M8 2v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-              <input
-                type="text"
-                value={competitors}
-                onChange={(e) => setCompetitors(e.target.value)}
-                placeholder="Competitors (optional) — e.g. competitor1.com, competitor2.com"
-                className="flex-1 py-3 text-sm text-gray-900 bg-transparent outline-none placeholder-[#bbb]"
-              />
             </div>
           </form>
 
@@ -808,13 +795,6 @@ export default function LandingPage() {
               Free analysis →
             </button>
           </div>
-          <input
-            type="text"
-            value={competitors}
-            onChange={(e) => setCompetitors(e.target.value)}
-            placeholder="Competitors (optional) — e.g. competitor1.com, competitor2.com"
-            className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-white/40"
-          />
         </form>
         <p className="text-xs text-white/30 tracking-wide uppercase">
           Free analysis · Paid plans track up to 7 engines · Results in ~60s

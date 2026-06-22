@@ -59,7 +59,6 @@ function AuditContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const domainParam = searchParams.get("domain") ?? "";
-  const competitorsParam = searchParams.get("competitors") ?? "";
 
   const [domain, setDomain] = useState(domainParam);
   const [inputDomain, setInputDomain] = useState(domainParam);
@@ -386,7 +385,6 @@ function AuditContent() {
                 <button
                   onClick={() => {
                     const params = new URLSearchParams({ domain });
-                    if (competitorsParam) params.set("competitors", competitorsParam);
                     router.push(`/setup?${params}`);
                   }}
                   className="w-full border border-gray-200 hover:border-gray-400 text-gray-900 text-sm font-medium py-2.5 rounded-lg transition-colors mb-6"
