@@ -344,14 +344,19 @@ export default function LandingPage() {
           <h1 className="text-[80px] leading-[1.0] font-black tracking-tight mb-8" style={{ letterSpacing: "-0.03em" }}>
             Be the answer<br />
             in{" "}
-            <span className="inline-block min-w-[200px] text-left relative">
-              <span
-                key={wordIdx}
-                className="text-[#c8372d] inline-block"
-                style={{ animation: "fadeSlideIn 0.4s ease forwards" }}
-              >
-                {ROTATING_WORDS[wordIdx]}
-              </span>
+            <span className="inline-grid text-[#c8372d]">
+              {ROTATING_WORDS.map((word, i) => (
+                <span
+                  key={word}
+                  className="col-start-1 row-start-1 transition-opacity duration-300"
+                  style={{
+                    opacity: i === wordIdx ? 1 : 0,
+                    animation: i === wordIdx ? "fadeSlideIn 0.4s ease forwards" : "none",
+                  }}
+                >
+                  {word}
+                </span>
+              ))}
             </span>{" "}
             AI&nbsp;search.
           </h1>
