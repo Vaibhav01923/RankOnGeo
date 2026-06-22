@@ -74,7 +74,7 @@ function ArticleContent() {
             <rect x="18" y="8" width="4" height="14" rx="1" fill="white" />
           </svg>
           <span className="text-lg font-bold tracking-tight text-gray-900">
-            SEO<span className="text-red-600">itis</span>
+            App<span className="text-red-600">Name</span>
           </span>
         </a>
         <div className="flex items-center gap-3">

@@ -63,8 +63,8 @@ const PRICING = [
 
 const FAQS = [
   {
-    q: "What's the difference between SEO and what SEOitis does?",
-    a: "Traditional SEO ranks pages in Google's blue links. SEOitis tracks and improves how generative engines — ChatGPT, Perplexity, AI Overviews, Claude, Gemini, AI Mode, and Grok — answer questions about your brand. They use different signals (claim density, source authority, schema, citation graph), and that's increasingly where your customers are searching.",
+    q: "What's the difference between SEO and what AppName does?",
+    a: "Traditional SEO ranks pages in Google's blue links. AppName tracks and improves how generative engines — ChatGPT, Perplexity, AI Overviews, Claude, Gemini, AI Mode, and Grok — answer questions about your brand. They use different signals (claim density, source authority, schema, citation graph), and that's increasingly where your customers are searching.",
   },
   {
     q: "Which AI engines do you track?",
@@ -72,11 +72,11 @@ const FAQS = [
   },
   {
     q: "How is this different from Peec AI, Otterly, or CrowdReply?",
-    a: "Most tools stop at measurement. SEOitis closes the loop: it diagnoses your gaps, generates citation-ready content, and publishes directly to your CMS — then re-measures automatically. It's a full pipeline, not just a dashboard.",
+    a: "Most tools stop at measurement. AppName closes the loop: it diagnoses your gaps, generates citation-ready content, and publishes directly to your CMS — then re-measures automatically. It's a full pipeline, not just a dashboard.",
   },
   {
     q: "Will I get penalized for AI-generated content?",
-    a: "No. Google's guidance targets low-quality, mass-produced content regardless of how it was made. SEOitis generates source-grounded, brand-voiced drafts you review before publishing. Quality is the signal, not the tool.",
+    a: "No. Google's guidance targets low-quality, mass-produced content regardless of how it was made. AppName generates source-grounded, brand-voiced drafts you review before publishing. Quality is the signal, not the tool.",
   },
   {
     q: "How fast can I expect to see results?",
@@ -106,7 +106,7 @@ function DashboardMockup() {
           <div className="w-3 h-3 rounded-full bg-[#c8c0b8]" />
         </div>
         <div className="flex-1 bg-[#d8d0c8] rounded-md px-3 py-1 text-xs text-center text-[#888] font-mono">
-          app.seoitis.com/overview
+          app.yourapp.com/overview
         </div>
         <div className="bg-[#111] text-white text-xs px-3 py-1 rounded-md font-medium">
           Live demo · click around
@@ -119,7 +119,7 @@ function DashboardMockup() {
         <div className="w-56 bg-[#faf8f5] border-r border-[#e8e3dc] flex flex-col shrink-0">
           <div className="px-4 py-3 border-b border-[#e8e3dc] flex items-center gap-2">
             <LogoIcon size={22} />
-            <span className="font-bold text-sm tracking-tight">SEO<span className="text-[#c8372d]">itis</span></span>
+            <span className="font-bold text-sm tracking-tight">App<span className="text-[#c8372d]">Name</span></span>
             <span className="ml-auto text-[10px] bg-[#e8e3dc] text-[#888] px-1.5 py-0.5 rounded">v2.0</span>
           </div>
           {/* Brand selector */}
@@ -301,7 +301,7 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between px-8 py-4 max-w-7xl mx-auto">
         <div className="flex items-center gap-2.5">
           <LogoIcon />
-          <span className="text-xl font-bold tracking-tight">SEO<span className="text-[#c8372d]">itis</span></span>
+          <span className="text-xl font-bold tracking-tight">App<span className="text-[#c8372d]">Name</span></span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-sm text-[#555]">
           <a href="#platform" className="hover:text-[#111] transition-colors">Platform</a>
@@ -438,7 +438,7 @@ export default function LandingPage() {
           <p className="text-xs uppercase tracking-widest text-[#888] font-semibold mb-4">Platform</p>
           <h2 className="text-4xl font-black tracking-tight mb-4">One pipeline. Four instruments.</h2>
           <p className="text-[#666] max-w-xl mx-auto">
-            Most tools tell you that you&apos;re not visible. SEOitis closes the loop: measure, research, write, publish, re-measure. Automatically.
+            Most tools tell you that you&apos;re not visible. AppName closes the loop: measure, research, write, publish, re-measure. Automatically.
           </p>
         </div>
 
@@ -777,7 +777,7 @@ export default function LandingPage() {
         </div>
         <p className="text-center text-sm text-[#888] mt-8">
           Still have questions?{" "}
-          <a href="mailto:hello@seoitis.com" className="text-[#c8372d] hover:underline">Drop us a line</a>{" "}
+          <a href="mailto:hello@yourapp.com" className="text-[#c8372d] hover:underline">Drop us a line</a>{" "}
           and we&apos;ll reply within a business day.
         </p>
       </section>
@@ -822,7 +822,7 @@ export default function LandingPage() {
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <LogoIcon />
-              <span className="text-lg font-bold">SEO<span className="text-[#c8372d]">itis</span></span>
+              <span className="text-lg font-bold">App<span className="text-[#c8372d]">Name</span></span>
             </div>
             <p className="text-sm text-[#888] mb-4">The visibility layer for AI search. Track. Treat. Repeat.</p>
             <div className="flex gap-3">
@@ -860,7 +860,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="border-t border-[#1a1a1a] pt-6 flex items-center justify-between text-xs text-[#555]">
-          <span>© 2026 SEOitis</span>
+          <span>© 2026 AppName</span>
           <div className="flex gap-4">
             {["Privacy", "Terms", "DPA", "Security"].map((l) => (
               <a key={l} href="#" className="hover:text-white transition-colors">{l}</a>
