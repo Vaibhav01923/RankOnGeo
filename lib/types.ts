@@ -74,10 +74,3 @@ export type RedditThread = {
   draftedReply: string | null;
 };
 
-export type UserPlan = {
-  plan: "starter" | "growth" | "enterprise";
-  creditsBalance: number;
-  creditsMonthly: number;
-  stripeCustomerId: string | null;
-  currentPeriodEnd: string | null;
-};

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AIEngine, BrandData, GapItem, RedditThread, ScanResult, SocialKeyword, UserPlan, VisibilityScore } from "@/lib/types";
+import { AIEngine, BrandData, GapItem, RedditThread, ScanResult, SocialKeyword, VisibilityScore } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
@@ -178,7 +178,6 @@ function DashboardPage() {
   const [activeThread, setActiveThread] = useState<RedditThread | null>(null);
   const [draftReply, setDraftReply] = useState("");
   const [draftingReply, setDraftingReply] = useState(false);
-  const [userPlan, setUserPlan] = useState<UserPlan | null>(null);
   const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
@@ -215,11 +214,6 @@ function DashboardPage() {
       })
       .finally(() => setLoadingBrand(false));
 
-    fetch("/api/credits")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.error) setUserPlan(d);
-      });
   }, []);
 
   useEffect(() => {
@@ -394,7 +388,7 @@ function DashboardPage() {
             </div>
             <div className="text-left min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{brand.name}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">{userPlan?.plan ?? "STARTER"}</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider">OWNER</p>
             </div>
             <svg className="ml-auto w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -445,9 +439,7 @@ function DashboardPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-gray-700 truncate">{userEmail || brand.domain}</p>
-              <p className="text-[10px] text-gray-400">
-                {userPlan ? `${userPlan.creditsBalance} credits` : "Workspace"}
-              </p>
+              <p className="text-[10px] text-gray-400">Workspace</p>
             </div>
             <button
               onClick={signOut}
