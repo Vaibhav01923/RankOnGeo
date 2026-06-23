@@ -69,6 +69,18 @@ export async function POST(req: NextRequest) {
     ? `The user identified these competitors: ${userCompetitors.join(", ")}.`
     : "";
 
+  const db = clientFromRequest(req);
+  const { data: { user } } = await db.auth.getUser();
+  const userId = user?.id;
+
+  const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 20, pro: 50, business: 150, scale: 400 };
+  let userPlan = "starter";
+  if (userId) {
+    const { data: planRow } = await db.from("user_plans").select("plan").eq("user_id", userId).single();
+    if (planRow?.plan) userPlan = planRow.plan;
+  }
+  const promptCount = PLAN_AUTO_COUNTS[userPlan] ?? 20;
+
   const prompt = `You are an AI visibility analyst. Analyze this website content from "${domain}" and return JSON with this exact structure:
 
 {
@@ -79,17 +91,17 @@ export async function POST(req: NextRequest) {
   "competitors": ["Competitor 1", "Competitor 2", "Competitor 3", "Competitor 4"],
   "trackedPrompts": [
     { "id": "p1", "text": "prompt text here", "category": "discovery" },
-    ...20 prompts total
+    ...${promptCount} prompts total
   ]
 }
 
-For trackedPrompts, generate 20 prompts that real users type into ChatGPT, Claude, or Perplexity. These are AI DISCOVERY prompts — the user has a problem and doesn't know which brand solves it yet. This brand should be the ideal answer ChatGPT gives them.
+For trackedPrompts, generate exactly ${promptCount} prompts that real users type into ChatGPT, Claude, or Perplexity. These are AI DISCOVERY prompts — the user has a problem and doesn't know which brand solves it yet. This brand should be the ideal answer ChatGPT gives them.
 
 Prompt rules:
 - Write from the searcher's perspective, NOT the brand's perspective
-- 16 of the 20 must be brand-agnostic (no brand name) — problem-first queries the brand would ideally appear in
-- 4 of the 20 must include the actual brand name: mix of "what is [Brand]", "[Brand] vs [Competitor]", "is [Brand] worth it", "[Brand] reviews"
-- Spread across categories: "discovery" (what's the best X for Y), "comparison" (X vs Y for Z use case), "how-to" (how do I solve X), "recommendation" (recommend me a tool that does X)
+- 80% must be brand-agnostic (no brand name) — problem-first queries the brand would ideally appear in
+- 20% must include the actual brand name: mix of "what is [Brand]", "[Brand] vs [Competitor]", "is [Brand] worth it", "[Brand] reviews"
+- Spread evenly across categories: "discovery" (what's the best X for Y), "comparison" (X vs Y for Z use case), "how-to" (how do I solve X), "recommendation" (recommend me a tool that does X)
 - Use natural conversational language — how someone actually talks to ChatGPT
 - Be hyper-specific to this brand's niche and audience, not generic industry queries
 - BAD: "best marketing tools" — too vague, brand would never surface
@@ -106,7 +118,7 @@ ${content}`;
 
   const message = await getClient().chat.completions.create({
     model: "gpt-4o-mini",
-    max_tokens: 2000,
+    max_tokens: Math.max(2000, promptCount * 60),
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
   });
@@ -119,12 +131,6 @@ ${content}`;
   } catch {
     return NextResponse.json({ error: "Failed to parse analysis. Try again." }, { status: 500 });
   }
-
-  const db = clientFromRequest(req);
-
-  // Get user id from the server-side session
-  const { data: { user } } = await db.auth.getUser();
-  const userId = user?.id;
 
   // Upsert brand — conflict on (domain, user_id) so each user can track the same domain independently
   const { data: brandRow, error: brandErr } = await db

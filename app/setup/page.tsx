@@ -5,12 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 
-const PLAN_PROMPT_LIMITS: Record<string, number> = {
-  starter: 20,
-  pro: 50,
-  business: 150,
-  scale: 400,
-};
+const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 20, pro: 50, business: 150, scale: 400 };
+const PLAN_CUSTOM_LIMITS: Record<string, number> = { starter: 5, pro: 10, business: 25, scale: 50 };
 
 type Step = "url" | "brand" | "prompts";
 
@@ -121,8 +117,9 @@ function SetupContent() {
 
   function addPrompt() {
     const trimmed = newPrompt.trim();
-    const limit = PLAN_PROMPT_LIMITS[userPlan] ?? 20;
-    if (!trimmed || prompts.length >= limit) return;
+    const customCount = prompts.filter((p) => p.category === "custom").length;
+    const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
+    if (!trimmed || customCount >= customLimit) return;
     setPrompts([...prompts, { id: `custom-${Date.now()}`, text: trimmed, category: "custom" }]);
     setNewPrompt("");
   }
@@ -357,12 +354,24 @@ function SetupContent() {
               </button>
             </div>
 
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs text-gray-400">{prompts.length} / {PLAN_PROMPT_LIMITS[userPlan] ?? 20} prompts selected</p>
-              {prompts.length >= (PLAN_PROMPT_LIMITS[userPlan] ?? 20) && (
-                <p className="text-xs text-amber-600 font-medium">Limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
-              )}
-            </div>
+            {(() => {
+              const customCount = prompts.filter((p) => p.category === "custom").length;
+              const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
+              const autoCount = prompts.filter((p) => p.category !== "custom").length;
+              const autoLimit = PLAN_AUTO_COUNTS[userPlan] ?? 20;
+              return (
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-gray-400">
+                    {autoCount} auto-generated · {customCount} / {customLimit} custom added
+                    <span className="text-gray-300 mx-1">·</span>
+                    {autoLimit} auto limit on {userPlan} plan
+                  </p>
+                  {customCount >= customLimit && (
+                    <p className="text-xs text-amber-600 font-medium">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
+                  )}
+                </div>
+              );
+            })()}
             <button
               onClick={handleStart}
               disabled={saving || prompts.length === 0}
