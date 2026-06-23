@@ -79,7 +79,7 @@ type SavedArticle = {
   id: string;
   title: string;
   keyword: string;
-  status: "draft" | "review" | "published" | "scheduled" | "queued" | "writing";
+  status: "draft" | "review" | "published" | "scheduled" | "writing";
   seoScore: number;
   wordCount: number;
   createdAt: string;
@@ -239,7 +239,6 @@ const STATUS_COLORS: Record<string, string> = {
   review: "bg-yellow-50 text-yellow-700",
   published: "bg-green-50 text-green-700",
   scheduled: "bg-blue-50 text-blue-700",
-  queued: "bg-stone-100 text-stone-600",
   writing: "bg-purple-50 text-purple-700",
 };
 
@@ -307,7 +306,7 @@ function DashboardPage() {
   // Articles state
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<SavedArticle | null>(null);
-  const [articleFilter, setArticleFilter] = useState<"all" | "draft" | "review" | "published" | "scheduled" | "queued">("all");
+  const [articleFilter, setArticleFilter] = useState<"all" | "draft" | "review" | "published" | "scheduled">("all");
   const [showNewArticleModal, setShowNewArticleModal] = useState(false);
   const [newArticleTopic, setNewArticleTopic] = useState("");
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
@@ -1703,7 +1702,7 @@ function DashboardPage() {
               }).filter((d) => d > 0)
             );
 
-            const pipeline = savedArticles.filter((a) => ["review", "queued", "scheduled", "writing"].includes(a.status));
+            const pipeline = savedArticles.filter((a) => ["review", "scheduled", "writing"].includes(a.status));
             const publishedThisMonth = publishingLog.filter((e) => {
               const d = new Date(e.created_at);
               return e.status === "published" && d.getFullYear() === year && d.getMonth() === month;
