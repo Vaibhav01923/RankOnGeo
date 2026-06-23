@@ -21,6 +21,7 @@ function ArticleContent() {
   const niche = searchParams.get("niche") ?? "";
   const topCompetitor = searchParams.get("competitor") ?? "";
   const missingEnginesRaw = searchParams.get("engines") ?? "[]";
+  const brandId = searchParams.get("brandId") ?? "";
 
   useEffect(() => {
     if (!gapPrompt || !brandName) { setLoading(false); return; }
@@ -49,6 +50,13 @@ function ArticleContent() {
         setTitle(data.title);
         setWordCount(data.wordCount);
         sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount }));
+        if (brandId) {
+          fetch("/api/articles", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brandId, title: data.title, content: data.article, keyword: gapPrompt, status: "draft", wordCount: data.wordCount }),
+          }).catch(() => {});
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -141,7 +149,7 @@ function ArticleContent() {
                   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
                   strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
                   a: ({ href, children }) => <a href={href} className="text-red-600 underline underline-offset-2 hover:text-red-700">{children}</a>,
-                  blockquote: ({ children }) => <blockquote className="border-l-4 border-stone-200 pl-5 italic text-gray-500 my-5">{children}</blockquote>,
+                  blockquote: ({ children }) => <blockquote className="bg-stone-50 rounded-lg px-5 py-3 italic text-gray-500 my-5 text-sm">{children}</blockquote>,
                   code: ({ className, children, ...props }) => {
                     const isBlock = className?.startsWith("language-");
                     const lang = className?.replace("language-", "") ?? "";

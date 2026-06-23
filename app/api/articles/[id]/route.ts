@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
+import { clientFromRequest } from "@/lib/supabase";
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const db = clientFromRequest(req);
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const body = await req.json();
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (body.status !== undefined) updates.status = body.status;
+  if (body.scheduledAt !== undefined) updates.scheduled_at = body.scheduledAt;
+  if (body.channelId !== undefined) updates.channel_id = body.channelId;
+  if (body.publishedAt !== undefined) updates.published_at = body.publishedAt;
+  if (body.content !== undefined) updates.content = body.content;
+  if (body.title !== undefined) updates.title = body.title;
+  if (body.seoScore !== undefined) updates.seo_score = body.seoScore;
+
+  const { data, error } = await db
+    .from("articles")
+    .update(updates)
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ article: data });
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const db = clientFromRequest(req);
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const { error } = await db.from("articles").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}

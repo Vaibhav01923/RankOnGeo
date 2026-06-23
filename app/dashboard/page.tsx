@@ -90,6 +90,50 @@ type SavedArticle = {
 
 type AgentMessage = { role: "user" | "assistant"; content: string };
 
+type PublishingChannel = {
+  id: string;
+  name: string;
+  type: "wordpress" | "webflow" | "webhook" | "discord" | "framer";
+  url: string;
+  api_key?: string;
+  status: "active" | "paused";
+  last_published_at?: string;
+  created_at: string;
+};
+
+type PublishingLogEntry = {
+  id: string;
+  channel_id?: string;
+  brand_id: string;
+  article_id?: string;
+  article_title?: string;
+  status: "published" | "failed" | "running";
+  error_message?: string;
+  created_at: string;
+  publishing_channels?: { name: string; type: string } | null;
+};
+
+type AlertDestination = {
+  id: string;
+  name: string;
+  kind: "slack" | "webhook" | "discord" | "email";
+  url?: string;
+  email?: string;
+  status: "active" | "paused";
+  events_count: number;
+  created_at: string;
+};
+
+type AlertDelivery = {
+  id: string;
+  destination_id: string;
+  event_type: string;
+  status: "succeeded" | "failed";
+  error_detail?: string;
+  created_at: string;
+  alert_destinations?: { name: string; kind: string } | null;
+};
+
 function getSourceType(domain: string): string {
   if (domain.includes("reddit.com")) return "Reddit";
   if (["youtube.com", "twitter.com", "x.com", "instagram.com", "linkedin.com", "tiktok.com"].some((d) => domain.includes(d))) return "Social";
@@ -199,39 +243,33 @@ const STATUS_COLORS: Record<string, string> = {
   writing: "bg-purple-50 text-purple-700",
 };
 
-const DEMO_PUBLISHING_CHANNELS = [
-  { name: "WordPress", url: "blog.example.com", status: "Active", lastPublished: "2d ago" },
-  { name: "Webflow", url: "example.com/resources", status: "Active", lastPublished: "5d ago" },
-  { name: "Webhook", url: "zapier · content feed", status: "Paused", lastPublished: "—" },
-];
+function mapArticleFromDb(a: Record<string, unknown>): SavedArticle {
+  return {
+    id: a.id as string,
+    title: a.title as string,
+    keyword: (a.keyword as string) ?? "",
+    status: (a.status as SavedArticle["status"]) ?? "draft",
+    seoScore: (a.seo_score as number) ?? 0,
+    wordCount: (a.word_count as number) ?? 0,
+    createdAt: a.created_at as string,
+    updatedAt: (a.updated_at as string) ?? (a.created_at as string),
+    brandId: a.brand_id as string,
+    content: a.content as string | undefined,
+  };
+}
 
-const DEMO_ACTIVITY_LOG = [
-  { time: "12m", channel: "WordPress", article: "The complete guide to AI visibility", status: "Published" },
-  { time: "3h", channel: "Webflow", article: "Why AI skips your brand", status: "Published" },
-  { time: "6h", channel: "WordPress", article: "Building company knowledge base", status: "Running" },
-  { time: "1d", channel: "Webhook", article: "AI docs collaboration", status: "Failed" },
-];
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
 
-const DEMO_UPCOMING = [
-  { date: "Jun 28", channel: "WordPress", article: "AI visibility for SaaS" },
-  { date: "Jun 30", channel: "Webflow", article: "Project management for remote teams" },
-  { date: "Jul 3", channel: "WordPress", article: "AI writing assistants compared" },
-];
-
-const DEMO_ALERT_DESTINATIONS = [
-  { name: "Eng team Slack", kind: "slack", events: 4, status: "Active" },
-  { name: "Ops webhook", kind: "webhook", events: 6, status: "Active" },
-  { name: "Marketing email", kind: "email", events: 2, status: "Active" },
-  { name: "Discord alerts", kind: "discord", events: 3, status: "Paused" },
-];
-
-const DEMO_RECENT_DELIVERIES = [
-  { channel: "slack", event: "visibility.drop", time: "2m", result: "succeeded" },
-  { channel: "webhook", event: "competitor.overtake", time: "41m", result: "succeeded" },
-  { channel: "email", event: "weekly.digest", time: "3h", result: "succeeded" },
-  { channel: "discord", event: "citation.new", time: "5h", result: "failed", detail: "401 unauthorized" },
-  { channel: "webhook", event: "sentiment.dip", time: "8h", result: "succeeded" },
-];
+const CHANNEL_ICONS: Record<string, string> = {
+  wordpress: "📝", webflow: "🌊", webhook: "🔗", discord: "💬", framer: "🎨",
+};
 
 function DashboardPage() {
   const router = useRouter();
@@ -272,6 +310,25 @@ function DashboardPage() {
   // Keywords state
   const [keywordSearch, setKeywordSearch] = useState("");
 
+  // Publishing state
+  const [publishingChannels, setPublishingChannels] = useState<PublishingChannel[]>([]);
+  const [publishingLog, setPublishingLog] = useState<PublishingLogEntry[]>([]);
+  const [showAddChannel, setShowAddChannel] = useState(false);
+  const [newChannel, setNewChannel] = useState({ name: "", type: "webhook", url: "", apiKey: "" });
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [publishArticleId, setPublishArticleId] = useState("");
+  const [publishChannelId, setPublishChannelId] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishResult, setPublishResult] = useState<{ success: boolean; error?: string } | null>(null);
+
+  // Alerts state
+  const [alertDestinations, setAlertDestinations] = useState<AlertDestination[]>([]);
+  const [alertDeliveries, setAlertDeliveries] = useState<AlertDelivery[]>([]);
+  const [showAddAlert, setShowAddAlert] = useState(false);
+  const [newAlert, setNewAlert] = useState({ name: "", kind: "slack", url: "", email: "" });
+  const [addingAlert, setAddingAlert] = useState(false);
+
   useEffect(() => {
     const savedTab = sessionStorage.getItem("dashTab");
     if (savedTab) setActiveTab(savedTab as Tab);
@@ -291,11 +348,10 @@ function DashboardPage() {
         fetch(`/api/history?brandId=${brandId}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
         fetch(`/api/keywords?brandId=${brandId}`).then((r) => r.json()).then((d) => setSocialKeywords(d.keywords ?? []));
         fetch(`/api/reddit/threads?brandId=${brandId}`).then((r) => r.json()).then((d) => setRedditThreads(d.threads ?? []));
-
-        const stored = localStorage.getItem(`rankongeo_articles_${brandId}`);
-        if (stored) {
-          try { setSavedArticles(JSON.parse(stored)); } catch { /* ignore */ }
-        }
+        fetch(`/api/articles?brandId=${brandId}`).then((r) => r.json()).then((d) => setSavedArticles((d.articles ?? []).map(mapArticleFromDb)));
+        fetch(`/api/publishing/channels?brandId=${brandId}`).then((r) => r.json()).then((d) => setPublishingChannels(d.channels ?? []));
+        fetch(`/api/publishing/log?brandId=${brandId}`).then((r) => r.json()).then((d) => setPublishingLog(d.log ?? []));
+        fetch(`/api/alerts?brandId=${brandId}`).then((r) => r.json()).then((d) => { setAlertDestinations(d.destinations ?? []); setAlertDeliveries(d.deliveries ?? []); });
       })
       .finally(() => setLoadingBrand(false));
   }, []);
@@ -328,6 +384,63 @@ function DashboardPage() {
       setAgentMessages([{ role: "assistant", content: greeting }]);
     }
   }, [activeTab, agentInitialized, brand, overallScore, gaps]);
+
+  async function addChannel() {
+    if (!brand?.id || !newChannel.name || !newChannel.url) return;
+    setAddingChannel(true);
+    const res = await fetch("/api/publishing/channels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: brand.id, name: newChannel.name, type: newChannel.type, url: newChannel.url, apiKey: newChannel.apiKey }) });
+    const d = await res.json();
+    if (d.channel) { setPublishingChannels((prev) => [...prev, d.channel]); setShowAddChannel(false); setNewChannel({ name: "", type: "webhook", url: "", apiKey: "" }); }
+    setAddingChannel(false);
+  }
+
+  async function toggleChannel(id: string, currentStatus: string) {
+    const status = currentStatus === "active" ? "paused" : "active";
+    const res = await fetch("/api/publishing/channels", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    const d = await res.json();
+    if (d.channel) setPublishingChannels((prev) => prev.map((ch) => ch.id === id ? d.channel : ch));
+  }
+
+  async function deleteChannel(id: string) {
+    await fetch(`/api/publishing/channels?id=${id}`, { method: "DELETE" });
+    setPublishingChannels((prev) => prev.filter((ch) => ch.id !== id));
+  }
+
+  async function publishNow() {
+    if (!publishArticleId || !publishChannelId || !brand?.id) return;
+    setPublishing(true);
+    setPublishResult(null);
+    const res = await fetch("/api/publishing/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelId: publishChannelId, articleId: publishArticleId }) });
+    const d = await res.json();
+    setPublishResult(d);
+    if (d.success) {
+      fetch(`/api/publishing/log?brandId=${brand.id}`).then((r) => r.json()).then((dd) => setPublishingLog(dd.log ?? []));
+      fetch(`/api/publishing/channels?brandId=${brand.id}`).then((r) => r.json()).then((dd) => setPublishingChannels(dd.channels ?? []));
+      setSavedArticles((prev) => prev.map((a) => a.id === publishArticleId ? { ...a, status: "published" as const } : a));
+    }
+    setPublishing(false);
+  }
+
+  async function addAlertDestination() {
+    if (!brand?.id || !newAlert.name || !newAlert.kind) return;
+    setAddingAlert(true);
+    const res = await fetch("/api/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: brand.id, name: newAlert.name, kind: newAlert.kind, url: newAlert.url || undefined, email: newAlert.email || undefined }) });
+    const d = await res.json();
+    if (d.destination) { setAlertDestinations((prev) => [...prev, d.destination]); setShowAddAlert(false); setNewAlert({ name: "", kind: "slack", url: "", email: "" }); }
+    setAddingAlert(false);
+  }
+
+  async function toggleAlertDestination(id: string, currentStatus: string) {
+    const status = currentStatus === "active" ? "paused" : "active";
+    const res = await fetch("/api/alerts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    const d = await res.json();
+    if (d.destination) setAlertDestinations((prev) => prev.map((dest) => dest.id === id ? d.destination : dest));
+  }
+
+  async function deleteAlertDestination(id: string) {
+    await fetch(`/api/alerts?id=${id}`, { method: "DELETE" });
+    setAlertDestinations((prev) => prev.filter((d) => d.id !== id));
+  }
 
   async function syncReddit() {
     if (!brand?.id) return;
@@ -615,7 +728,7 @@ function DashboardPage() {
               </button>
             )}
             {activeTab === "publishing" && (
-              <button className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+              <button onClick={() => { setPublishResult(null); setShowPublishModal(true); }} className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
                 ⚡ Publish now
               </button>
             )}
@@ -928,7 +1041,7 @@ function DashboardPage() {
                           <p className="text-xs text-gray-400 flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
                           <button
                             onClick={() => {
-                              const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
+                              const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
                               window.open(`/article?${params}`, "_blank");
                             }}
                             className="shrink-0 text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
@@ -1020,7 +1133,7 @@ function DashboardPage() {
                               {row.hasGap && (
                                 <button
                                   onClick={() => {
-                                    const params = new URLSearchParams({ gapPrompt: row.text, brand: brand.name, niche: brand.niche, engines: encodeURIComponent(JSON.stringify(gaps.find(g => g.promptText === row.text)?.engines ?? [])) });
+                                    const params = new URLSearchParams({ gapPrompt: row.text, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gaps.find(g => g.promptText === row.text)?.engines ?? [])) });
                                     window.open(`/article?${params}`, "_blank");
                                   }}
                                   className="text-xs font-medium text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-2.5 py-1 rounded-lg transition-colors"
@@ -1291,159 +1404,212 @@ function DashboardPage() {
           )}
 
           {/* PUBLISHING */}
-          {activeTab === "publishing" && (
-            <>
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Publishing</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">Distribution status across {DEMO_PUBLISHING_CHANNELS.filter(c => c.status === "Active").length} channels</p>
+          {activeTab === "publishing" && (() => {
+            const activeChannels = publishingChannels.filter((c) => c.status === "active");
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const publishedThisMonth = publishingLog.filter((e) => e.status === "published" && new Date(e.created_at) >= monthStart).length;
+            const upcoming = savedArticles.filter((a) => a.status === "scheduled" && a.createdAt).slice(0, 5);
+            return (
+              <>
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Publishing</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Distribution status across {activeChannels.length} channel{activeChannels.length !== 1 ? "s" : ""}</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-5">
-                <StatCard label="Published / Mo" value="18" sub="42 total" />
-                <StatCard label="Syndications" value="42" sub="across all channels" />
-                <StatCard label="Avg Crawl Pickup" value="6h" sub="publish → first citation" />
-                <StatCard label="Channels Active" value="2/3" sub="1 paused" />
-              </div>
-
-              <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-semibold text-gray-900">Channels · {DEMO_PUBLISHING_CHANNELS.filter(c => c.status === "Active").length} connected</p>
-                  <button className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">+ Add channel</button>
+                <div className="grid grid-cols-4 gap-3 mb-5">
+                  <StatCard label="Published / Mo" value={publishedThisMonth} sub={`${publishingLog.filter(e => e.status === "published").length} total`} />
+                  <StatCard label="Syndications" value={publishingLog.filter(e => e.status === "published").length} sub="across all channels" />
+                  <StatCard label="Channels Active" value={`${activeChannels.length}/${publishingChannels.length}`} sub={`${publishingChannels.filter(c => c.status === "paused").length} paused`} />
+                  <StatCard label="Failed" value={publishingLog.filter(e => e.status === "failed").length} sub="delivery errors" />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {DEMO_PUBLISHING_CHANNELS.map((ch) => (
-                    <div key={ch.name} className="border border-stone-200 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-base">{ch.name === "WordPress" ? "📝" : ch.name === "Webflow" ? "🌊" : "🔗"}</span>
-                        <span className="text-sm font-semibold text-gray-900">{ch.name}</span>
-                      </div>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${ch.status === "Active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"}`}>{ch.status}</span>
-                      <p className="text-[10px] text-gray-400 mt-2 truncate">{ch.url}</p>
-                      <p className="text-[10px] text-gray-400">Last: {ch.lastPublished}</p>
+
+                <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-gray-900">Channels · {publishingChannels.length} connected</p>
+                    <button onClick={() => setShowAddChannel(true)} className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">+ Add channel</button>
+                  </div>
+                  {publishingChannels.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 mb-3">No channels yet</p>
+                      <button onClick={() => setShowAddChannel(true)} className="text-xs font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">Add your first channel →</button>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white border border-stone-200 rounded-xl p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <p className="text-sm font-semibold text-gray-900">Activity log</p>
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                    <span className="text-xs text-gray-400">real-time</span>
-                  </div>
-                  <div className="space-y-3">
-                    {DEMO_ACTIVITY_LOG.map((entry, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="text-[10px] text-gray-400 w-6 shrink-0 mt-0.5">{entry.time}</span>
-                        <span className="text-xs font-medium text-blue-600 w-20 shrink-0">{entry.channel}</span>
-                        <span className="text-xs text-gray-600 flex-1 truncate">{entry.article}</span>
-                        <span className={`text-[10px] font-medium shrink-0 ${entry.status === "Published" ? "text-green-600" : entry.status === "Failed" ? "text-red-500" : "text-gray-500"}`}>{entry.status}</span>
-                      </div>
-                    ))}
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      {publishingChannels.map((ch) => (
+                        <div key={ch.id} className="border border-stone-200 rounded-xl p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-base">{CHANNEL_ICONS[ch.type] ?? "🔗"}</span>
+                            <span className="text-sm font-semibold text-gray-900">{ch.name}</span>
+                            <button onClick={() => toggleChannel(ch.id, ch.status)} className="ml-auto text-[10px] text-gray-400 hover:text-gray-600">
+                              {ch.status === "active" ? "Pause" : "Resume"}
+                            </button>
+                          </div>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${ch.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"}`}>{ch.status === "active" ? "Active" : "Paused"}</span>
+                          <p className="text-[10px] text-gray-400 mt-2 truncate">{ch.url}</p>
+                          <p className="text-[10px] text-gray-400">Last: {ch.last_published_at ? timeAgo(ch.last_published_at) + " ago" : "—"}</p>
+                          <button onClick={() => deleteChannel(ch.id)} className="mt-2 text-[10px] text-red-400 hover:text-red-600">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="bg-white border border-stone-200 rounded-xl p-5">
-                  <p className="text-sm font-semibold text-gray-900 mb-4">Upcoming · next 7 days</p>
-                  <div className="space-y-3">
-                    {DEMO_UPCOMING.map((item, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="text-xs font-medium text-gray-500 w-14 shrink-0">{item.date}</span>
-                        <span className="text-xs font-medium text-blue-600 w-20 shrink-0">{item.channel}</span>
-                        <span className="text-xs text-gray-600 flex-1 truncate">{item.article}</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white border border-stone-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <p className="text-sm font-semibold text-gray-900">Activity log</p>
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                      <span className="text-xs text-gray-400">real-time</span>
+                    </div>
+                    {publishingLog.length === 0 ? (
+                      <p className="text-xs text-gray-400 py-4 text-center">No activity yet — publish an article to see the log</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {publishingLog.slice(0, 10).map((entry) => (
+                          <div key={entry.id} className="flex items-start gap-3">
+                            <span className="text-[10px] text-gray-400 w-6 shrink-0 mt-0.5">{timeAgo(entry.created_at)}</span>
+                            <span className="text-xs font-medium text-blue-600 w-20 shrink-0 truncate">{entry.publishing_channels?.name ?? "—"}</span>
+                            <span className="text-xs text-gray-600 flex-1 truncate">{entry.article_title ?? "—"}</span>
+                            <span className={`text-[10px] font-medium shrink-0 ${entry.status === "published" ? "text-green-600" : entry.status === "failed" ? "text-red-500" : "text-gray-500"}`}>{entry.status}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+                  </div>
+
+                  <div className="bg-white border border-stone-200 rounded-xl p-5">
+                    <p className="text-sm font-semibold text-gray-900 mb-4">Upcoming · scheduled articles</p>
+                    {upcoming.length === 0 ? (
+                      <p className="text-xs text-gray-400 py-4 text-center">No scheduled articles — set an article&apos;s status to &quot;scheduled&quot; to see it here</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {upcoming.map((item) => {
+                          const ch = publishingChannels.find((c) => c.id === item.brandId);
+                          return (
+                            <div key={item.id} className="flex items-start gap-3">
+                              <span className="text-xs text-gray-500 flex-1 truncate">{item.title}</span>
+                              {ch && <span className="text-xs font-medium text-blue-600 shrink-0">{ch.name}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
 
           {/* SCHEDULE */}
-          {activeTab === "schedule" && (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Schedule</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">Hands-off article generation, scheduling &amp; refreshes</p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">Plan slots</button>
-                  <button className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">Pause</button>
-                </div>
-              </div>
+          {activeTab === "schedule" && (() => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-medium bg-green-50 text-green-700 px-2.5 py-1 rounded-full border border-green-100">Autopilot active</span>
-                <span className="text-xs text-gray-400">Next publish in 2 days · 1 in review · 1 generating · 4 queued</span>
-              </div>
+            const publishedDays = new Set(
+              publishingLog.filter((e) => e.status === "published").map((e) => {
+                const d = new Date(e.created_at);
+                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
+              }).filter((d) => d > 0)
+            );
+            const failedDays = new Set(
+              publishingLog.filter((e) => e.status === "failed").map((e) => {
+                const d = new Date(e.created_at);
+                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
+              }).filter((d) => d > 0)
+            );
+            const scheduledDays = new Set(
+              savedArticles.filter((a) => a.status === "scheduled" && a.createdAt).map((a) => {
+                const d = new Date(a.createdAt);
+                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
+              }).filter((d) => d > 0)
+            );
 
-              <div className="grid grid-cols-4 gap-3 mb-5">
-                <StatCard label="Cadence" value="Daily" sub="09:00 local" />
-                <StatCard label="In Pipeline" value="5" sub="queued + review" />
-                <StatCard label="Published / Mo" value="18" sub="this month" />
-                <StatCard label="Scheduled" value="5" sub="upcoming slots" />
-              </div>
+            const pipeline = savedArticles.filter((a) => ["review", "queued", "scheduled", "writing"].includes(a.status));
+            const publishedThisMonth = publishingLog.filter((e) => {
+              const d = new Date(e.created_at);
+              return e.status === "published" && d.getFullYear() === year && d.getMonth() === month;
+            }).length;
 
-              <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
+            return (
+              <>
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-semibold text-gray-900">Content pipeline · 1 in review</p>
-                  <button className="text-xs text-gray-400 hover:text-gray-600">Review all</button>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Schedule</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Content pipeline, scheduling &amp; publishing calendar</p>
+                  </div>
+                  <button onClick={() => navTo("articles")} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">Manage articles</button>
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-1">
-                  {[
-                    { topic: "ai visibility for saas", status: "In review", title: "How to build AI visibility", desc: "Ready for review" },
-                    { topic: "ai docs collaboration", status: "Queued", title: "AI docs collaboration guide", desc: "Generating now" },
-                    { topic: "notion templates", status: "Scheduled", title: "15 best templates for startups", desc: "Scheduled Jun 28" },
-                    { topic: "remote project mg", status: "Scheduled", title: "Project management for remote teams", desc: "Scheduled Jun 30" },
-                  ].map((item, i) => (
-                    <div key={i} className="border border-stone-200 rounded-xl p-4 shrink-0 w-52">
-                      <p className="text-[10px] text-gray-400 font-mono mb-1 truncate">{item.topic}</p>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_COLORS[item.status.toLowerCase().replace(" ", "")] ?? "bg-gray-100 text-gray-600"}`}>{item.status}</span>
-                      <p className="text-sm font-medium text-gray-800 mt-2 leading-snug line-clamp-2">{item.title}</p>
-                      <p className="text-xs text-gray-400 mt-1">{item.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="bg-white border border-stone-200 rounded-xl p-5">
-                <p className="text-sm font-semibold text-gray-900 mb-4">Publishing calendar · June 2026</p>
-                <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                    <div key={d} className="text-[10px] font-semibold text-gray-400 uppercase">{d}</div>
-                  ))}
+                <div className="grid grid-cols-4 gap-3 mb-5">
+                  <StatCard label="In Pipeline" value={pipeline.length} sub="queued + review" />
+                  <StatCard label="Published / Mo" value={publishedThisMonth} sub="this month" />
+                  <StatCard label="Scheduled" value={savedArticles.filter(a => a.status === "scheduled").length} sub="upcoming slots" />
+                  <StatCard label="Total Articles" value={savedArticles.length} sub="all time" />
                 </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {Array.from({ length: 30 }, (_, i) => {
-                    const day = i + 1;
-                    const published = [3, 5].includes(day);
-                    const scheduled = [8, 10, 12, 17, 24].includes(day);
-                    const failed = day === 15;
-                    return (
-                      <div key={day} className={`rounded-lg p-1.5 min-h-[44px] text-xs ${published ? "bg-green-500 text-white" : scheduled ? "bg-gray-900 text-white" : failed ? "bg-red-500 text-white" : "bg-gray-50 text-gray-500"}`}>
-                        <span className={day === 15 ? "font-bold" : ""}>{day}</span>
-                        {published && <div className="text-[9px] mt-0.5 opacity-90">Published</div>}
-                        {scheduled && <div className="text-[9px] mt-0.5 opacity-90">Scheduled</div>}
-                        {failed && <div className="text-[9px] mt-0.5 opacity-90">Failed</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-4 mt-3">
-                  {[["bg-gray-900", "Scheduled"], ["bg-green-500", "Published"], ["bg-red-500", "Failed"]].map(([color, label]) => (
-                    <div key={label} className="flex items-center gap-1.5">
-                      <div className={`w-2.5 h-2.5 rounded ${color}`} />
-                      <span className="text-[10px] text-gray-500">{label}</span>
+
+                <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-gray-900">Content pipeline · {pipeline.length} items</p>
+                    <button onClick={() => navTo("articles")} className="text-xs text-gray-400 hover:text-gray-600">View all</button>
+                  </div>
+                  {pipeline.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-4 text-center">No content in pipeline — generate articles from Research gaps</p>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {pipeline.map((item) => (
+                        <div key={item.id} className="border border-stone-200 rounded-xl p-4 shrink-0 w-52">
+                          <p className="text-[10px] text-gray-400 font-mono mb-1 truncate">{item.keyword || "—"}</p>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-600"}`}>{item.status}</span>
+                          <p className="text-sm font-medium text-gray-800 mt-2 leading-snug line-clamp-2">{item.title}</p>
+                          <p className="text-xs text-gray-400 mt-1">{new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            </>
-          )}
+
+                <div className="bg-white border border-stone-200 rounded-xl p-5">
+                  <p className="text-sm font-semibold text-gray-900 mb-4">Publishing calendar · {monthLabel}</p>
+                  <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                      <div key={d} className="text-[10px] font-semibold text-gray-400 uppercase">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: daysInMonth }, (_, i) => {
+                      const day = i + 1;
+                      const isPublished = publishedDays.has(day);
+                      const isScheduled = scheduledDays.has(day);
+                      const isFailed = failedDays.has(day);
+                      const isToday = day === now.getDate();
+                      return (
+                        <div key={day} className={`rounded-lg p-1.5 min-h-[44px] text-xs ${isPublished ? "bg-green-500 text-white" : isFailed ? "bg-red-500 text-white" : isScheduled ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-500"}`}>
+                          <span className={isToday ? "font-bold" : ""}>{day}</span>
+                          {isPublished && <div className="text-[9px] mt-0.5 opacity-90">Published</div>}
+                          {isScheduled && !isPublished && <div className="text-[9px] mt-0.5 opacity-90">Scheduled</div>}
+                          {isFailed && <div className="text-[9px] mt-0.5 opacity-90">Failed</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-4 mt-3">
+                    {[["bg-gray-900", "Scheduled"], ["bg-green-500", "Published"], ["bg-red-500", "Failed"]].map(([color, label]) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <div className={`w-2.5 h-2.5 rounded ${color}`} />
+                        <span className="text-[10px] text-gray-500">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* BRANDS */}
           {activeTab === "brands" && (
@@ -1524,69 +1690,233 @@ function DashboardPage() {
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Alerts</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">Webhook, Slack and email destinations plus a live delivery log</p>
+                  <p className="text-sm text-gray-400 mt-0.5">Webhook, Slack, Discord and email destinations plus a live delivery log</p>
                 </div>
-                <button className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors">+ New destination</button>
+                <button onClick={() => setShowAddAlert(true)} className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors">+ New destination</button>
               </div>
 
               <div className="grid grid-cols-4 gap-3 mb-5">
-                <StatCard label="Destinations" value={DEMO_ALERT_DESTINATIONS.length} sub="channels wired" />
-                <StatCard label="Active" value={DEMO_ALERT_DESTINATIONS.filter(d => d.status === "Active").length} sub="enabled" />
-                <StatCard label="Recent Deliveries" value={DEMO_RECENT_DELIVERIES.length} sub="last 20" />
-                <StatCard label="Failed" value={DEMO_RECENT_DELIVERIES.filter(d => d.result === "failed").length} sub="need attention" />
+                <StatCard label="Destinations" value={alertDestinations.length} sub="channels wired" />
+                <StatCard label="Active" value={alertDestinations.filter(d => d.status === "active").length} sub="enabled" />
+                <StatCard label="Recent Deliveries" value={alertDeliveries.length} sub="last 20" />
+                <StatCard label="Failed" value={alertDeliveries.filter(d => d.status === "failed").length} sub="need attention" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                   <div className="px-5 py-4 border-b border-stone-100">
-                    <p className="text-sm font-semibold text-gray-900">Destinations · {DEMO_ALERT_DESTINATIONS.length}</p>
+                    <p className="text-sm font-semibold text-gray-900">Destinations · {alertDestinations.length}</p>
                   </div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-stone-100">
-                        <th className="px-5 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Destination</th>
-                        <th className="px-5 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Kind</th>
-                        <th className="px-5 py-3 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Events</th>
-                        <th className="px-5 py-3 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-50">
-                      {DEMO_ALERT_DESTINATIONS.map((dest) => (
-                        <tr key={dest.name} className="hover:bg-stone-50/50">
-                          <td className="px-5 py-3 text-sm font-medium text-gray-800">{dest.name}</td>
-                          <td className="px-5 py-3">
-                            <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{dest.kind}</span>
-                          </td>
-                          <td className="px-5 py-3 text-sm text-gray-600 text-right">{dest.events}</td>
-                          <td className="px-5 py-3 text-right">
-                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${dest.status === "Active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"}`}>{dest.status}</span>
-                          </td>
+                  {alertDestinations.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="text-sm text-gray-400 mb-3">No destinations yet</p>
+                      <button onClick={() => setShowAddAlert(true)} className="text-xs font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">Add Slack or webhook →</button>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-stone-100">
+                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Destination</th>
+                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Kind</th>
+                          <th className="px-5 py-3 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Status</th>
+                          <th className="px-5 py-3" />
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-stone-50">
+                        {alertDestinations.map((dest) => (
+                          <tr key={dest.id} className="hover:bg-stone-50/50">
+                            <td className="px-5 py-3 text-sm font-medium text-gray-800">{dest.name}</td>
+                            <td className="px-5 py-3">
+                              <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{dest.kind}</span>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <button onClick={() => toggleAlertDestination(dest.id, dest.status)} className={`text-[10px] font-medium px-2 py-0.5 rounded ${dest.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"}`}>{dest.status === "active" ? "Active" : "Paused"}</button>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <button onClick={() => deleteAlertDestination(dest.id)} className="text-[10px] text-red-400 hover:text-red-600">Remove</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
 
                 <div className="bg-white border border-stone-200 rounded-xl p-5">
                   <p className="text-sm font-semibold text-gray-900 mb-4">Recent deliveries</p>
-                  <div className="space-y-3">
-                    {DEMO_RECENT_DELIVERIES.map((d, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-mono text-gray-600">{d.channel} · {d.event}</p>
-                          {d.detail && <p className="text-[10px] text-red-500 mt-0.5">{d.detail}</p>}
+                  {alertDeliveries.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-4 text-center">No deliveries yet — alerts fire when scans detect significant changes</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {alertDeliveries.map((d) => (
+                        <div key={d.id} className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-mono text-gray-600">{d.alert_destinations?.kind ?? "—"} · {d.event_type}</p>
+                            {d.error_detail && <p className="text-[10px] text-red-500 mt-0.5">{d.error_detail}</p>}
+                          </div>
+                          <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(d.created_at)}</span>
+                          <span className={`text-[10px] font-medium shrink-0 ${d.status === "succeeded" ? "text-green-600" : "text-red-500"}`}>{d.status}</span>
                         </div>
-                        <span className="text-[10px] text-gray-400 shrink-0">{d.time}</span>
-                        <span className={`text-[10px] font-medium shrink-0 ${d.result === "succeeded" ? "text-green-600" : "text-red-500"}`}>{d.result}</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
           )}
         </div>
       </main>
+
+      {/* Add Channel Modal */}
+      {showAddChannel && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAddChannel(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-semibold text-gray-900">Add publishing channel</h3>
+                <button onClick={() => setShowAddChannel(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Channel type</label>
+                  <select value={newChannel.type} onChange={(e) => setNewChannel((p) => ({ ...p, type: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400">
+                    <option value="webhook">Webhook (generic JSON POST)</option>
+                    <option value="discord">Discord webhook</option>
+                    <option value="wordpress">WordPress (REST API)</option>
+                    <option value="webflow">Webflow (manual)</option>
+                    <option value="framer">Framer (manual)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Name</label>
+                  <input value={newChannel.name} onChange={(e) => setNewChannel((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Company blog" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">{newChannel.type === "wordpress" ? "WordPress site URL" : "Webhook URL"}</label>
+                  <input value={newChannel.url} onChange={(e) => setNewChannel((p) => ({ ...p, url: e.target.value }))} placeholder={newChannel.type === "wordpress" ? "https://yourblog.com" : "https://hooks.example.com/..."} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                </div>
+                {newChannel.type === "wordpress" && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Application password <span className="text-gray-400">(Users → Edit → App Passwords)</span></label>
+                    <input type="password" value={newChannel.apiKey} onChange={(e) => setNewChannel((p) => ({ ...p, apiKey: e.target.value }))} placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                )}
+                {(newChannel.type === "webflow" || newChannel.type === "framer") && (
+                  <p className="text-xs text-gray-500 bg-stone-50 rounded-lg px-3 py-2">Manual channel — you&apos;ll copy article content and paste it into your CMS. We track the log here.</p>
+                )}
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setShowAddChannel(false)} className="flex-1 text-sm border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={addChannel} disabled={addingChannel || !newChannel.name || !newChannel.url} className="flex-1 text-sm font-medium bg-gray-900 text-white rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                  {addingChannel ? "Adding…" : "Add channel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish Now Modal */}
+      {showPublishModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { if (!publishing) { setShowPublishModal(false); setPublishResult(null); } }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-semibold text-gray-900">Publish article</h3>
+                <button onClick={() => { setShowPublishModal(false); setPublishResult(null); }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              </div>
+              {publishResult ? (
+                <div className={`rounded-xl p-4 mb-5 ${publishResult.success ? "bg-green-50 border border-green-100" : "bg-red-50 border border-red-100"}`}>
+                  <p className={`text-sm font-medium ${publishResult.success ? "text-green-700" : "text-red-700"}`}>{publishResult.success ? "Published successfully!" : "Publish failed"}</p>
+                  {publishResult.error && <p className="text-xs text-red-600 mt-1">{publishResult.error}</p>}
+                </div>
+              ) : (
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Article</label>
+                    <select value={publishArticleId} onChange={(e) => setPublishArticleId(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400">
+                      <option value="">Select article…</option>
+                      {savedArticles.filter(a => a.status !== "published").map((a) => (
+                        <option key={a.id} value={a.id}>{a.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Channel</label>
+                    {publishingChannels.length === 0 ? (
+                      <p className="text-xs text-gray-400">No channels — <button onClick={() => { setShowPublishModal(false); setShowAddChannel(true); }} className="text-red-600 underline">add one first</button></p>
+                    ) : (
+                      <select value={publishChannelId} onChange={(e) => setPublishChannelId(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400">
+                        <option value="">Select channel…</option>
+                        {publishingChannels.filter(c => c.status === "active").map((c) => (
+                          <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => { setShowPublishModal(false); setPublishResult(null); }} className="flex-1 text-sm border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition-colors">
+                  {publishResult ? "Close" : "Cancel"}
+                </button>
+                {!publishResult && (
+                  <button onClick={publishNow} disabled={publishing || !publishArticleId || !publishChannelId} className="flex-1 text-sm font-medium bg-gray-900 text-white rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                    {publishing && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                    {publishing ? "Publishing…" : "⚡ Publish"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Alert Destination Modal */}
+      {showAddAlert && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAddAlert(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-semibold text-gray-900">Add alert destination</h3>
+                <button onClick={() => setShowAddAlert(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Kind</label>
+                  <select value={newAlert.kind} onChange={(e) => setNewAlert((p) => ({ ...p, kind: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400">
+                    <option value="slack">Slack (incoming webhook)</option>
+                    <option value="discord">Discord webhook</option>
+                    <option value="webhook">Generic webhook</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Name</label>
+                  <input value={newAlert.name} onChange={(e) => setNewAlert((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Eng team Slack" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                </div>
+                {newAlert.kind !== "email" ? (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Webhook URL</label>
+                    <input value={newAlert.url} onChange={(e) => setNewAlert((p) => ({ ...p, url: e.target.value }))} placeholder="https://hooks.slack.com/..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Email address</label>
+                    <input type="email" value={newAlert.email} onChange={(e) => setNewAlert((p) => ({ ...p, email: e.target.value }))} placeholder="team@company.com" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setShowAddAlert(false)} className="flex-1 text-sm border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={addAlertDestination} disabled={addingAlert || !newAlert.name} className="flex-1 text-sm font-medium bg-gray-900 text-white rounded-lg py-2 hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                  {addingAlert ? "Adding…" : "Add destination"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Thread reply modal */}
       {activeThread && (
