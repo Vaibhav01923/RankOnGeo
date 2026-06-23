@@ -277,6 +277,7 @@ function DashboardPage() {
   const [brand, setBrand] = useState<BrandData | null>(null);
   const [loadingBrand, setLoadingBrand] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false);
   const [results, setResults] = useState<ScanResult[]>([]);
   const [scores, setScores] = useState<VisibilityScore[]>([]);
   const [gaps, setGaps] = useState<GapItem[]>([]);
@@ -636,17 +637,47 @@ function DashboardPage() {
           <span className="ml-auto text-[10px] font-semibold bg-stone-200 text-stone-500 px-1.5 py-0.5 rounded">v2.0</span>
         </div>
 
-        <div className="mx-3 mb-5 shrink-0">
-          <button onClick={() => router.push("/setup")} className="w-full bg-white rounded-xl px-3 py-3 flex items-center gap-3 hover:bg-white/90 transition-colors shadow-sm">
+        <div className="mx-3 mb-5 shrink-0 relative">
+          <button
+            onClick={() => setShowBrandDropdown((v) => !v)}
+            className="w-full bg-white rounded-xl px-3 py-3 flex items-center gap-3 hover:bg-white/90 transition-colors shadow-sm"
+          >
             <div className="w-9 h-9 rounded-lg bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">{brandInitial}</div>
             <div className="text-left min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{brand.name}</p>
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">OWNER</p>
             </div>
-            <svg className="ml-auto w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`ml-auto w-4 h-4 text-gray-300 shrink-0 transition-transform duration-150 ${showBrandDropdown ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
+
+          {showBrandDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowBrandDropdown(false)} />
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
+                <div className="px-3 py-2.5 flex items-center gap-3 bg-stone-50 border-b border-stone-100">
+                  <div className="w-7 h-7 rounded-lg bg-gray-900 text-white flex items-center justify-center text-xs font-bold shrink-0">{brandInitial}</div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{brand.name}</p>
+                    <p className="text-[9px] text-gray-400 uppercase tracking-wider">Current brand</p>
+                  </div>
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                </div>
+                <button
+                  onClick={() => { setShowBrandDropdown(false); router.push("/setup"); }}
+                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-stone-50 transition-colors group"
+                >
+                  <div className="w-7 h-7 rounded-lg border-2 border-dashed border-stone-300 group-hover:border-stone-400 flex items-center justify-center shrink-0 transition-colors">
+                    <svg className="w-3.5 h-3.5 text-stone-400 group-hover:text-stone-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-medium text-stone-500 group-hover:text-stone-700 transition-colors">Add another brand</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         <nav className="flex-1 px-3 overflow-y-auto space-y-5">
