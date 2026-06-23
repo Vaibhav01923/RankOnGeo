@@ -370,7 +370,7 @@ function DashboardPage() {
             <rect x="18" y="8" width="4" height="14" rx="1" fill="white" />
           </svg>
           <span className="font-bold text-xl tracking-tight text-gray-900">
-            rankon<span className="text-red-600">geo</span>
+            RankOn<span className="text-red-600">Geo</span>
           </span>
           <span className="ml-auto text-[10px] font-semibold bg-stone-200 text-stone-500 px-1.5 py-0.5 rounded">
             v2.0

@@ -63,8 +63,8 @@ const PRICING = [
 
 const FAQS = [
   {
-    q: "What's the difference between SEO and what rankongeo does?",
-    a: "Traditional SEO ranks pages in Google's blue links. rankongeo tracks and improves how generative engines — ChatGPT, Perplexity, AI Overviews, Claude, Gemini, AI Mode, and Grok — answer questions about your brand. They use different signals (claim density, source authority, schema, citation graph), and that's increasingly where your customers are searching.",
+    q: "What's the difference between SEO and what RankOnGeo does?",
+    a: "Traditional SEO ranks pages in Google's blue links. RankOnGeo tracks and improves how generative engines — ChatGPT, Perplexity, AI Overviews, Claude, Gemini, AI Mode, and Grok — answer questions about your brand. They use different signals (claim density, source authority, schema, citation graph), and that's increasingly where your customers are searching.",
   },
   {
     q: "Which AI engines do you track?",
@@ -72,11 +72,11 @@ const FAQS = [
   },
   {
     q: "How is this different from Peec AI, Otterly, or similar tools?",
-    a: "Most tools stop at measurement. rankongeo closes the loop: it diagnoses your gaps, generates citation-ready content, and publishes directly to your CMS — then re-measures automatically. It's a full pipeline, not just a dashboard.",
+    a: "Most tools stop at measurement. RankOnGeo closes the loop: it diagnoses your gaps, generates citation-ready content, and publishes directly to your CMS — then re-measures automatically. It's a full pipeline, not just a dashboard.",
   },
   {
     q: "Will I get penalized for AI-generated content?",
-    a: "No. Google's guidance targets low-quality, mass-produced content regardless of how it was made. rankongeo generates source-grounded, brand-voiced drafts you review before publishing. Quality is the signal, not the tool.",
+    a: "No. Google's guidance targets low-quality, mass-produced content regardless of how it was made. RankOnGeo generates source-grounded, brand-voiced drafts you review before publishing. Quality is the signal, not the tool.",
   },
   {
     q: "How fast can I expect to see results?",
@@ -119,7 +119,7 @@ function DashboardMockup() {
         <div className="w-56 bg-[#faf8f5] border-r border-[#e8e3dc] flex flex-col shrink-0">
           <div className="px-4 py-3 border-b border-[#e8e3dc] flex items-center gap-2">
             <LogoIcon size={22} />
-            <span className="font-bold text-sm tracking-tight">rankon<span className="text-[#c8372d]">geo</span></span>
+            <span className="font-bold text-sm tracking-tight">RankOn<span className="text-[#c8372d]">Geo</span></span>
             <span className="ml-auto text-[10px] bg-[#e8e3dc] text-[#888] px-1.5 py-0.5 rounded">v2.0</span>
           </div>
           {/* Brand selector */}
@@ -298,7 +298,7 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between px-8 py-4 max-w-7xl mx-auto">
         <div className="flex items-center gap-2.5">
           <LogoIcon />
-          <span className="text-xl font-bold tracking-tight">rankon<span className="text-[#c8372d]">geo</span></span>
+          <span className="text-xl font-bold tracking-tight">RankOn<span className="text-[#c8372d]">Geo</span></span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-sm text-[#555]">
           <a href="#platform" className="hover:text-[#111] transition-colors">Platform</a>
@@ -430,7 +430,7 @@ export default function LandingPage() {
           <p className="text-xs uppercase tracking-widest text-[#888] font-semibold mb-4">Platform</p>
           <h2 className="text-4xl font-black tracking-tight mb-4">One pipeline. Four instruments.</h2>
           <p className="text-[#666] max-w-xl mx-auto">
-            Most tools tell you that you&apos;re not visible. rankongeo closes the loop: measure, research, write, publish, re-measure. Automatically.
+            Most tools tell you that you&apos;re not visible. RankOnGeo closes the loop: measure, research, write, publish, re-measure. Automatically.
           </p>
         </div>
 
@@ -807,7 +807,7 @@ export default function LandingPage() {
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <LogoIcon />
-              <span className="text-lg font-bold">rankon<span className="text-[#c8372d]">geo</span></span>
+              <span className="text-lg font-bold">RankOn<span className="text-[#c8372d]">Geo</span></span>
             </div>
             <p className="text-sm text-[#888] mb-4">The visibility layer for AI search. Track. Treat. Repeat.</p>
             <div className="flex gap-3">
@@ -845,7 +845,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="border-t border-[#1a1a1a] pt-6 flex items-center justify-between text-xs text-[#555]">
-          <span>© 2026 rankongeo</span>
+          <span>© 2026 RankOnGeo</span>
           <div className="flex gap-4">
             {["Privacy", "Terms", "DPA", "Security"].map((l) => (
               <a key={l} href="#" className="hover:text-white transition-colors">{l}</a>

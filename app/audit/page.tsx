@@ -133,7 +133,7 @@ function AuditContent() {
       <nav className="flex items-center justify-between px-8 py-4 border-b border-[#e8e0d4]">
         <a href="/" className="flex items-center gap-2">
           <LogoIcon />
-          <span className="text-lg font-bold tracking-tight">rankon<span className="text-[#c8372d]">geo</span></span>
+          <span className="text-lg font-bold tracking-tight">RankOn<span className="text-[#c8372d]">Geo</span></span>
         </a>
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <div className="flex items-center gap-2 bg-white border border-[#d8cfc5] rounded-lg px-3 py-2 shadow-sm">

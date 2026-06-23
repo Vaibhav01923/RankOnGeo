@@ -101,7 +101,7 @@ function SetupContent() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-100 px-6 py-4">
         <a href="/" className="font-bold text-xl tracking-tight">
-          rankon<span className="text-emerald-500">geo</span>
+          RankOn<span className="text-emerald-500">Geo</span>
         </a>
       </header>
 

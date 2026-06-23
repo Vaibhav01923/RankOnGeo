@@ -62,7 +62,7 @@ function AuthContent() {
             <rect x="18" y="8" width="4" height="14" rx="1" fill="white" />
           </svg>
           <span className="text-lg font-bold tracking-tight text-gray-900">
-            rankon<span className="text-red-600">geo</span>
+            RankOn<span className="text-red-600">Geo</span>
           </span>
         </a>
       </nav>

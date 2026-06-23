@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     try {
       const res = await fetch(
         `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&sort=new&limit=25&t=month`,
-        { headers: { "User-Agent": "rankongeo/1.0" }, signal: AbortSignal.timeout(8000) }
+        { headers: { "User-Agent": "RankOnGeo/1.0" }, signal: AbortSignal.timeout(8000) }
       );
       if (!res.ok) continue;
       const data = await res.json();
