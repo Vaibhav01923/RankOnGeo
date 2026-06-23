@@ -1122,15 +1122,35 @@ function DashboardPage() {
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs text-gray-400 flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
-                          <button
-                            onClick={() => {
-                              const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
-                              window.open(`/article?${params}`, "_blank");
-                            }}
-                            className="shrink-0 text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
-                          >
-                            Write article →
-                          </button>
+                          {(() => {
+                            const existing = savedArticles.find((a) => a.keyword?.toLowerCase() === gap.promptText.toLowerCase());
+                            const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
+                            if (existing) {
+                              const cacheKey = `article:${existing.keyword || existing.title}:${brand.name}`;
+                              return (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[existing.status] ?? "bg-gray-100 text-gray-600"}`}>{existing.status}</span>
+                                  <button
+                                    onClick={() => {
+                                      if (existing.content) sessionStorage.setItem(cacheKey, JSON.stringify({ article: existing.content, title: existing.title, wordCount: existing.wordCount }));
+                                      window.open(`/article?${params}`, "_blank");
+                                    }}
+                                    className="text-xs font-medium border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                                  >
+                                    View article ↗
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => window.open(`/article?${params}`, "_blank")}
+                                className="shrink-0 text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
+                              >
+                                Write article →
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     ))}
