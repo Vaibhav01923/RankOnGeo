@@ -1258,7 +1258,7 @@ function DashboardPage() {
 
                 {savedArticles.length > 0 && (
                   <div className="flex gap-1 mb-3">
-                    {(["all", "draft", "review", "published", "scheduled", "queued"] as const).map((f) => (
+                    {(["all", "draft", "review", "scheduled", "published"] as const).map((f) => (
                       <button
                         key={f}
                         onClick={() => setArticleFilter(f)}
@@ -1385,15 +1385,6 @@ function DashboardPage() {
                           📅 Schedule
                         </button>
                       )
-                    )}
-
-                    {selectedArticle.status !== "queued" && selectedArticle.status !== "published" && !showSchedulePicker && (
-                      <button
-                        onClick={() => updateArticleStatus(selectedArticle.id, "queued")}
-                        className="w-full text-xs font-medium border border-gray-200 text-gray-700 rounded-lg py-2.5 hover:bg-gray-50 transition-colors"
-                      >
-                        Add to queue
-                      </button>
                     )}
 
                     {selectedArticle.status !== "draft" && selectedArticle.status !== "published" && !showSchedulePicker && (
