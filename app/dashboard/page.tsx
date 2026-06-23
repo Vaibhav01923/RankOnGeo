@@ -347,6 +347,9 @@ function DashboardPage() {
           if (!searchParams.get("brandId")) router.replace(`/dashboard?brandId=${id}`);
           setBrand(data);
           fetch(`/api/history?brandId=${id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
+          fetch(`/api/scan/results?brandId=${id}`).then((r) => r.json()).then((d) => {
+            if (d.results?.length) { setResults(d.results); setScanned(true); }
+          });
           fetch(`/api/keywords?brandId=${id}`).then((r) => r.json()).then((d) => setSocialKeywords(d.keywords ?? []));
           fetch(`/api/reddit/threads?brandId=${id}`).then((r) => r.json()).then((d) => setRedditThreads(d.threads ?? []));
           fetch(`/api/articles?brandId=${id}`).then((r) => r.json()).then((d) => setSavedArticles((d.articles ?? []).map(mapArticleFromDb)));
