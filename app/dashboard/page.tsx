@@ -289,6 +289,9 @@ function DashboardPage() {
   const [scanHistory, setScanHistory] = useState<ScanRun[]>([]);
   const [socialKeywords, setSocialKeywords] = useState<SocialKeyword[]>([]);
   const [redditThreads, setRedditThreads] = useState<RedditThread[]>([]);
+  const [redditConnected, setRedditConnected] = useState(false);
+  const [redditUsername, setRedditUsername] = useState<string | null>(null);
+  const [postingReply, setPostingReply] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
   const [activeThread, setActiveThread] = useState<RedditThread | null>(null);
@@ -342,6 +345,14 @@ function DashboardPage() {
     createSupabaseBrowserClient()
       .auth.getUser()
       .then(({ data: { user } }) => setUserEmail(user?.email ?? ""));
+
+    fetch("/api/reddit/connection").then((r) => r.json()).then((d) => {
+      setRedditConnected(d.connected);
+      setRedditUsername(d.username);
+    });
+
+    if (searchParams.get("reddit") === "connected") setActiveTab("social");
+    if (searchParams.get("tab") === "social") setActiveTab("social");
 
     const brandId = searchParams.get("brandId");
 
@@ -525,6 +536,25 @@ function DashboardPage() {
       setDraftReply(d.reply ?? "");
       setRedditThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, draftedReply: d.reply, status: "read" } : t)));
     } finally { setDraftingReply(false); }
+  }
+
+  async function postReply() {
+    if (!activeThread || !draftReply.trim() || !brand?.id) return;
+    setPostingReply(true);
+    try {
+      const res = await fetch("/api/reddit/post", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId: activeThread.id, reply: draftReply, brandId: brand.id }) });
+      const d = await res.json();
+      if (d.error) { setError(d.error); return; }
+      setRedditThreads((prev) => prev.map((t) => t.id === activeThread.id ? { ...t, status: "replied" } : t));
+      setActiveThread(null);
+      setDraftReply("");
+    } finally { setPostingReply(false); }
+  }
+
+  async function disconnectReddit() {
+    await fetch("/api/reddit/connection", { method: "DELETE" });
+    setRedditConnected(false);
+    setRedditUsername(null);
   }
 
   async function runScan() {
@@ -1447,9 +1477,28 @@ function DashboardPage() {
           {/* SOCIAL */}
           {activeTab === "social" && (
             <div>
-              <div className="mb-5">
-                <h2 className="text-xl font-bold text-gray-900">Social</h2>
-                <p className="text-sm text-gray-400 mt-0.5">Monitor Reddit for keyword-relevant conversations</p>
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Social</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Monitor Reddit for keyword-relevant conversations</p>
+                </div>
+                {redditConnected ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      u/{redditUsername}
+                    </div>
+                    <button onClick={disconnectReddit} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Disconnect</button>
+                  </div>
+                ) : (
+                  <a
+                    href={`/api/reddit/auth?brandId=${brand.id}`}
+                    className="flex items-center gap-2 text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M20 10c0-5.523-4.477-10-10-10S0 4.477 0 10c0 5.522 4.478 10 10 10 5.523 0 10-4.478 10-10zm-7.432 4.434a4.91 4.91 0 01-2.568.712 4.91 4.91 0 01-2.568-.712.312.312 0 01.345-.518c.596.394 1.374.618 2.223.618s1.627-.224 2.223-.618a.312.312 0 01.345.518zm.138-2.506a.937.937 0 110-1.874.937.937 0 010 1.874zm-5.412 0a.937.937 0 110-1.874.937.937 0 010 1.874zm8.354-1.962a1.25 1.25 0 00-2.12-.896 6.166 6.166 0 00-3.124-.846l.6-2.375 1.741.41a.937.937 0 101.017-1.08l-1.955-.46a.313.313 0 00-.37.218l-.683 2.712a6.172 6.172 0 00-3.094.843 1.25 1.25 0 10-1.388 2.016 2.47 2.47 0 000 .305c0 1.875 2.187 3.398 4.888 3.398s4.888-1.523 4.888-3.398c0-.104-.006-.206-.017-.305.383-.23.617-.644.617-1.112z"/></svg>
+                    Connect Reddit
+                  </a>
+                )}
               </div>
 
               <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
@@ -2199,9 +2248,25 @@ function DashboardPage() {
                   <div>
                     <textarea value={draftReply} onChange={(e) => setDraftReply(e.target.value)} rows={5} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
                     <div className="flex items-center gap-2 mt-2">
-                      <button onClick={() => navigator.clipboard.writeText(draftReply)} className="flex-1 text-sm font-medium border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition-colors">Copy reply</button>
-                      <a href={activeThread.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-medium bg-blue-600 text-white text-center rounded-lg py-2 hover:bg-blue-700 transition-colors">Post on Reddit ↗</a>
+                      <button onClick={() => navigator.clipboard.writeText(draftReply)} className="flex-1 text-sm font-medium border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition-colors">Copy</button>
+                      {redditConnected ? (
+                        <button
+                          onClick={postReply}
+                          disabled={postingReply}
+                          className="flex-1 text-sm font-medium bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg py-2 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          {postingReply ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
+                          {postingReply ? "Posting…" : "Post on Reddit"}
+                        </button>
+                      ) : (
+                        <a href={activeThread.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-medium bg-blue-600 text-white text-center rounded-lg py-2 hover:bg-blue-700 transition-colors">Open thread ↗</a>
+                      )}
                     </div>
+                    {!redditConnected && (
+                      <p className="text-[10px] text-gray-400 mt-2 text-center">
+                        <a href={`/api/reddit/auth?brandId=${brand.id}`} className="text-orange-500 hover:underline font-medium">Connect Reddit</a> to post without copy-pasting
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <button onClick={() => draftReplyForThread(activeThread)} className="w-full text-sm font-medium bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors">Generate draft</button>
