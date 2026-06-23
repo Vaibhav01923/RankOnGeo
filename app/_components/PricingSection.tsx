@@ -61,77 +61,104 @@ export function PricingSection() {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   return (
-    <section id="pricing" className="max-w-6xl mx-auto px-8 py-24">
-      <div className="text-center mb-12">
-        <h2 className="text-4xl font-black tracking-tight mb-3" style={{ textWrap: "balance" } as React.CSSProperties}>
-          Simple pricing. Every plan.
-        </h2>
-        <p className="text-[#4b5563] mb-8">The full pipeline. The bigger the plan, the more brands, prompts, and articles.</p>
-        <div className="inline-flex items-center gap-1 bg-[#f4f6ff] rounded-lg p-1" role="group" aria-label="Billing period">
-          <button
-            onClick={() => setBilling("monthly")}
-            aria-pressed={billing === "monthly"}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
-              billing === "monthly" ? "bg-white shadow-sm text-[#111]" : "text-[#555]"
-            }`}
+    <section id="pricing" className="bg-[#080808] px-8 py-24">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <h2
+            className="text-4xl font-black tracking-tight mb-3 text-white"
+            style={{ textWrap: "balance" } as React.CSSProperties}
           >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBilling("annual")}
-            aria-pressed={billing === "annual"}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
-              billing === "annual" ? "bg-white shadow-sm text-[#111]" : "text-[#555]"
-            }`}
+            Simple pricing. Every plan.
+          </h2>
+          <p className="text-[#555] mb-8">
+            The full pipeline. The bigger the plan, the more brands, prompts, and articles.
+          </p>
+          <div
+            className="inline-flex items-center gap-1 bg-[#161616] border border-white/[0.07] rounded-lg p-1"
+            role="group"
+            aria-label="Billing period"
           >
-            Annual <span className="text-brand text-xs ml-1 font-semibold">−17%</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {PRICING.map((plan) => {
-          const price = billing === "annual" ? Math.round(plan.price * 0.83) : plan.price;
-          return (
-            <div
-              key={plan.name}
-              className={`rounded-2xl p-7 ${plan.highlight ? "bg-[#111] text-white" : "bg-white border border-gray-100"}`}
+            <button
+              onClick={() => setBilling("monthly")}
+              aria-pressed={billing === "monthly"}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-[#161616] ${
+                billing === "monthly"
+                  ? "bg-[#2a2a2a] text-white shadow-sm"
+                  : "text-[#666] hover:text-[#999]"
+              }`}
             >
-              {plan.highlight && (
-                <div className="text-xs bg-brand text-white px-3 py-1 rounded-full w-fit mb-4 font-semibold uppercase tracking-wide">
-                  Most picked
-                </div>
-              )}
-              <h3 className={`text-xl font-black mb-2 ${plan.highlight ? "text-white" : "text-[#111]"}`}>
-                {plan.name}
-              </h3>
-              <p className={`text-sm mb-5 ${plan.highlight ? "text-[#9ca3af]" : "text-[#4b5563]"}`}>{plan.desc}</p>
-              <div className="mb-6">
-                <span className={`text-4xl font-black ${plan.highlight ? "text-white" : "text-[#111]"}`}>
-                  ${price}
-                </span>
-                <span className={`text-sm ml-1 ${plan.highlight ? "text-[#9ca3af]" : "text-[#6b7280]"}`}>/ month</span>
-              </div>
-              <button
-                className={`w-full py-3 rounded-xl text-sm font-semibold mb-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling("annual")}
+              aria-pressed={billing === "annual"}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-[#161616] ${
+                billing === "annual"
+                  ? "bg-[#2a2a2a] text-white shadow-sm"
+                  : "text-[#666] hover:text-[#999]"
+              }`}
+            >
+              Annual{" "}
+              <span className="text-brand text-xs ml-1 font-semibold">−17%</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {PRICING.map((plan) => {
+            const price =
+              billing === "annual" ? Math.round(plan.price * 0.83) : plan.price;
+            return (
+              <div
+                key={plan.name}
+                className={`rounded-2xl p-7 border transition-all ${
                   plan.highlight
-                    ? "bg-brand hover:bg-brand-dark text-white focus-visible:ring-white focus-visible:ring-offset-[#111]"
-                    : "bg-[#111] hover:bg-[#333] text-white focus-visible:ring-brand focus-visible:ring-offset-white"
+                    ? "bg-[#111] border-brand/35"
+                    : "bg-[#111] border-white/[0.07]"
                 }`}
+                style={
+                  plan.highlight
+                    ? { boxShadow: "0 0 40px rgba(200,55,45,0.1)" }
+                    : undefined
+                }
               >
-                Get started
-              </button>
-              <ul className="space-y-2.5">
-                {plan.features.map((f) => (
-                  <li key={f} className={`flex items-start gap-2 text-sm ${plan.highlight ? "text-[#d1d5db]" : "text-[#374151]"}`}>
-                    <span className="text-brand shrink-0 mt-0.5" aria-hidden="true">✓</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+                {plan.highlight && (
+                  <div className="text-xs bg-brand text-white px-3 py-1 rounded-full w-fit mb-4 font-semibold">
+                    Most picked
+                  </div>
+                )}
+                <h3 className="text-xl font-black mb-2 text-white">{plan.name}</h3>
+                <p className="text-sm mb-5 text-[#555]">{plan.desc}</p>
+                <div className="mb-6">
+                  <span className="text-4xl font-black text-white">${price}</span>
+                  <span className="text-sm ml-1 text-[#555]">/ month</span>
+                </div>
+                <button
+                  className={`w-full py-3 rounded-xl text-sm font-semibold mb-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111] ${
+                    plan.highlight
+                      ? "bg-brand hover:bg-brand-dark text-white focus-visible:ring-white"
+                      : "bg-white/[0.08] hover:bg-white/[0.14] text-white focus-visible:ring-brand"
+                  }`}
+                >
+                  Get started
+                </button>
+                <ul className="space-y-2.5">
+                  {plan.features.map((f) => (
+                    <li
+                      key={f}
+                      className="flex items-start gap-2 text-sm text-[#888]"
+                    >
+                      <span className="text-brand shrink-0 mt-0.5" aria-hidden="true">
+                        ✓
+                      </span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

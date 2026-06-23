@@ -28,51 +28,60 @@ export function FAQSection() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
-    <section className="max-w-3xl mx-auto px-8 pb-24">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-black tracking-tight" style={{ textWrap: "balance" } as React.CSSProperties}>
-          Common questions.
-        </h2>
-      </div>
-      <div className="space-y-2">
-        {FAQS.map((faq, i) => (
-          <div key={i} className="border border-gray-100 bg-white rounded-xl overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
-              onClick={() => setOpenFaq(openFaq === i ? null : i)}
-              aria-expanded={openFaq === i}
-              aria-controls={`faq-answer-${i}`}
-            >
-              <span className="font-medium text-sm text-[#111]">{faq.q}</span>
-              <span
-                className={`text-[#6b7280] transition-transform text-lg ml-4 shrink-0 motion-reduce:transition-none ${openFaq === i ? "rotate-45" : ""}`}
-                aria-hidden="true"
+    <section className="bg-[#0a0a0a] px-8 pb-24 pt-20">
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-10">
+          <h2
+            className="text-3xl font-black tracking-tight text-white"
+            style={{ textWrap: "balance" } as React.CSSProperties}
+          >
+            Common questions.
+          </h2>
+        </div>
+        <div className="divide-y divide-white/[0.06]">
+          {FAQS.map((faq, i) => (
+            <div key={i}>
+              <button
+                className="w-full flex items-center justify-between px-0 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded group"
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                aria-expanded={openFaq === i}
+                aria-controls={`faq-answer-${i}`}
               >
-                +
-              </span>
-            </button>
-            {openFaq === i && (
-              <div
-                id={`faq-answer-${i}`}
-                role="region"
-                className="px-5 pb-4 text-sm text-[#4b5563] leading-relaxed border-t border-gray-100"
-              >
-                {faq.a}
-              </div>
-            )}
-          </div>
-        ))}
+                <span className="font-medium text-sm text-[#e0e0e0] group-hover:text-white transition-colors">
+                  {faq.q}
+                </span>
+                <span
+                  className={`text-[#555] transition-transform text-lg ml-6 shrink-0 motion-reduce:transition-none group-hover:text-[#888] ${
+                    openFaq === i ? "rotate-45" : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  +
+                </span>
+              </button>
+              {openFaq === i && (
+                <div
+                  id={`faq-answer-${i}`}
+                  role="region"
+                  className="pb-5 text-sm text-[#888] leading-relaxed"
+                >
+                  {faq.a}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-sm text-[#555] mt-10">
+          Still have questions?{" "}
+          <a
+            href="mailto:hello@rankongeo.com"
+            className="text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded"
+          >
+            Drop us a line
+          </a>{" "}
+          and we&apos;ll reply within a business day.
+        </p>
       </div>
-      <p className="text-center text-sm text-[#4b5563] mt-8">
-        Still have questions?{" "}
-        <a
-          href="mailto:hello@rankongeo.com"
-          className="text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded"
-        >
-          Drop us a line
-        </a>{" "}
-        and we&apos;ll reply within a business day.
-      </p>
     </section>
   );
 }

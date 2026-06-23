@@ -4,6 +4,7 @@ import { DomainForm } from "./_components/DomainForm";
 import { PricingSection } from "./_components/PricingSection";
 import { FAQSection } from "./_components/FAQSection";
 import { MobileNav } from "./_components/MobileNav";
+import { ScrollReveal } from "./_components/ScrollReveal";
 
 export const metadata: Metadata = {
   title: "RankOnGeo — Track Your Brand in AI Search",
@@ -259,25 +260,27 @@ function BentoGrid() {
   return (
     <section id="platform" className="bg-[#0a0a0a] px-6 pb-24">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center pt-20 pb-12">
-          <h2
-            className="text-4xl font-black tracking-tight mb-4 text-white"
-            style={{ textWrap: "balance", letterSpacing: "-0.02em" } as React.CSSProperties}
-          >
-            One pipeline. Four instruments.
-          </h2>
-          <p className="text-white/45 max-w-lg mx-auto text-sm leading-relaxed">
-            Measure → Research → Write → Publish → Re-measure. Fully automatic.
-          </p>
-        </div>
+        <ScrollReveal>
+          <div className="text-center pt-20 pb-12">
+            <h2
+              className="text-4xl font-black tracking-tight mb-4 text-white"
+              style={{ textWrap: "balance", letterSpacing: "-0.02em" } as React.CSSProperties}
+            >
+              One pipeline. Four instruments.
+            </h2>
+            <p className="text-[#555] max-w-lg mx-auto text-sm leading-relaxed">
+              Measure → Research → Write → Publish → Re-measure. Fully automatic.
+            </p>
+          </div>
+        </ScrollReveal>
 
         <div className="space-y-4">
           {/* Row 1: Visibility (2/3) + Engines (1/3) */}
+          <ScrollReveal>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 bg-[#111] border border-white/[0.06] rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-[10px] font-mono text-brand font-bold">01</span>
-                <span className="text-[10px] text-white/30 uppercase tracking-widest">Visibility</span>
+              <div className="mb-4">
+                <span className="text-[10px] text-white/30 uppercase tracking-widest tracking-[0.12em]">Visibility</span>
               </div>
               <h3 className="text-xl font-black text-white mb-5 leading-tight">
                 See exactly where AI ranks your brand.
@@ -326,9 +329,14 @@ function BentoGrid() {
             </div>
           </div>
 
+          </ScrollReveal>
           {/* Row 2: Stat + Research + Generate */}
+          <ScrollReveal delay={100}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-brand rounded-2xl p-6 flex flex-col justify-between min-h-[220px]">
+            <div
+              className="bg-brand rounded-2xl p-6 flex flex-col justify-between min-h-[220px]"
+              style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1px)", backgroundSize: "20px 20px" }}
+            >
               <span className="text-white/70 text-[10px] uppercase tracking-widest font-medium">Time to first data</span>
               <div>
                 <div className="text-5xl font-black text-white leading-none mt-3">~60s</div>
@@ -338,9 +346,8 @@ function BentoGrid() {
             </div>
 
             <div className="bg-[#111] border border-white/[0.06] rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-[10px] font-mono text-brand font-bold">02</span>
-                <span className="text-[10px] text-white/30 uppercase tracking-widest">Research</span>
+              <div className="mb-4">
+                <span className="text-[10px] text-white/30 uppercase tracking-widest tracking-[0.12em]">Research</span>
               </div>
               <h3 className="text-lg font-black text-white mb-4 leading-tight">Mine the gaps AI is about to fill.</h3>
               <div className="space-y-2">
@@ -355,9 +362,8 @@ function BentoGrid() {
             </div>
 
             <div className="bg-[#111] border border-white/[0.06] rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-[10px] font-mono text-brand font-bold">03</span>
-                <span className="text-[10px] text-white/30 uppercase tracking-widest">Generate</span>
+              <div className="mb-4">
+                <span className="text-[10px] text-white/30 uppercase tracking-widest tracking-[0.12em]">Generate</span>
               </div>
               <h3 className="text-lg font-black text-white mb-4 leading-tight">Write what citation engines quote.</h3>
               <div className="bg-black/50 rounded-xl p-3.5 border border-white/[0.04] font-mono text-[10px]">
@@ -376,13 +382,14 @@ function BentoGrid() {
             </div>
           </div>
 
+          </ScrollReveal>
           {/* Row 3: Publish — full width */}
+          <ScrollReveal delay={200}>
           <div className="bg-[#111] border border-white/[0.06] rounded-2xl p-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-8">
               <div className="shrink-0 sm:w-52">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-mono text-brand font-bold">04</span>
-                  <span className="text-[10px] text-white/30 uppercase tracking-widest">Publish</span>
+                <div className="mb-2">
+                  <span className="text-[10px] text-white/30 uppercase tracking-widest tracking-[0.12em]">Publish</span>
                 </div>
                 <h3 className="text-xl font-black text-white leading-snug">
                   Publish once.<br />Structured for citation.
@@ -401,6 +408,7 @@ function BentoGrid() {
               </div>
             </div>
           </div>
+          </ScrollReveal>
         </div>
       </div>
     </section>
@@ -409,7 +417,7 @@ function BentoGrid() {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white text-[#111]" style={{ fontFamily: "var(--font-geist-sans, system-ui, sans-serif)" }}>
+    <div className="min-h-screen bg-[#080808] text-[#c8c8c8]" style={{ fontFamily: "var(--font-geist-sans, system-ui, sans-serif)" }}>
 
       <a
         href="#main-content"
@@ -419,7 +427,7 @@ export default function LandingPage() {
       </a>
 
       {/* NAV */}
-      <nav className="relative sticky top-0 z-50 bg-[#0d0d0d] border-b border-white/10" aria-label="Main navigation">
+      <nav className="relative sticky top-0 z-50 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-white/[0.06]" aria-label="Main navigation">
         <div className="flex items-center justify-between px-8 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-2.5">
             <LogoIcon />
@@ -448,73 +456,70 @@ export default function LandingPage() {
         {/* HERO */}
         <section
           className="relative overflow-hidden"
-          style={{ background: "radial-gradient(ellipse at 50% -10%, rgba(200,55,45,0.18) 0%, transparent 55%), #0d0d0d" }}
+          style={{
+            background: "#080808",
+            backgroundImage: [
+              "radial-gradient(ellipse at 50% -5%, rgba(200,55,45,0.13) 0%, transparent 52%)",
+              "radial-gradient(circle, rgba(255,255,255,0.045) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize: "100% 100%, 24px 24px",
+          }}
         >
-          <div className="relative max-w-4xl mx-auto px-8 pt-16 pb-20 text-center">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-3 border border-white/15 bg-white/8 backdrop-blur-sm rounded-full px-4 py-1.5 text-xs font-medium tracking-wide mb-10">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-brand animate-pulse motion-reduce:animate-none" aria-hidden="true" />
-                <span className="uppercase tracking-widest text-brand font-semibold">Up to 7 engines</span>
-              </span>
-              <span className="text-white/30" aria-hidden="true">·</span>
-              <span className="uppercase tracking-widest text-white/70">Daily updates</span>
-              <span className="text-white/30 ml-1" aria-hidden="true">→</span>
-            </div>
+          <div className="relative max-w-4xl mx-auto px-8 pt-20 pb-24 text-center">
+            <ScrollReveal>
+              <p className="text-sm text-white/35 tracking-wide mb-10">
+                Track your brand across every AI engine —{" "}
+                <span className="text-white/55">ChatGPT, Claude, Gemini, Perplexity, Grok, AI Overviews</span>
+              </p>
+              <h1
+                className="leading-[1.05] font-black tracking-tight mb-7 text-white"
+                style={{ fontSize: "clamp(2.5rem, 10vw, 5rem)", letterSpacing: "-0.03em", textWrap: "balance" } as React.CSSProperties}
+              >
+                Be the answer<br />
+                in <RotatingWord /> AI&nbsp;search.
+              </h1>
+            </ScrollReveal>
 
-            {/* Headline */}
-            <h1
-              className="leading-[1.05] font-black tracking-tight mb-8 text-white"
-              style={{ fontSize: "clamp(2.5rem, 10vw, 5rem)", letterSpacing: "-0.03em", textWrap: "balance" } as React.CSSProperties}
-            >
-              Be the answer<br />
-              in <RotatingWord /> AI&nbsp;search.
-            </h1>
+            <ScrollReveal delay={120}>
+              <p className="text-base text-white/50 mb-10 max-w-xl mx-auto leading-relaxed">
+                Measure your AI visibility, mine content gaps, generate citation-ready articles, and publish — all in one pipeline.
+              </p>
 
-            {/* Subtext */}
-            <p className="text-lg text-white/75 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Track how{" "}
-              <strong className="text-white/95">ChatGPT, Claude, Gemini, Perplexity, Grok, AI Overviews</strong>{" "}
-              answer about your brand — then close the gap with research, articles, and publishing.{" "}
-              <strong className="text-white/95">One pipeline.</strong>
-            </p>
+              <div className="max-w-xl mx-auto mb-5">
+                <DomainForm variant="hero" />
+              </div>
 
-            {/* Form */}
-            <div className="max-w-xl mx-auto mb-5">
-              <DomainForm variant="hero" />
-            </div>
-
-            <p className="text-xs text-white/55 tracking-wide">
-              <span className="uppercase font-semibold text-white/65">Free analysis</span>
-              {" · "}Paid plans track up to 7 engines{" · "}Results in ~60s
-            </p>
+              <p className="text-xs text-white/30 tracking-wide">
+                Free analysis · Paid plans track up to 7 engines · Results in ~60s
+              </p>
+            </ScrollReveal>
           </div>
         </section>
 
         {/* DASHBOARD MOCKUP */}
-        <section className="px-8 pb-20 bg-[#0d0d0d] pt-4">
-          <DashboardMockup />
+        <section className="px-8 pb-20 bg-[#080808] pt-4">
+          <div style={{ filter: "drop-shadow(0 32px 80px rgba(200,55,45,0.07))" }}>
+            <DashboardMockup />
+          </div>
         </section>
 
         {/* ENGINE STRIP */}
-        <section className="border-y border-gray-100 bg-[#f4f6ff] py-6 px-8">
-          <p className="text-center text-xs uppercase tracking-widest text-[#6b7280] font-medium mb-5">
+        <section className="border-y border-white/[0.06] bg-[#080808] py-5 px-8">
+          <p className="text-center text-[11px] tracking-widest text-[#3a3a3a] font-medium mb-4 uppercase">
             Tracking visibility across every major AI engine
           </p>
-          <div className="flex items-center justify-center gap-6 flex-wrap">
+          <div className="flex items-center justify-center gap-8 flex-wrap">
             {[
-              { name: "ChatGPT", bg: "#10a37f" },
-              { name: "Claude", bg: "#d4673a" },
-              { name: "Perplexity", bg: "#1c1c1c" },
-              { name: "Gemini", bg: "#4285f4" },
-              { name: "Grok", bg: "#111" },
-              { name: "AI Overviews", bg: "#4285f4" },
-              { name: "AI Mode", bg: "#8b5cf6" },
+              { name: "ChatGPT", color: "#10a37f" },
+              { name: "Claude", color: "#d4673a" },
+              { name: "Perplexity", color: "#888" },
+              { name: "Gemini", color: "#4285f4" },
+              { name: "Grok", color: "#666" },
+              { name: "AI Overviews", color: "#4285f4" },
+              { name: "AI Mode", color: "#8b5cf6" },
             ].map((e) => (
-              <div key={e.name} className="flex items-center gap-2 text-sm text-[#374151] font-medium">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold" style={{ background: e.bg }} aria-hidden="true">
-                  {e.name[0]}
-                </div>
+              <div key={e.name} className="flex items-center gap-2 text-sm text-[#555] font-medium">
+                <span style={{ color: e.color, fontSize: 8 }} aria-hidden="true">●</span>
                 {e.name}
               </div>
             ))}
@@ -524,29 +529,32 @@ export default function LandingPage() {
         <BentoGrid />
 
         {/* HOW IT WORKS */}
-        <section className="bg-[#f4f6ff] border-y border-gray-100 py-24 px-8">
+        <section className="bg-[#0d0d0d] border-y border-white/[0.06] py-24 px-8">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-14">
-              <h2 className="text-4xl font-black tracking-tight mb-3" style={{ textWrap: "balance" } as React.CSSProperties}>
-                Diagnose. Treat. Repeat.
-              </h2>
-              <p className="text-[#4b5563]">Every morning, you wake up to fresh visibility signals. Here&apos;s the loop.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { step: "01", label: "Diagnose", desc: "Plug in your domain. Daily visibility updates begin across your plan engines. Your first composite visibility index arrives in minutes." },
-                { step: "02", label: "Research", desc: "Generative query mining, topic clusters, AI overlap & intent scoring. Outlines you approve." },
-                { step: "03", label: "Write", desc: "Source-grounded article generation tuned to citation patterns. Schema and FAQ included." },
-                { step: "04", label: "Publish", desc: "One-click to your CMS, structured for citation. Schema, canonical, and internal links, handled." },
-              ].map((s) => (
-                <div key={s.step}>
-                  <div className="text-xs font-mono text-brand font-bold mb-2">{s.step}</div>
-                  <h3 className="font-black text-lg mb-2">{s.label}</h3>
-                  <p className="text-sm text-[#4b5563] leading-relaxed">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-            <p className="text-center text-xs text-[#6b7280] mt-10 uppercase tracking-widest">
+            <ScrollReveal>
+              <div className="text-center mb-14">
+                <h2 className="text-4xl font-black tracking-tight mb-3 text-white" style={{ textWrap: "balance" } as React.CSSProperties}>
+                  Diagnose. Treat. Repeat.
+                </h2>
+                <p className="text-[#555]">Every morning, you wake up to fresh visibility signals. Here&apos;s the loop.</p>
+              </div>
+            </ScrollReveal>
+            <ScrollReveal delay={80}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                {[
+                  { label: "Diagnose", desc: "Plug in your domain. Daily visibility updates begin across your plan engines. Your first composite visibility index arrives in minutes." },
+                  { label: "Research", desc: "Generative query mining, topic clusters, AI overlap & intent scoring. Outlines you approve." },
+                  { label: "Write", desc: "Source-grounded article generation tuned to citation patterns. Schema and FAQ included." },
+                  { label: "Publish", desc: "One-click to your CMS, structured for citation. Schema, canonical, and internal links, handled." },
+                ].map((s) => (
+                  <div key={s.label} className="border-t-2 border-brand/25 pt-5">
+                    <h3 className="font-black text-lg mb-2 text-white">{s.label}</h3>
+                    <p className="text-sm text-[#555] leading-relaxed">{s.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollReveal>
+            <p className="text-center text-xs text-[#3a3a3a] mt-10 uppercase tracking-widest">
               The loop runs daily: update visibility, treat gaps, re-measure.
             </p>
           </div>
@@ -559,19 +567,31 @@ export default function LandingPage() {
         <FAQSection />
 
         {/* BOTTOM CTA */}
-        <section className="bg-[#111] text-white py-24 px-8 text-center">
-          <h2 className="text-4xl font-black tracking-tight mb-4" style={{ textWrap: "balance" } as React.CSSProperties}>
-            Be in the answer,<br />not just on the page.
-          </h2>
-          <p className="text-[#9ca3af] mb-8 max-w-md mx-auto">
-            Run a free diagnosis in minutes. See exactly where you stand across the engines that now answer your customers&apos; questions.
-          </p>
-          <div className="max-w-md mx-auto mb-5">
-            <DomainForm variant="cta" />
-          </div>
-          <p className="text-xs text-white/55 tracking-wide uppercase">
-            Free analysis · Paid plans track up to 7 engines · Results in ~60s
-          </p>
+        <section
+          className="text-white py-24 px-8 text-center"
+          style={{
+            background: "#0a0a0a",
+            backgroundImage: [
+              "radial-gradient(ellipse at 50% 100%, rgba(200,55,45,0.1) 0%, transparent 60%)",
+              "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize: "100% 100%, 24px 24px",
+          }}
+        >
+          <ScrollReveal>
+            <h2 className="text-4xl font-black tracking-tight mb-4 text-white" style={{ textWrap: "balance" } as React.CSSProperties}>
+              Be in the answer,<br />not just on the page.
+            </h2>
+            <p className="text-[#555] mb-8 max-w-md mx-auto">
+              Run a free diagnosis in minutes. See exactly where you stand across the engines that now answer your customers&apos; questions.
+            </p>
+            <div className="max-w-md mx-auto mb-5">
+              <DomainForm variant="cta" />
+            </div>
+            <p className="text-xs text-white/30 tracking-wide uppercase">
+              Free analysis · Paid plans track up to 7 engines · Results in ~60s
+            </p>
+          </ScrollReveal>
         </section>
       </main>
 

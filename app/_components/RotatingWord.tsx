@@ -27,7 +27,7 @@ export function RotatingWord() {
   }, []);
 
   return (
-    <span className="inline-grid text-[#c8372d]" aria-live="polite" aria-atomic="true">
+    <span className="inline-grid text-white border-b-2 border-brand pb-0.5" aria-live="polite" aria-atomic="true">
       {WORDS.map((word, i) => (
         <span
           key={word}
