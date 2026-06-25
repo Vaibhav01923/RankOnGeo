@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { RotatingWord } from "./_components/RotatingWord";
 import { DomainForm } from "./_components/DomainForm";
 import { PricingSection } from "./_components/PricingSection";
 import { FAQSection } from "./_components/FAQSection";
 import { MobileNav } from "./_components/MobileNav";
 import { ScrollReveal } from "./_components/ScrollReveal";
+import { InteractiveDemoMockup } from "./_components/InteractiveDemoMockup";
 
 export const metadata: Metadata = {
   title: "RankOnGeo — Track Your Brand in AI Search",
@@ -467,39 +467,44 @@ export default function LandingPage() {
         >
           <div className="relative max-w-4xl mx-auto px-8 pt-20 pb-24 text-center">
             <ScrollReveal>
-              <p className="text-sm text-white/35 tracking-wide mb-10">
-                Track your brand across every AI engine —{" "}
-                <span className="text-white/55">ChatGPT, Claude, Gemini, Perplexity, Grok, AI Overviews</span>
-              </p>
               <h1
-                className="leading-[1.05] font-black tracking-tight mb-7 text-white"
-                style={{ fontSize: "clamp(2.5rem, 10vw, 5rem)", letterSpacing: "-0.03em", textWrap: "balance" } as React.CSSProperties}
+                className="leading-[1.06] font-black tracking-tight mb-6 text-white"
+                style={{ fontSize: "clamp(2.4rem, 9vw, 4.8rem)", letterSpacing: "-0.03em", textWrap: "balance" } as React.CSSProperties}
               >
-                Be the answer<br />
-                in <RotatingWord /> AI&nbsp;search.
+                Track where AI ranks<br />
+                your brand.
               </h1>
+              <p className="text-base text-white/45 mb-10 max-w-lg mx-auto leading-relaxed">
+                See exactly what ChatGPT, Claude, Gemini, Perplexity, and Grok say about your brand — then close the gaps with research, articles, and one-click publishing.
+              </p>
             </ScrollReveal>
 
-            <ScrollReveal delay={120}>
-              <p className="text-base text-white/50 mb-10 max-w-xl mx-auto leading-relaxed">
-                Measure your AI visibility, mine content gaps, generate citation-ready articles, and publish — all in one pipeline.
-              </p>
-
-              <div className="max-w-xl mx-auto mb-5">
+            <ScrollReveal delay={100}>
+              <div className="max-w-xl mx-auto mb-6">
                 <DomainForm variant="hero" />
               </div>
 
-              <p className="text-xs text-white/30 tracking-wide">
-                Free analysis · Paid plans track up to 7 engines · Results in ~60s
-              </p>
+              <div className="flex items-center justify-center gap-6 text-sm">
+                {[
+                  { stat: "7", label: "AI engines" },
+                  { stat: "~60s", label: "first scan" },
+                  { stat: "Free", label: "to start" },
+                ].map((s, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    {i > 0 && <span className="text-white/15" aria-hidden="true">·</span>}
+                    <span className="font-bold text-white">{s.stat}</span>
+                    <span className="text-white/35">{s.label}</span>
+                  </div>
+                ))}
+              </div>
             </ScrollReveal>
           </div>
         </section>
 
-        {/* DASHBOARD MOCKUP */}
-        <section className="px-8 pb-20 bg-[#080808] pt-4">
+        {/* INTERACTIVE DEMO */}
+        <section className="px-8 pb-20 bg-[#080808] pt-4 overflow-x-auto">
           <div style={{ filter: "drop-shadow(0 32px 80px rgba(200,55,45,0.07))" }}>
-            <DashboardMockup />
+            <InteractiveDemoMockup />
           </div>
         </section>
 
