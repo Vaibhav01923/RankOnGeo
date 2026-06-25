@@ -1,389 +1,210 @@
 "use client";
 import { useState } from "react";
 
-function LogoIcon({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <rect width="28" height="28" rx="7" fill="#c8372d" />
-      <path d="M14 5C10.96 5 8.5 7.46 8.5 10.5c0 4.63 5.5 12.5 5.5 12.5s5.5-7.87 5.5-12.5C19.5 7.46 17.04 5 14 5z" fill="white" />
-      <circle cx="14" cy="10.5" r="2.2" fill="#c8372d" />
-    </svg>
-  );
-}
-
-const SIDEBAR: Record<string, string[]> = {
-  Measure: ["Overview", "Engines", "Prompts", "Competitors"],
-  Create: ["Research", "Articles"],
+const ENG_COLORS: Record<string, string> = {
+  ChatGPT: "#10a37f",
+  Claude: "#d4673a",
+  Gemini: "#4285f4",
+  Perplexity: "#7c3aed",
+  Grok: "#1a1a1a",
+  "Google AI": "#c8372d",
 };
+const ENGINES = ["ChatGPT", "Claude", "Gemini", "Perplexity", "Grok", "Google AI"];
 
-function Sidebar({ active, onChange }: { active: string; onChange: (t: string) => void }) {
-  return (
-    <div className="w-52 bg-[#f8f9fb] border-r border-[#eaecf0] flex flex-col shrink-0">
-      <div className="px-4 py-3 border-b border-[#eaecf0] flex items-center gap-2">
-        <LogoIcon size={20} />
-        <span className="font-bold text-sm tracking-tight text-[#111]">
-          RankOn<span className="text-[#c8372d]">Geo</span>
-        </span>
-      </div>
-      <div className="px-3 py-2 border-b border-[#eaecf0]">
-        <div className="flex items-center gap-2 bg-white border border-[#e5e7eb] rounded-lg px-2.5 py-2">
-          <div className="w-6 h-6 bg-[#c8372d] rounded flex items-center justify-center text-white text-[10px] font-bold">P</div>
-          <div>
-            <div className="text-xs font-semibold text-[#111]">Playwright</div>
-            <div className="text-[10px] text-[#888] uppercase tracking-wide">microsoft.com</div>
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 px-2 py-2 space-y-4 text-xs overflow-y-auto">
-        {Object.entries(SIDEBAR).map(([section, tabs]) => (
-          <div key={section}>
-            <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-[#bbb] font-medium">{section}</div>
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => onChange(tab)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
-                  active === tab
-                    ? "bg-white border border-[#e5e7eb] text-[#111] font-medium shadow-sm"
-                    : "text-[#666] hover:bg-white/60"
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${active === tab ? "bg-[#c8372d]" : "bg-transparent"}`} />
-                {tab}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="border-t border-[#eaecf0] px-3 py-2">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-[#c8372d] rounded-full flex items-center justify-center text-white text-[10px] font-bold">MS</div>
-          <div>
-            <div className="text-[10px] font-medium text-[#111]">demo@playwright.dev</div>
-            <div className="text-[10px] text-[#888]">Business plan</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ── OVERVIEW ──────────────────────────────────────────────────────
 function OverviewContent() {
-  const stats = [
-    { label: "Composite Visibility", value: "72.4%", sub: "+8.1 pts this month", up: true },
-    { label: "Mentions", value: "3,241", sub: "+12% mention rate", up: true },
-    { label: "Avg Position", value: "1.8", sub: "lower is better", up: true },
-    { label: "Sentiment", value: "91", sub: "positive", up: true },
-  ];
-  const rankings = [
-    { rank: "01", name: "Playwright", you: true, vis: "72.4", sov: "38%", sent: 91 },
-    { rank: "02", name: "Cypress", vis: "54.1", sov: "28%", sent: 74 },
-    { rank: "03", name: "Selenium", vis: "41.8", sov: "22%", sent: 58 },
-    { rank: "04", name: "Puppeteer", vis: "28.3", sov: "12%", sent: 66 },
-  ];
+  const trend = [42, 46, 44, 50, 54, 52, 58, 62, 60, 65, 68, 65, 70, 72, 74];
+  const max = Math.max(...trend), min = Math.min(...trend);
+  const norm = trend.map((v) => ((v - min) / (max - min)) * 55);
+  const poly = norm.map((v, i) => `${i * 27 + 8},${60 - v}`).join(" ");
+  const lastX = 8 + 14 * 27, lastY = 60 - norm[14];
   return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <h2 className="text-base font-bold text-[#111] mb-0.5">Overview</h2>
-      <p className="text-[11px] text-[#888] mb-4">Visibility up 8.1 pts this month · playwright.dev</p>
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <h2 className="text-lg font-bold text-[#111] mb-0.5">Overview</h2>
+      <p className="text-xs text-[#aaa] mb-4">playwright.dev · last scan Jun 24, 2026</p>
       <div className="grid grid-cols-4 gap-2.5 mb-4">
-        {stats.map((s) => (
-          <div key={s.label} className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-            <div className="text-[8px] uppercase tracking-widest text-[#aaa] font-medium mb-1">{s.label}</div>
-            <div className="text-xl font-bold text-[#111] mb-0.5">{s.value}</div>
-            <div className="text-[9px] text-[#c8372d] font-medium">{s.sub}</div>
-            <div className="mt-2 h-5 flex items-end gap-0.5">
-              {[40, 44, 48, 46, 52, 56, 54, 60, 63, 68, 72, 76].map((h, i) => (
-                <div key={i} className="flex-1 bg-red-100 rounded-sm" style={{ height: `${h}%` }} />
-              ))}
-            </div>
+        {[
+          { label: "COMPOSITE VISIBILITY", val: "72.4%", sub: "+8.1% vs last scan" },
+          { label: "TOTAL MENTIONS", val: "3,241", sub: "+12% this week" },
+          { label: "AVG POSITION", val: "1.8", sub: "across all engines" },
+          { label: "SENTIMENT", val: "89%", sub: "positive responses" },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl p-3.5 border border-[#e5e0da]">
+            <p className="text-[9px] font-semibold text-[#bbb] tracking-wider mb-1 uppercase">{s.label}</p>
+            <p className="text-xl font-black text-[#111]">{s.val}</p>
+            <p className="text-[10px] text-[#aaa] mt-0.5">{s.sub}</p>
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-semibold text-[#111]">Visibility trend</span>
-            <span className="text-[10px] text-[#aaa]">· last 30 days</span>
-            <div className="ml-auto flex items-center gap-3 text-[10px]">
-              <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-[#c8372d]" />Playwright</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-[#888]" />Cypress</span>
-            </div>
-          </div>
-          <svg viewBox="0 0 280 70" className="w-full" style={{ height: 70 }}>
-            <polyline points="0,62 23,58 47,53 70,50 93,46 117,42 140,38 163,34 187,30 210,26 233,22 257,18 280,15" fill="none" stroke="#c8372d" strokeWidth="2" />
-            <polyline points="0,68 23,66 47,63 70,61 93,59 117,58 140,57 163,56 187,55 210,54 233,54 257,53 280,53" fill="none" stroke="#888" strokeWidth="1.5" strokeDasharray="4,3" />
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="col-span-2 bg-white rounded-xl border border-[#e5e0da] p-4">
+          <p className="text-xs font-semibold text-[#444] mb-2">Visibility trend — last 15 scans</p>
+          <svg width="100%" height="65" viewBox="0 0 390 65">
+            <polyline points={poly} fill="none" stroke="#c8372d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx={lastX} cy={lastY} r="3.5" fill="#c8372d" />
           </svg>
         </div>
-        <div className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-semibold text-[#111]">Brand rankings</span>
-            <span className="text-[10px] text-[#aaa]">· by AI visibility</span>
+        <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
+          <p className="text-xs font-semibold text-[#444] mb-3">By engine</p>
+          <div className="space-y-2">
+            {[
+              { name: "ChatGPT", pct: 80 }, { name: "Claude", pct: 74 }, { name: "Gemini", pct: 72 },
+              { name: "Perplexity", pct: 69 }, { name: "Grok", pct: 65 }, { name: "Google AI", pct: 79 },
+            ].map((e) => (
+              <div key={e.name} className="flex items-center gap-1.5">
+                <span className="text-[9px] text-[#888] w-14 text-right shrink-0 truncate">{e.name}</span>
+                <div className="flex-1 h-1.5 bg-[#f0ece6] rounded-full">
+                  <div className="h-full rounded-full" style={{ width: `${e.pct}%`, background: ENG_COLORS[e.name] }} />
+                </div>
+                <span className="text-[9px] text-[#888] w-6 shrink-0">{e.pct}%</span>
+              </div>
+            ))}
           </div>
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="text-[#aaa] uppercase">
-                <th className="text-left py-0.5 font-medium w-5">#</th>
-                <th className="text-left py-0.5 font-medium">Brand</th>
-                <th className="text-right py-0.5 font-medium">Vis.</th>
-                <th className="text-right py-0.5 font-medium">SOV</th>
-                <th className="text-right py-0.5 font-medium">Sent.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rankings.map((r) => (
-                <tr key={r.rank} className={r.you ? "bg-red-50" : ""}>
-                  <td className="py-0.5 text-[#aaa]">{r.rank}</td>
-                  <td className="py-0.5">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3.5 h-3.5 rounded flex items-center justify-center text-white text-[7px] font-bold shrink-0 bg-[#111]">{r.name[0]}</div>
-                      <span className={r.you ? "font-semibold text-[#111]" : "text-[#555]"}>{r.name}</span>
-                      {r.you && <span className="bg-[#c8372d] text-white text-[7px] px-1 rounded font-bold">YOU</span>}
-                    </div>
-                  </td>
-                  <td className="py-0.5 text-right font-medium text-[#111]">{r.vis}</td>
-                  <td className="py-0.5 text-right text-[#888]">{r.sov}</td>
-                  <td className="py-0.5 text-right">
-                    <span className={`font-bold text-[10px] ${r.sent >= 80 ? "text-green-600" : r.sent >= 60 ? "text-yellow-600" : "text-red-500"}`}>{r.sent}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
   );
 }
 
+// ── ENGINES ───────────────────────────────────────────────────────
 function EnginesContent() {
-  const engines = [
-    { name: "ChatGPT", color: "#10a37f", pct: 81, logo: "/openai.svg" },
-    { name: "AI Overviews", color: "#4285f4", pct: 79 },
-    { name: "Perplexity", color: "#20b2aa", pct: 77, logo: "/perplexity.svg" },
-    { name: "Claude", color: "#d4673a", pct: 74, logo: "/claude.svg" },
-    { name: "Gemini", color: "#4285f4", pct: 68, logo: "/gemini.svg" },
-    { name: "AI Mode", color: "#8b5cf6", pct: 65 },
-    { name: "Grok", color: "#555", pct: 61, logo: "/grok.svg" },
+  const scans: Array<{ overall: number; data: Record<string, number>; time: string }> = [
+    { overall: 74, data: { ChatGPT: 80, Claude: 78, Gemini: 72, Perplexity: 69, Grok: 65, "Google AI": 79 }, time: "Jun 24, 2026, 12:01 AM" },
+    { overall: 71, data: { ChatGPT: 75, Claude: 74, Gemini: 68, Perplexity: 71, Grok: 61, "Google AI": 77 }, time: "Jun 23, 2026, 11:09 PM" },
+    { overall: 68, data: { ChatGPT: 73, Claude: 70, Gemini: 65, Perplexity: 64, Grok: 58, "Google AI": 74 }, time: "Jun 23, 2026, 10:54 PM" },
   ];
   return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <h2 className="text-base font-bold text-[#111] mb-0.5">Engines</h2>
-      <p className="text-[11px] text-[#888] mb-5">Playwright visibility per AI engine · last 30 days</p>
-      <div className="space-y-3">
-        {engines.map((e) => (
-          <div key={e.name} className="flex items-center gap-3">
-            <div className="w-28 flex items-center justify-end shrink-0">
-              {"logo" in e && e.logo ? (
-                <img src={e.logo} alt={e.name} className="h-3.5 w-auto max-w-[88px]" style={{ filter: "brightness(0) opacity(0.55)" }} />
-              ) : (
-                <span className="text-xs text-[#444]">{e.name}</span>
-              )}
-            </div>
-            <div className="flex-1 h-2 bg-[#f3f4f6] rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${e.pct}%`, background: e.color }} />
-            </div>
-            <div className="w-9 text-xs font-semibold text-[#111] text-right shrink-0">{e.pct}%</div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 grid grid-cols-3 gap-2.5">
-        {[
-          { label: "Avg visibility", value: "72.1%", sub: "across 7 engines" },
-          { label: "Top engine", value: "ChatGPT", sub: "81% visibility" },
-          { label: "Weakest", value: "Grok", sub: "61% — gap to close" },
-        ].map((s) => (
-          <div key={s.label} className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-            <div className="text-[9px] uppercase tracking-widest text-[#aaa] font-medium mb-1">{s.label}</div>
-            <div className="text-sm font-bold text-[#111]">{s.value}</div>
-            <div className="text-[9px] text-[#888] mt-0.5">{s.sub}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PromptsContent() {
-  const prompts = [
-    { q: "best e2e testing framework 2025", mentioned: true, rank: 1, engine: "ChatGPT" },
-    { q: "playwright vs cypress comparison", mentioned: true, rank: 2, engine: "Claude" },
-    { q: "browser automation for CI/CD pipelines", mentioned: true, rank: 1, engine: "Perplexity" },
-    { q: "how to test react apps end-to-end", mentioned: false, rank: null, engine: "Gemini" },
-  ];
-  return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-bold text-[#111] mb-0.5">Prompts</h2>
-          <p className="text-[11px] text-[#888]">4 tracked · 3 mentions · 1 gap</p>
-        </div>
-        <button className="bg-[#111] text-white text-[11px] px-3 py-1.5 rounded-lg">+ Add prompt</button>
-      </div>
-      <div className="space-y-2">
-        {prompts.map((p, i) => (
-          <div key={i} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${p.mentioned ? "bg-white border-[#eaecf0]" : "bg-red-50/50 border-red-100"}`}>
-            <span className={`text-xs shrink-0 font-bold ${p.mentioned ? "text-green-600" : "text-red-400"}`}>
-              {p.mentioned ? "✓" : "✗"}
-            </span>
-            <span className="flex-1 text-xs text-[#333] truncate">{p.q}</span>
-            <span className="text-[10px] bg-[#f3f4f6] text-[#666] px-2 py-0.5 rounded font-medium shrink-0">{p.engine}</span>
-            <span className="text-[10px] text-[#888] w-10 text-right shrink-0">
-              {p.rank ? `#${p.rank}` : "—"}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 grid grid-cols-3 gap-2.5">
-        {[
-          { label: "Mention rate", value: "75%", sub: "3 of 4 prompts" },
-          { label: "Avg rank", value: "#1.3", sub: "when mentioned" },
-          { label: "Coverage gap", value: "1 prompt", sub: "react e2e testing" },
-        ].map((s) => (
-          <div key={s.label} className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-            <div className="text-[9px] uppercase tracking-widest text-[#aaa] font-medium mb-1">{s.label}</div>
-            <div className="text-sm font-bold text-[#111]">{s.value}</div>
-            <div className="text-[9px] text-[#888] mt-0.5">{s.sub}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CompetitorsContent() {
-  const brands = [
-    { name: "Playwright", you: true, sov: 38, vis: 72.4, sent: 91, color: "#c8372d" },
-    { name: "Cypress", sov: 28, vis: 54.1, sent: 74, color: "#3b82f6" },
-    { name: "Selenium", sov: 22, vis: 41.8, sent: 58, color: "#f59e0b" },
-    { name: "Puppeteer", sov: 12, vis: 28.3, sent: 66, color: "#8b5cf6" },
-  ];
-  return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <h2 className="text-base font-bold text-[#111] mb-0.5">Competitors</h2>
-      <p className="text-[11px] text-[#888] mb-4">Share of voice · AI search · last 30 days</p>
-      <div className="space-y-3 mb-5">
-        {brands.map((b) => (
-          <div key={b.name} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${b.you ? "bg-red-50 border border-red-100" : "bg-white border border-[#eaecf0]"}`}>
-            <div className="w-28 flex items-center gap-2 shrink-0">
-              <div className="w-4 h-4 rounded flex items-center justify-center text-white text-[8px] font-bold shrink-0" style={{ background: b.color }}>{b.name[0]}</div>
-              <span className={`text-xs ${b.you ? "font-semibold text-[#111]" : "text-[#555]"}`}>{b.name}</span>
-              {b.you && <span className="bg-[#c8372d] text-white text-[7px] px-1 rounded font-bold ml-0.5">YOU</span>}
-            </div>
-            <div className="flex-1 h-2 bg-[#f3f4f6] rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${b.sov * 2}%`, background: b.color }} />
-            </div>
-            <span className="text-xs font-semibold text-[#111] w-8 text-right shrink-0">{b.sov}%</span>
-            <span className="text-[10px] text-[#888] w-8 text-right shrink-0">{b.vis}</span>
-            <span className={`text-[10px] font-bold w-6 text-right shrink-0 ${b.sent >= 80 ? "text-green-600" : b.sent >= 60 ? "text-yellow-600" : "text-red-500"}`}>{b.sent}</span>
-          </div>
-        ))}
-      </div>
-      <div className="text-[10px] text-[#aaa] flex gap-4">
-        <span>SOV = Share of Voice in AI answers</span>
-        <span>Vis. = Composite Visibility score</span>
-        <span>Sent. = Sentiment (0–100)</span>
-      </div>
-    </div>
-  );
-}
-
-function ResearchContent() {
-  const gaps = [
-    { kw: "playwright mobile testing guide", score: 91, priority: "high" },
-    { kw: "playwright docker setup tutorial", score: 88, priority: "high" },
-    { kw: "playwright vs webdriverio 2025", score: 84, priority: "high" },
-    { kw: "playwright typescript config best practices", score: 79, priority: "medium" },
-  ];
-  return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-bold text-[#111] mb-0.5">Research</h2>
-          <p className="text-[11px] text-[#888]">4 high-priority gaps · AI overlap scored</p>
-        </div>
-        <button className="text-[11px] border border-[#e5e7eb] px-3 py-1.5 rounded-lg text-[#555] hover:bg-gray-50">Refresh</button>
-      </div>
-      <div className="space-y-2">
-        {gaps.map((g, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-white border border-[#eaecf0]">
-            <span className="flex-1 text-xs text-[#333] truncate">{g.kw}</span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-12 h-1.5 bg-[#f3f4f6] rounded-full overflow-hidden">
-                <div className="h-full bg-[#c8372d] rounded-full" style={{ width: `${g.score}%` }} />
-              </div>
-              <span className="text-[11px] font-semibold text-[#c8372d] w-7 text-right">{g.score}%</span>
-            </div>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 ${g.priority === "high" ? "bg-red-50 text-red-500" : "bg-yellow-50 text-yellow-600"}`}>
-              {g.priority}
-            </span>
-            <button className="text-[10px] bg-[#111] text-white px-2.5 py-1 rounded-lg font-medium shrink-0 hover:bg-[#333] transition-colors">
-              + Article
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 border border-dashed border-[#e5e7eb] rounded-xl p-3 text-center">
-        <p className="text-[11px] text-[#888]">247 total gaps detected · showing top 4 by AI overlap score</p>
-      </div>
-    </div>
-  );
-}
-
-function ArticlesContent() {
-  const articles = [
-    { title: "Playwright vs Cypress: Complete 2025 Guide", status: "published", words: 2840, updated: "2d ago" },
-    { title: "Setting up Playwright in Docker", status: "draft", words: 1620, updated: "5h ago" },
-    { title: "Playwright TypeScript Configuration", status: "generating", words: null, updated: "now" },
-  ];
-  const statusStyle: Record<string, string> = {
-    published: "bg-emerald-50 text-emerald-600",
-    draft: "bg-[#f3f4f6] text-[#666]",
-    generating: "bg-yellow-50 text-yellow-600",
-  };
-  return (
-    <div className="px-5 py-4" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-bold text-[#111] mb-0.5">Articles</h2>
-          <p className="text-[11px] text-[#888]">3 pieces · 1 published · 1 draft · 1 generating</p>
-        </div>
-        <button className="bg-[#c8372d] text-white text-[11px] px-3 py-1.5 rounded-lg font-medium">+ Write article</button>
-      </div>
-      <div className="space-y-2">
-        {articles.map((a, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-3 bg-white border border-[#eaecf0]">
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <h2 className="text-lg font-bold text-[#111] mb-4">Engines</h2>
+      <div className="space-y-2.5">
+        {scans.map((scan, i) => (
+          <div key={i} className="bg-white rounded-xl border border-[#e5e0da] px-5 py-4 flex items-center gap-4">
+            <span className="text-3xl font-black text-[#111] w-14 shrink-0">{scan.overall}%</span>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-[#111] truncate">{a.title}</div>
-              <div className="text-[10px] text-[#aaa] mt-0.5">
-                {a.words ? `${a.words.toLocaleString()} words` : "Generating…"} · {a.updated}
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[#444] mb-1">
+                {ENGINES.map((e) => (
+                  <span key={e}>
+                    <span className="font-semibold">{e}:</span>{" "}
+                    <span className={scan.data[e] > 0 ? "text-[#222]" : "text-[#bbb]"}>{scan.data[e]}%</span>
+                  </span>
+                ))}
               </div>
+              <p className="text-[11px] text-[#aaa]">{scan.time}</p>
             </div>
-            <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium shrink-0 ${statusStyle[a.status]}`}>
-              {a.status === "generating" ? (
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                  generating
-                </span>
-              ) : a.status}
-            </span>
-            {a.status !== "generating" && (
-              <button className="text-[10px] border border-[#e5e7eb] px-2.5 py-1 rounded-lg text-[#555] shrink-0 hover:bg-gray-50 transition-colors">
-                Open ↗
-              </button>
+            <div className="flex gap-0.5 shrink-0">
+              {ENGINES.map((e) => (
+                <span key={e} style={{ color: ENG_COLORS[e], fontSize: 14 }}>●</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── PROMPTS ───────────────────────────────────────────────────────
+function PromptsContent() {
+  const [expanded, setExpanded] = useState<number | null>(1);
+  const rows = [
+    { engine: "Perplexity", prompt: "what's the best way to run parallel tests in different brow…", status: "Absent" },
+    {
+      engine: "ChatGPT",
+      prompt: "what tools can help me create visual dashboards for test…",
+      status: "Absent",
+      response: "Here are some top tools for creating visual dashboards for test results: 1. **Tableau** — A powerful data visualization tool that allows you to create interactive dashboards from various data sources. 2. **Microsoft Power BI** — User-friendly, integrates well with Microsoft products, and offers extensive reporting features. 3. **Google Data Studio** — A free tool that connects with various sources. 4. **Grafana** — Excellent for real-time monitoring, particularly with time-series data...",
+    },
+    {
+      engine: "Gemini",
+      prompt: "what tools can help me create visual dashboards for test…",
+      status: "Absent",
+      response: "Here are top tools for creating visual dashboards for test results: * **Tableau:** Powerful, feature-rich, and highly interactive. * **Power BI:** Excellent integration with Microsoft products, strong data modeling. * **Grafana:** Open-source, great for real-time monitoring and time-series data. * **Kibana:** Specifically designed for Elasticsearch, ideal for log analysis...",
+    },
+    { engine: "Perplexity", prompt: "what tools can help me create visual dashboards for test…", status: "Absent" },
+    {
+      engine: "Gemini",
+      prompt: "what framework is best for testing web apps with divers…",
+      status: "Mentioned",
+      response: "Here are my top framework recommendations: * **Cypress:** Excellent for end-to-end testing, fast and reliable. * **Playwright:** Supports multiple browsers and is built for modern web applications. Robust cross-browser testing capabilities. * **Selenium WebDriver:** A mature and widely adopted framework with various language bindings and strong community support...",
+    },
+    { engine: "Perplexity", prompt: "what framework is best for testing web apps with divers…", status: "Absent" },
+  ];
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <h2 className="text-lg font-bold text-[#111] mb-4">Prompts</h2>
+      <div className="space-y-2">
+        {rows.map((row, i) => (
+          <div
+            key={i}
+            className="bg-white rounded-xl border border-[#e5e0da] px-4 py-3 cursor-pointer"
+            onClick={() => setExpanded(expanded === i ? null : i)}
+          >
+            <div className="flex items-center gap-3">
+              <span style={{ color: ENG_COLORS[row.engine], fontSize: 11, lineHeight: 1 }}>●</span>
+              <span className="text-xs font-medium text-[#555] w-20 shrink-0">{row.engine}</span>
+              <span className="flex-1 text-xs text-[#222] truncate">{row.prompt}</span>
+              <span className={`text-xs font-semibold shrink-0 ${row.status === "Mentioned" ? "text-green-600" : "text-[#c8372d]"}`}>
+                {row.status}
+              </span>
+            </div>
+            {expanded === i && "response" in row && row.response && (
+              <p className="mt-2 pt-2 text-[11px] text-[#666] leading-relaxed border-t border-[#f0ece6]">{row.response}</p>
             )}
           </div>
         ))}
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-2.5">
-        {[
-          { label: "Published", value: "1", sub: "1 this month" },
-          { label: "In draft", value: "1", sub: "ready to review" },
-          { label: "Avg length", value: "2,230", sub: "words per article" },
-        ].map((s) => (
-          <div key={s.label} className="border border-[#eaecf0] rounded-xl p-3 bg-white">
-            <div className="text-[9px] uppercase tracking-widest text-[#aaa] font-medium mb-1">{s.label}</div>
-            <div className="text-sm font-bold text-[#111]">{s.value}</div>
-            <div className="text-[9px] text-[#888] mt-0.5">{s.sub}</div>
+    </div>
+  );
+}
+
+// ── CITATIONS ─────────────────────────────────────────────────────
+function CitationsContent() {
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <h2 className="text-lg font-bold text-[#111] mb-0.5">Citations</h2>
+      <p className="text-xs text-[#aaa] mb-4">Sources AI engines cited when mentioning Playwright</p>
+      <div className="grid grid-cols-3 gap-2.5 mb-3">
+        <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
+          <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-2">TOTAL CITATIONS</p>
+          <p className="text-3xl font-black text-[#111]">6</p>
+          <p className="text-[11px] text-[#aaa] mt-1">avg 0 per response</p>
+        </div>
+        <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
+          <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-2">BY SOURCE TYPE</p>
+          {[{ label: "Owned", count: 3 }, { label: "Editorial", count: 3 }].map((t) => (
+            <div key={t.label} className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs text-[#444] w-14 shrink-0">{t.label}</span>
+              <div className="flex-1 h-1.5 bg-[#f0ece6] rounded-full">
+                <div className="h-full bg-[#c8372d] rounded-full" style={{ width: "50%" }} />
+              </div>
+              <span className="text-xs text-[#888] w-4 text-right">{t.count}</span>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
+          <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-2">TOP CITING SOURCES</p>
+          {[{ src: "playwright.dev", type: "Owned", count: 3 }, { src: "example.com", type: "Editorial", count: 2 }, { src: "github.com", type: "Editorial", count: 1 }].map((s) => (
+            <div key={s.src} className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-[#444]">{s.src}</span>
+              <div className="flex items-center gap-1">
+                <span className={`text-[9px] px-1.5 py-0.5 rounded ${s.type === "Owned" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-[#666]"}`}>{s.type}</span>
+                <span className="text-xs text-[#888] w-3 text-right">{s.count}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
+        <p className="text-sm font-semibold text-[#111] mb-3">All citing sources · 3</p>
+        <div className="grid grid-cols-[1fr_80px_100px_60px] text-[9px] font-semibold text-[#bbb] tracking-wider uppercase pb-2 border-b border-[#f0ece6] mb-1">
+          <span>Source</span><span>Type</span><span>Engines</span><span className="text-right">Citations</span>
+        </div>
+        {[{ src: "playwright.dev", type: "Owned", engine: "ChatGPT", count: 3 }, { src: "example.com", type: "Editorial", engine: "ChatGPT", count: 2 }, { src: "github.com", type: "Editorial", engine: "ChatGPT", count: 1 }].map((row) => (
+          <div key={row.src} className="grid grid-cols-[1fr_80px_100px_60px] py-2.5 border-b border-[#f5f3f0] last:border-0 items-center">
+            <span className="text-xs text-[#333]">{row.src}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded w-fit ${row.type === "Owned" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-[#666]"}`}>{row.type}</span>
+            <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 rounded w-fit">{row.engine}</span>
+            <span className="text-sm font-semibold text-[#111] text-right">{row.count}</span>
           </div>
         ))}
       </div>
@@ -391,42 +212,320 @@ function ArticlesContent() {
   );
 }
 
+// ── COMPETITORS ───────────────────────────────────────────────────
+function CompetitorsContent() {
+  const data = [
+    { name: "Selenium", pct: 35 }, { name: "Cypress", pct: 35 },
+    { name: "Puppeteer", pct: 9 }, { name: "TestCafe", pct: 13 },
+    { name: "Playwright", pct: 51, isMe: true },
+  ];
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <div className="bg-white rounded-xl border border-[#e5e0da] p-5">
+        <h2 className="text-lg font-bold text-[#111] mb-0.5">Competitors</h2>
+        <p className="text-xs text-[#aaa] mb-5">Share of voice across AI engines</p>
+        <div className="space-y-3">
+          {data.map((d) => (
+            <div key={d.name} className="flex items-center gap-4">
+              <span className={`w-20 text-sm text-right shrink-0 ${d.isMe ? "font-bold text-[#111]" : "text-[#666]"}`}>{d.name}</span>
+              <div className="flex-1 h-2.5 bg-[#f0ece6] rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${d.pct}%`, background: d.isMe ? "#c8372d" : "#ccc" }} />
+              </div>
+              <span className={`w-9 text-sm text-right shrink-0 ${d.isMe ? "font-bold text-[#c8372d]" : "text-[#888]"}`}>{d.pct}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── RESEARCH ──────────────────────────────────────────────────────
+function ResearchContent() {
+  const gaps = [
+    { query: "what tools can help me create visual dashboards for test results?", absent: ["ChatGPT", "Gemini", "Perplexity"], instead: null, published: false },
+    { query: "how to ensure my tests are resilient and not impacted by UI changes?", absent: ["ChatGPT", "Gemini", "Perplexity"], instead: "Selenium", published: false },
+    { query: "what's the best way to run parallel tests in different browsers?", absent: ["Perplexity", "Gemini"], instead: "Selenium", published: false },
+    { query: "what tool do I use for testing across multiple browsers effortlessly?", absent: ["ChatGPT", "Perplexity"], instead: "Selenium", published: true },
+    { query: "how can I monitor browser sessions live during test execution?", absent: ["ChatGPT", "Gemini"], instead: "Cypress", published: false },
+  ];
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <h2 className="text-lg font-bold text-[#111] mb-0.5">Research</h2>
+      <p className="text-xs text-[#aaa] mb-4">20 queries where Playwright isn&apos;t mentioned</p>
+      <div className="space-y-2.5">
+        {gaps.map((g, i) => (
+          <div key={i} className="bg-white rounded-xl border border-[#e5e0da] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#111] mb-2">{g.query}</p>
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  {g.absent.map((e) => (
+                    <span key={e} className="text-[11px] px-2 py-0.5 rounded-full border border-[#c8372d]/30 text-[#c8372d] font-medium">Not in {e}</span>
+                  ))}
+                  {g.instead && <span className="text-[11px] text-[#888]">· {g.instead} appears instead</span>}
+                </div>
+                <p className="text-[11px] text-[#aaa]">Publishing an article that answers this query will teach AI engines to recommend Playwright for it.</p>
+              </div>
+              {g.published ? (
+                <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                  <span className="text-xs font-semibold text-green-600">Published</span>
+                  <span className="text-xs text-[#444] underline cursor-pointer">View article ↗</span>
+                </div>
+              ) : (
+                <button className="text-xs font-semibold bg-[#111] text-white px-3 py-1.5 rounded-lg shrink-0">Write article →</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── KEYWORDS ──────────────────────────────────────────────────────
+function KeywordsContent() {
+  const rows = [
+    { kw: "what is Playwright and how does it work for web automation?", pct: 67, competing: "—" },
+    { kw: "what tool do I use for testing across multiple browsers…", pct: 0, competing: "Selenium" },
+    { kw: "how can I automate my web app testing without flaky tests?", pct: 67, competing: "Selenium" },
+    { kw: "what's the best way to run parallel tests in different browsers?", pct: 33, competing: "Selenium" },
+    { kw: "how do I set up a testing environment for modern web…", pct: 67, competing: "Cypress" },
+    { kw: "recommend a tool that offers auto-waiting and assertions fo…", pct: 67, competing: "Selenium" },
+    { kw: "how do I get a fresh browser context for each test?", pct: 67, competing: "—" },
+  ];
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-[#111] mb-0.5">Keywords</h2>
+          <p className="text-xs text-[#aaa]">Tracked prompts &amp; visibility opportunities for playwright.dev</p>
+        </div>
+        <button className="text-xs font-semibold bg-[#111] text-white px-3 py-1.5 rounded-lg">+ Add keyword</button>
+      </div>
+      <div className="grid grid-cols-4 gap-2.5 mb-3">
+        {[{ label: "KEYWORDS", val: "20", sub: "tracked prompts" }, { label: "WITH GAPS", val: "20", sub: "need articles" }, { label: "AVG VISIBILITY", val: "53%", sub: "across engines" }, { label: "ENGINES", val: "6", sub: "being tracked" }].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-[#e5e0da] p-3.5">
+            <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-1">{s.label}</p>
+            <p className="text-2xl font-black text-[#111]">{s.val}</p>
+            <p className="text-[10px] text-[#aaa] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-xl border border-[#e5e0da]">
+        <div className="p-3 border-b border-[#f0ece6]">
+          <div className="w-full text-xs px-3 py-2 rounded-lg border border-[#e5e0da] bg-[#fafaf8] text-[#bbb]">Search keywords…</div>
+        </div>
+        <div className="px-4 py-2 flex gap-3 text-[9px] font-semibold text-[#bbb] tracking-wider uppercase border-b border-[#f0ece6]">
+          <span className="flex-1">Prompt / Keyword</span>
+          <span className="w-28 text-center">Visibility</span>
+          <span className="w-12 text-center">Status</span>
+          <span className="w-20 text-right">Competing with</span>
+          <span className="w-16"></span>
+        </div>
+        <div className="max-h-48 overflow-hidden">
+          {rows.map((r, i) => (
+            <div key={i} className="px-4 py-2.5 flex gap-3 items-center border-b border-[#f5f3f0] last:border-0">
+              <span className="flex-1 text-xs text-[#333] truncate">{r.kw}</span>
+              <div className="w-28 flex items-center gap-1.5">
+                <div className="flex-1 h-1.5 bg-[#f0ece6] rounded-full">
+                  <div className="h-full bg-[#c8372d] rounded-full" style={{ width: r.pct === 0 ? "0%" : `${r.pct}%` }} />
+                </div>
+                <span className="text-[10px] text-[#888] w-6 shrink-0">{r.pct}%</span>
+              </div>
+              <span className="w-12 text-center text-[11px] font-semibold text-[#c8372d]">Gap</span>
+              <span className="w-20 text-right text-[11px] text-[#888]">{r.competing}</span>
+              <button className="w-16 text-[10px] font-medium border border-[#ddd] rounded-lg py-1 text-[#444] text-center">+ Article</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ARTICLES ──────────────────────────────────────────────────────
+function ArticlesContent() {
+  const [filter, setFilter] = useState("All");
+  const articles = [
+    { title: "What Tool Do I Use for Testing Across Multiple Browsers Effortlessly?", prompt: "what tool do I use for testing across multiple browsers effortlessly?", status: "Published", seo: "—", updated: "Jun 24" },
+    { title: "Playwright vs Cypress: Complete 2025 Comparison Guide", prompt: "playwright vs cypress 2025", status: "Draft", seo: "72", updated: "Jun 23" },
+    { title: "Setting up Playwright in Docker for CI/CD Pipelines", prompt: "playwright docker ci setup", status: "Draft", seo: "—", updated: "Jun 22" },
+  ];
+  const filtered = filter === "All" ? articles : articles.filter((a) => a.status === filter);
+  return (
+    <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-[#111] mb-0.5">Articles</h2>
+          <p className="text-xs text-[#aaa]">{articles.length} pieces · 1 published</p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span className="text-xs text-[#aaa]">From research</span>
+          <button className="text-xs font-semibold bg-[#111] text-white px-3 py-1.5 rounded-lg">+ New article</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2.5 mb-3">
+        {[{ label: "PUBLISHED", val: "1", sub: "+0 this month" }, { label: "IN DRAFT", val: "2", sub: "awaiting review" }, { label: "AVG SEO SCORE", val: "72", sub: "1 scored" }, { label: "LAST PUBLISHED", val: "Jun 24", sub: "" }].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-[#e5e0da] p-3.5">
+            <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-1">{s.label}</p>
+            <p className="text-lg font-black text-[#111] leading-tight">{s.val}</p>
+            {s.sub && <p className="text-[10px] text-[#aaa] mt-0.5">{s.sub}</p>}
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-xl border border-[#e5e0da]">
+        <div className="p-3 border-b border-[#f0ece6] flex gap-1.5">
+          {["All", "Draft", "Review", "Scheduled", "Published"].map((f) => (
+            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${filter === f ? "bg-[#c8372d] text-white" : "text-[#666] hover:bg-[#f5f3f0]"}`}>{f}</button>
+          ))}
+        </div>
+        <div className="px-4 py-2 flex gap-3 text-[9px] font-semibold text-[#bbb] tracking-wider uppercase border-b border-[#f0ece6]">
+          <span className="flex-1">Title</span>
+          <span className="w-20 text-center">Status</span>
+          <span className="w-10 text-center">SEO</span>
+          <span className="w-14 text-right">Updated</span>
+        </div>
+        {filtered.map((a, i) => (
+          <div key={i} className="px-4 py-3 flex gap-3 items-start border-b border-[#f5f3f0] last:border-0">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-[#222] leading-snug">{a.title}</p>
+              <p className="text-[10px] text-[#bbb] mt-0.5 truncate">{a.prompt}</p>
+            </div>
+            <span className={`w-20 text-center text-xs font-semibold mt-0.5 ${a.status === "Published" ? "text-green-600" : "text-[#888]"}`}>{a.status}</span>
+            <span className="w-10 text-center text-xs text-[#888] mt-0.5">{a.seo}</span>
+            <span className="w-14 text-right text-xs text-[#aaa] mt-0.5">{a.updated}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────
 export function InteractiveDemoMockup() {
-  const [activeTab, setActiveTab] = useState("Overview");
+  const [activeTab, setActiveTab] = useState("Engines");
+
+  const navItem = (name: string, badge?: number) => (
+    <button
+      key={name}
+      onClick={() => setActiveTab(name)}
+      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center transition-colors ${
+        activeTab === name
+          ? "bg-white border border-[#ddd8d0] shadow-sm font-semibold text-[#111]"
+          : "text-[#666] hover:bg-white/60"
+      }`}
+    >
+      <span className={`text-[8px] mr-1.5 transition-opacity ${activeTab === name ? "text-[#c8372d]" : "opacity-0"}`}>●</span>
+      <span className="flex-1">{name}</span>
+      {badge != null && <span className="text-[10px] text-[#c8372d] font-bold">{badge}</span>}
+    </button>
+  );
 
   return (
-    <div className="relative mx-auto max-w-5xl" aria-label="Interactive RankOnGeo demo — Playwright sample brand">
+    <div className="relative mx-auto max-w-5xl">
       <div className="min-w-[760px]">
         {/* Browser chrome */}
-        <div className="bg-[#1a1a1a] rounded-t-xl px-4 py-3 flex items-center gap-2">
-          <div className="flex gap-1.5" aria-hidden="true">
+        <div className="bg-[#1a1a1a] rounded-t-xl px-4 py-2.5 flex items-center gap-3">
+          <div className="flex gap-1.5">
             <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-            <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+            <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
             <div className="w-3 h-3 rounded-full bg-[#28c840]" />
           </div>
-          <div className="flex-1 bg-[#2a2a2a] rounded-md px-3 py-1 text-xs text-center text-[#888] font-mono">
-            app.rankongeo.com/dashboard — Playwright
+          <div className="flex-1 bg-[#2a2a2a] rounded-md px-3 py-1 text-xs text-center text-[#777] font-mono">
+            app.rankongeo.com/dashboard — playwright.dev
           </div>
-          <div className="bg-[#c8372d] text-white text-xs px-3 py-1 rounded-md font-medium">
-            Interactive demo ↓ click tabs
-          </div>
+          <div className="bg-brand text-white text-[11px] px-2.5 py-1 rounded-md font-medium">Live demo</div>
         </div>
 
         {/* App shell */}
-        <div
-          className="bg-white border border-[#e5e0da] rounded-b-xl overflow-hidden flex"
-          style={{ height: 520 }}
-        >
-          <Sidebar active={activeTab} onChange={setActiveTab} />
+        <div className="flex overflow-hidden rounded-b-xl border border-[#ddd8d0]" style={{ height: 580, background: "#ede8df" }}>
+          {/* Sidebar */}
+          <div className="w-52 shrink-0 flex flex-col border-r border-[#ddd8d0]" style={{ background: "#ede8df" }}>
+            {/* Logo row */}
+            <div className="px-4 py-2.5 border-b border-[#ddd8d0] flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#c8372d" />
+                  <circle cx="12" cy="9" r="2.5" fill="white" />
+                </svg>
+                <span className="text-sm font-bold text-[#111]">RankOnGeo</span>
+              </div>
+              <span className="text-[10px] text-[#aaa] font-medium">v2.0</span>
+            </div>
+            {/* Brand selector */}
+            <div className="px-2.5 py-2 border-b border-[#ddd8d0]">
+              <div className="flex items-center gap-2 bg-white rounded-lg px-2.5 py-2 border border-[#ddd8d0]">
+                <div className="w-7 h-7 bg-[#111] rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0">P</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#111]">Playwright</p>
+                  <p className="text-[9px] text-[#aaa] uppercase tracking-wider">OWNER</p>
+                </div>
+                <span className="text-[#aaa] text-xs">▾</span>
+              </div>
+            </div>
+            {/* Nav */}
+            <div className="flex-1 overflow-hidden py-2 px-2 flex flex-col gap-0.5">
+              {navItem("Agent")}
+              <p className="text-[9px] font-semibold text-[#aaa] tracking-widest uppercase px-2 mt-2.5 mb-1">Measure</p>
+              {["Overview", "Engines", "Prompts", "Citations", "Competitors"].map((t) => navItem(t))}
+              <p className="text-[9px] font-semibold text-[#aaa] tracking-widest uppercase px-2 mt-3 mb-1">Create</p>
+              {navItem("Research", 20)}
+              {navItem("Keywords")}
+              {navItem("Articles")}
+              <p className="text-[9px] font-semibold text-[#aaa] tracking-widest uppercase px-2 mt-3 mb-1">Distribute</p>
+              {navItem("Publishing")}
+            </div>
+            {/* Bottom user */}
+            <div className="px-3 py-2.5 border-t border-[#ddd8d0] flex items-center gap-2">
+              <div className="w-7 h-7 bg-[#c8372d] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">U</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-[#333] truncate">playwright.dev</p>
+                <p className="text-[9px] text-[#aaa]">Workspace</p>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#aaa]" aria-hidden="true">
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
 
-          {/* Main content — key forces remount + fadeUp on tab switch */}
-          <div key={activeTab} className="flex-1 overflow-y-auto">
-            {activeTab === "Overview" && <OverviewContent />}
-            {activeTab === "Engines" && <EnginesContent />}
-            {activeTab === "Prompts" && <PromptsContent />}
-            {activeTab === "Competitors" && <CompetitorsContent />}
-            {activeTab === "Research" && <ResearchContent />}
-            {activeTab === "Articles" && <ArticlesContent />}
+          {/* Main panel */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="bg-white border-b border-[#e5e0da] px-5 py-2.5 flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 bg-[#111] rounded flex items-center justify-center text-white text-[9px] font-bold">P</div>
+                <span className="text-xs text-[#aaa]">playwright.dev</span>
+                <span className="text-[#ddd] text-xs">/</span>
+                <span className="text-xs font-medium text-[#333]">{activeTab}</span>
+              </div>
+              <div className="flex-1" />
+              <div className="flex items-center gap-1">
+                {ENGINES.map((e) => (
+                  <span key={e} className="text-[10px] px-2 py-0.5 rounded-full border border-[#c8372d]/40 text-[#c8372d] font-medium cursor-default">
+                    {e}
+                  </span>
+                ))}
+              </div>
+              <button className="text-xs font-semibold bg-[#111] text-white px-3 py-1.5 rounded-lg ml-1">+ Re-scan</button>
+            </div>
+
+            {/* Content */}
+            <div key={activeTab} className="flex-1 overflow-y-auto">
+              {activeTab === "Overview" && <OverviewContent />}
+              {activeTab === "Engines" && <EnginesContent />}
+              {activeTab === "Prompts" && <PromptsContent />}
+              {activeTab === "Citations" && <CitationsContent />}
+              {activeTab === "Competitors" && <CompetitorsContent />}
+              {activeTab === "Research" && <ResearchContent />}
+              {activeTab === "Keywords" && <KeywordsContent />}
+              {activeTab === "Articles" && <ArticlesContent />}
+              {(activeTab === "Publishing" || activeTab === "Agent") && (
+                <div className="p-5 flex items-center justify-center h-full">
+                  <p className="text-sm text-[#aaa]">Available in the full dashboard</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
