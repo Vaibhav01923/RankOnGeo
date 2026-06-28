@@ -183,7 +183,7 @@ function CitationsContent() {
         </div>
         <div className="bg-white rounded-xl border border-[#e5e0da] p-4">
           <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-2">TOP CITING SOURCES</p>
-          {[{ src: "playwright.dev", type: "Owned", count: 3 }, { src: "example.com", type: "Editorial", count: 2 }, { src: "github.com", type: "Editorial", count: 1 }].map((s) => (
+          {[{ src: "playwright.dev", type: "Owned", count: 3 }, { src: "dev.to", type: "Editorial", count: 2 }, { src: "github.com", type: "Editorial", count: 1 }].map((s) => (
             <div key={s.src} className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-[#444]">{s.src}</span>
               <div className="flex items-center gap-1">
@@ -199,7 +199,7 @@ function CitationsContent() {
         <div className="grid grid-cols-[1fr_80px_100px_60px] text-[9px] font-semibold text-[#bbb] tracking-wider uppercase pb-2 border-b border-[#f0ece6] mb-1">
           <span>Source</span><span>Type</span><span>Engines</span><span className="text-right">Citations</span>
         </div>
-        {[{ src: "playwright.dev", type: "Owned", engine: "ChatGPT", count: 3 }, { src: "example.com", type: "Editorial", engine: "ChatGPT", count: 2 }, { src: "github.com", type: "Editorial", engine: "ChatGPT", count: 1 }].map((row) => (
+        {[{ src: "playwright.dev", type: "Owned", engine: "ChatGPT", count: 3 }, { src: "dev.to", type: "Editorial", engine: "ChatGPT", count: 2 }, { src: "github.com", type: "Editorial", engine: "ChatGPT", count: 1 }].map((row) => (
           <div key={row.src} className="grid grid-cols-[1fr_80px_100px_60px] py-2.5 border-b border-[#f5f3f0] last:border-0 items-center">
             <span className="text-xs text-[#333]">{row.src}</span>
             <span className={`text-[10px] px-2 py-0.5 rounded w-fit ${row.type === "Owned" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-[#666]"}`}>{row.type}</span>
