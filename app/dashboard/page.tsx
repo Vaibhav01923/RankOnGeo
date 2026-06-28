@@ -1662,7 +1662,7 @@ function DashboardPage() {
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={() => {
-                        const params = new URLSearchParams({ gapPrompt: selectedArticle.keyword || selectedArticle.title, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "" });
+                        const params = new URLSearchParams({ gapPrompt: selectedArticle.keyword || selectedArticle.title, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", articleId: selectedArticle.id });
                         const cacheKey = `article:${selectedArticle.keyword || selectedArticle.title}:${brand.name}`;
                         if (selectedArticle.content) sessionStorage.setItem(cacheKey, JSON.stringify({ article: selectedArticle.content, title: selectedArticle.title, wordCount: selectedArticle.wordCount }));
                         window.open(`/article?${params}`, "_blank");
