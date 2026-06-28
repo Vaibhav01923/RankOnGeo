@@ -308,7 +308,6 @@ function DashboardPage() {
   const [agentInitialized, setAgentInitialized] = useState(false);
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
   const [hoveredScanIdx, setHoveredScanIdx] = useState<number | null>(null);
-  const [hiddenEngines, setHiddenEngines] = useState<Set<string>>(new Set());
   const agentEndRef = useRef<HTMLDivElement>(null);
 
   // Articles state
@@ -952,50 +951,20 @@ function DashboardPage() {
               ) : (
                 <>
                   <h2 className="text-xl font-bold text-gray-900 mb-1">Engines</h2>
-                  <p className="text-sm text-gray-400 mb-5">AI visibility per scan — click engines to toggle</p>
+                  <p className="text-sm text-gray-400 mb-5">Overall AI visibility over time — hover for details</p>
 
                   {/* Chart */}
                   {(() => {
-                    const runs = [...scanHistory].reverse(); // oldest → newest
+                    const runs = [...scanHistory].reverse();
                     const W = 600, H = 160, PAD = { t: 12, r: 16, b: 28, l: 36 };
                     const iW = W - PAD.l - PAD.r, iH = H - PAD.t - PAD.b;
                     const xOf = (i: number) => PAD.l + (runs.length === 1 ? iW / 2 : (i / (runs.length - 1)) * iW);
                     const yOf = (v: number) => PAD.t + iH - (v / 100) * iH;
-                    const allEngines = Array.from(new Set(runs.flatMap((r) => r.engines)));
                     const ENGINE_HEX: Record<string, string> = { chatgpt: "#10a37f", claude: "#d4673a", gemini: "#4285f4", perplexity: "#7c3aed", google: "#c8372d", grok: "#555" };
-
                     const hovered = hoveredScanIdx !== null ? runs[hoveredScanIdx] : null;
 
                     return (
                       <div className="bg-white border border-stone-200 rounded-xl p-5 mb-5">
-                        {/* Engine toggles */}
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          <button
-                            onClick={() => setHiddenEngines(new Set())}
-                            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hiddenEngines.size === 0 ? "bg-gray-900 text-white border-gray-900" : "text-gray-500 border-stone-200 hover:border-gray-400"}`}
-                          >
-                            All
-                          </button>
-                          {allEngines.map((eng) => {
-                            const hidden = hiddenEngines.has(eng);
-                            return (
-                              <button
-                                key={eng}
-                                onClick={() => setHiddenEngines((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(eng)) next.delete(eng); else next.add(eng);
-                                  return next;
-                                })}
-                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hidden ? "text-gray-300 border-stone-100" : "text-gray-700 border-stone-200 hover:border-gray-400"}`}
-                              >
-                                <span className="w-2 h-2 rounded-full" style={{ background: hidden ? "#ddd" : (ENGINE_HEX[eng] ?? "#888") }} />
-                                {ENGINE_LABELS[eng as AIEngine] ?? eng}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* SVG chart */}
                         <div className="relative">
                           <svg
                             viewBox={`0 0 ${W} ${H}`}
@@ -1011,8 +980,8 @@ function DashboardPage() {
                               </g>
                             ))}
 
-                            {/* Composite area */}
-                            {runs.length > 1 && !hiddenEngines.has("__composite") && (
+                            {/* Area fill */}
+                            {runs.length > 1 && (
                               <path
                                 d={[
                                   `M ${xOf(0)} ${yOf(runs[0].overall_score)}`,
@@ -1034,38 +1003,12 @@ function DashboardPage() {
                               strokeLinejoin="round"
                             />
 
-                            {/* Per-engine lines */}
-                            {allEngines.filter((e) => !hiddenEngines.has(e)).map((eng) => {
-                              const pts = runs.map((r, i) => {
-                                const sc = r.visibility_scores?.find((s) => s.engine === eng);
-                                return sc ? `${xOf(i)},${yOf(sc.score)}` : null;
-                              }).filter(Boolean);
-                              if (pts.length < 1) return null;
-                              return (
-                                <polyline
-                                  key={eng}
-                                  points={pts.join(" ")}
-                                  fill="none"
-                                  stroke={ENGINE_HEX[eng] ?? "#888"}
-                                  strokeWidth="1.5"
-                                  strokeDasharray="4 2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  opacity="0.7"
-                                />
-                              );
-                            })}
-
-                            {/* Hover vertical line */}
+                            {/* Hover crosshair */}
                             {hoveredScanIdx !== null && (
-                              <line
-                                x1={xOf(hoveredScanIdx)} y1={PAD.t}
-                                x2={xOf(hoveredScanIdx)} y2={H - PAD.b}
-                                stroke="#d0cac3" strokeWidth="1" strokeDasharray="3 2"
-                              />
+                              <line x1={xOf(hoveredScanIdx)} y1={PAD.t} x2={xOf(hoveredScanIdx)} y2={H - PAD.b} stroke="#d0cac3" strokeWidth="1" strokeDasharray="3 2" />
                             )}
 
-                            {/* Composite dots */}
+                            {/* Dots */}
                             {runs.map((r, i) => (
                               <circle key={i} cx={xOf(i)} cy={yOf(r.overall_score)} r={hoveredScanIdx === i ? 4 : 3} fill="#c8372d" />
                             ))}
@@ -1073,25 +1016,16 @@ function DashboardPage() {
                             {/* X-axis labels */}
                             {runs.map((r, i) => {
                               if (runs.length > 6 && i % 2 !== 0) return null;
-                              const d = new Date(r.created_at);
                               return (
                                 <text key={i} x={xOf(i)} y={H - 4} textAnchor="middle" fontSize="9" fill="#bbb">
-                                  {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                  {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                                 </text>
                               );
                             })}
 
                             {/* Hover hit areas */}
                             {runs.map((_, i) => (
-                              <rect
-                                key={i}
-                                x={xOf(i) - (iW / Math.max(runs.length - 1, 1)) / 2}
-                                y={PAD.t}
-                                width={iW / Math.max(runs.length - 1, 1)}
-                                height={iH}
-                                fill="transparent"
-                                onMouseEnter={() => setHoveredScanIdx(i)}
-                              />
+                              <rect key={i} x={xOf(i) - (iW / Math.max(runs.length - 1, 1)) / 2} y={PAD.t} width={iW / Math.max(runs.length - 1, 1)} height={iH} fill="transparent" onMouseEnter={() => setHoveredScanIdx(i)} />
                             ))}
                           </svg>
 
@@ -1099,45 +1033,24 @@ function DashboardPage() {
                           {hovered && hoveredScanIdx !== null && (
                             <div
                               className="absolute z-10 bg-white border border-stone-200 rounded-xl shadow-lg px-3.5 py-3 text-xs pointer-events-none"
-                              style={{
-                                top: 8,
-                                left: Math.min(
-                                  Math.max((hoveredScanIdx / Math.max(runs.length - 1, 1)) * 100, 5),
-                                  70
-                                ) + "%",
-                                transform: "translateX(-50%)",
-                                minWidth: 160,
-                              }}
+                              style={{ top: 8, left: Math.min(Math.max((hoveredScanIdx / Math.max(runs.length - 1, 1)) * 100, 5), 70) + "%", transform: "translateX(-50%)", minWidth: 160 }}
                             >
                               <p className="font-semibold text-gray-700 mb-2">
                                 {new Date(hovered.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#c8372d]" />
-                                <span className="text-gray-500">Composite</span>
-                                <span className="font-bold text-gray-900 ml-auto">{hovered.overall_score}%</span>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-gray-500">Overall</span>
+                                <span className="font-bold text-[#c8372d] ml-auto">{hovered.overall_score}%</span>
                               </div>
-                              {hovered.visibility_scores?.filter((s) => !hiddenEngines.has(s.engine)).map((s) => (
+                              {hovered.visibility_scores?.map((s) => (
                                 <div key={s.engine} className="flex items-center gap-2 mb-1">
-                                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: ENGINE_HEX[s.engine] ?? "#888" }} />
+                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ENGINE_HEX[s.engine] ?? "#888" }} />
                                   <span className="text-gray-400">{ENGINE_LABELS[s.engine as AIEngine]}</span>
-                                  <span className="font-medium text-gray-700 ml-auto">{s.score}%</span>
+                                  <span className="font-medium text-gray-600 ml-auto">{s.score}%</span>
                                 </div>
                               ))}
                             </div>
                           )}
-                        </div>
-
-                        {/* Legend */}
-                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-stone-100">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                            <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#c8372d" strokeWidth="2" strokeLinecap="round" /></svg>
-                            Composite
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#888" strokeWidth="1.5" strokeDasharray="4 2" strokeLinecap="round" /></svg>
-                            Per engine
-                          </div>
                         </div>
                       </div>
                     );
