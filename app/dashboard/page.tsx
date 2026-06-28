@@ -308,6 +308,7 @@ function DashboardPage() {
   const [agentInitialized, setAgentInitialized] = useState(false);
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
   const [hoveredScanIdx, setHoveredScanIdx] = useState<number | null>(null);
+  const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
 
   // Articles state
@@ -565,20 +566,59 @@ function DashboardPage() {
     if (!brand) return;
     setScanning(true);
     setError("");
+    const total = brand.trackedPrompts.length * selectedEngines.length;
+    setScanProgress({ done: 0, total });
+    const accumulated: ScanResult[] = [];
+
     try {
-      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: brand.id, engines: selectedEngines }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Scan failed");
-      const newResults: ScanResult[] = data.results;
-      setResults(newResults);
-      if (data.scores) setScores(data.scores);
-      if (data.overallScore !== undefined) setOverallScore(data.overallScore);
-      setGaps(computeGaps(newResults, brand));
-      setScanned(true);
-      if (brand.id) fetch(`/api/history?brandId=${brand.id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id, engines: selectedEngines }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Scan failed");
+      }
+
+      if (!res.body) throw new Error("No response stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            if (msg.type === "result") {
+              accumulated.push(msg.result);
+              setResults([...accumulated]);
+              setScanned(true);
+              setScanProgress((p) => p ? { ...p, done: p.done + 1 } : null);
+            } else if (msg.type === "done") {
+              if (msg.scores) setScores(msg.scores);
+              if (msg.overallScore !== undefined) setOverallScore(msg.overallScore);
+              setGaps(computeGaps(accumulated, brand));
+              if (brand.id) fetch(`/api/history?brandId=${brand.id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
+            }
+          } catch {}
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
-    } finally { setScanning(false); }
+    } finally {
+      setScanning(false);
+      setScanProgress(null);
+    }
   }
 
   async function sendAgentMessage() {
@@ -874,9 +914,23 @@ function DashboardPage() {
           {scanning && activeTab !== "agent" && (
             <div className="bg-white border border-stone-200 rounded-xl p-8 text-center mb-5">
               <div className="w-7 h-7 border-2 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-700">Submitting prompts to AI engines…</p>
-              <p className="text-xs text-gray-400 mt-1">Running {brand.trackedPrompts.length} prompts × {selectedEngines.length} engines · this may take 2–5 minutes</p>
-              <p className="text-xs text-amber-600 mt-1.5 font-medium">Please keep this tab open until the scan completes</p>
+              <p className="text-sm font-medium text-gray-700">Scanning AI engines…</p>
+              {scanProgress ? (
+                <div className="mt-2 w-48">
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>{scanProgress.done} of {scanProgress.total} done</span>
+                    <span>{Math.round((scanProgress.done / scanProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#c8372d] rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((scanProgress.done / scanProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">Starting up…</p>
+              )}
             </div>
           )}
 
