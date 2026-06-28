@@ -162,38 +162,30 @@ export async function POST(req: NextRequest) {
     : allPrompts;
 
   const promptsToRun = prompts;
-  const jobs: Array<{ prompt: typeof prompts[0]; engine: AIEngine }> = [];
-  for (const p of promptsToRun) {
-    for (const e of engines) {
-      jobs.push({ prompt: p, engine: e });
+
+  // Run engines in parallel, but prompts within each engine sequentially with a
+  // small delay — prevents rate-limit failures when multiple prompts hit the same
+  // API tier simultaneously.
+  async function runEngine(engine: AIEngine): Promise<ScanResult[]> {
+    const engineResults: ScanResult[] = [];
+    for (let i = 0; i < promptsToRun.length; i++) {
+      const prompt = promptsToRun[i];
+      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      try {
+        const response = await queryEngine(engine, prompt.text);
+        const mentions = extractMentions(response, brand.name, brand.competitors);
+        engineResults.push({ promptId: prompt.id, promptText: prompt.text, engine, response, ...mentions, scannedAt: new Date().toISOString() });
+      } catch (err) {
+        console.error(`[scan] ${engine} × "${prompt.text.slice(0, 50)}" FAILED:`, err);
+      }
     }
+    return engineResults;
   }
 
-  const results = await Promise.allSettled(
-    jobs.map(async ({ prompt, engine }): Promise<ScanResult> => {
-      const response = await queryEngine(engine, prompt.text);
-      const mentions = extractMentions(response, brand.name, brand.competitors);
-      return {
-        promptId: prompt.id,
-        promptText: prompt.text,
-        engine,
-        response,
-        ...mentions,
-        scannedAt: new Date().toISOString(),
-      };
-    })
+  const perEngineResults = await Promise.allSettled(engines.map(runEngine));
+  const scanResults: ScanResult[] = perEngineResults.flatMap((r) =>
+    r.status === "fulfilled" ? r.value : []
   );
-
-  results.forEach((r, i) => {
-    if (r.status === "rejected") {
-      const job = jobs[i];
-      console.error(`[scan] ${job.engine} × "${job.prompt.text.slice(0, 50)}" FAILED:`, r.reason);
-    }
-  });
-
-  const scanResults: ScanResult[] = results
-    .filter((r): r is PromiseFulfilledResult<ScanResult> => r.status === "fulfilled")
-    .map((r) => r.value);
 
   // Compute per-engine scores
   const scores: VisibilityScore[] = engines.map((engine) => {

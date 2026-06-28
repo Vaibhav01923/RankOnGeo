@@ -4,6 +4,8 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AIEngine, BrandData, GapItem, RedditThread, ScanResult, SocialKeyword, VisibilityScore } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
   chatgpt: "ChatGPT",
@@ -1248,7 +1250,9 @@ function DashboardPage() {
                                     )}
                                   </div>
                                   {r.response ? (
-                                    <p className="text-xs text-gray-600 leading-relaxed">{r.response}</p>
+                                    <div className="text-xs text-gray-600 leading-relaxed prose prose-xs max-w-none prose-p:my-1.5 prose-p:leading-relaxed prose-strong:font-semibold prose-strong:text-gray-800 prose-h2:text-sm prose-h2:font-bold prose-h2:text-gray-800 prose-h2:mt-3 prose-h2:mb-1 prose-h3:text-xs prose-h3:font-semibold prose-h3:text-gray-700 prose-h3:mt-2 prose-h3:mb-0.5 prose-ul:my-1.5 prose-ul:pl-4 prose-ol:my-1.5 prose-ol:pl-4 prose-li:my-0.5 prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline">
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.response}</ReactMarkdown>
+                                    </div>
                                   ) : (
                                     <p className="text-xs text-gray-400 italic">No response recorded</p>
                                   )}
