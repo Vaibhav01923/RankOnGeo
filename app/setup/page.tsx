@@ -48,8 +48,10 @@ function SetupContent() {
   const [editedCompetitors, setEditedCompetitors] = useState<string[]>([]);
   const [editedAudience, setEditedAudience] = useState<string[]>([]);
   const [newCompetitorInput, setNewCompetitorInput] = useState("");
+  const [suggestedCompetitors, setSuggestedCompetitors] = useState<string[]>([]);
   const [newAudienceInput, setNewAudienceInput] = useState("");
   const [prompts, setPrompts] = useState<TrackedPrompt[]>([]);
+  const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
   const [newPrompt, setNewPrompt] = useState("");
   const [userPlan, setUserPlan] = useState("starter");
   const [saving, setSaving] = useState(false);
@@ -77,8 +79,10 @@ function SetupContent() {
       setBrand(data);
       setEditedName(data.name);
       setEditedNiche(data.niche);
-      setEditedCompetitors(data.competitors);
+      setSuggestedCompetitors(data.competitors ?? []);
+      setEditedCompetitors(comps.length ? comps : []);
       setEditedAudience(data.targetAudience ?? []);
+      setDeselectedIds(new Set());
       setPrompts(data.trackedPrompts);
       setStep("brand");
     } catch (err) {
@@ -111,8 +115,12 @@ function SetupContent() {
     setStep("prompts");
   }
 
-  function removePrompt(id: string) {
-    setPrompts(prompts.filter((p) => p.id !== id));
+  function togglePrompt(id: string) {
+    setDeselectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   function addPrompt() {
@@ -136,7 +144,7 @@ function SetupContent() {
         niche: editedNiche || brand.niche,
         competitors: editedCompetitors,
         targetAudience: editedAudience,
-        prompts: prompts.map((p) => ({ text: p.text, category: p.category })),
+        prompts: prompts.filter((p) => !deselectedIds.has(p.id)).map((p) => ({ text: p.text, category: p.category })),
       }),
     });
     setSaving(false);
@@ -285,24 +293,63 @@ function SetupContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Competitors</label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {editedCompetitors.map((c) => (
-                    <span key={c} className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
-                      {c}
-                      <button onClick={() => setEditedCompetitors(editedCompetitors.filter((x) => x !== c))} className="text-gray-400 hover:text-gray-600">×</button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
+                {editedCompetitors.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {editedCompetitors.map((c) => (
+                      <span key={c} className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full">
+                        {c}
+                        <button onClick={() => setEditedCompetitors(editedCompetitors.filter((x) => x !== c))} className="text-emerald-400 hover:text-emerald-700 ml-0.5">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2 mb-3">
                   <input
                     value={newCompetitorInput}
                     onChange={(e) => setNewCompetitorInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEditedCompetitor(); } }}
-                    placeholder="Add competitor"
+                    placeholder="Add competitor domain"
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
                   />
                   <button type="button" onClick={addEditedCompetitor} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Add</button>
                 </div>
+                {suggestedCompetitors.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Suggested competitors</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedCompetitors.map((c) => {
+                        const added = editedCompetitors.includes(c);
+                        const domain = c.includes(".") ? c : `${c}.com`;
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() =>
+                              added
+                                ? setEditedCompetitors(editedCompetitors.filter((x) => x !== c))
+                                : setEditedCompetitors([...editedCompetitors, c])
+                            }
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                              added
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                              alt=""
+                              className="w-3.5 h-3.5 rounded-sm"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                            {c}
+                            <span className={`ml-0.5 ${added ? "text-emerald-500" : "text-gray-400"}`}>{added ? "✓" : "+"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleBrandNext}
@@ -317,36 +364,52 @@ function SetupContent() {
         {/* Step 3: Tracked prompts */}
         {step === "prompts" && (
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Tracked prompts</h1>
-            <p className="text-gray-500 text-sm mb-8">
-              These are the queries we&apos;ll submit to AI engines to measure your visibility. Remove any that don&apos;t fit, or add your own.
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Review search queries</h1>
+            <p className="text-gray-500 text-sm mb-2">
+              These are questions people ask AI about businesses like yours. We&apos;ll track your brand&apos;s visibility for each.
             </p>
-
-            {/* Group by category */}
-            {["discovery", "comparison", "how-to", "recommendation", "custom"].map((cat) => {
-              const catPrompts = prompts.filter((p) => p.category === cat);
-              if (!catPrompts.length) return null;
+            {(() => {
+              const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
               return (
-                <div key={cat} className="mb-6">
-                  <h3 className="text-xs uppercase tracking-wide text-gray-400 font-medium mb-2">{cat}</h3>
-                  <div className="space-y-2">
-                    {catPrompts.map((p) => (
-                      <div key={p.id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-lg px-4 py-2.5">
-                        <span className="flex-1 text-sm text-gray-700">{p.text}</span>
-                        <button onClick={() => removePrompt(p.id)} className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none">×</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-sm font-semibold text-emerald-600 mb-7">
+                  {selectedCount}/{prompts.length} prompts selected
+                </p>
               );
-            })}
+            })()}
 
-            <div className="flex gap-2 mt-4 mb-8">
+            <div className="space-y-2 mb-5">
+              {prompts.map((p) => {
+                const selected = !deselectedIds.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => togglePrompt(p.id)}
+                    className={`w-full flex items-center gap-3 bg-white border rounded-lg px-4 py-3 text-left transition-colors group ${
+                      selected ? "border-gray-200 hover:border-gray-300" : "border-gray-100 opacity-50 hover:opacity-70"
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                      selected ? "bg-emerald-500 border-emerald-500" : "border-gray-300 bg-white"
+                    }`}>
+                      {selected && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
+                          <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={`flex-1 text-sm ${selected ? "text-gray-700" : "text-gray-400"}`}>{p.text}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2 mb-6">
               <input
                 value={newPrompt}
                 onChange={(e) => setNewPrompt(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPrompt(); } }}
-                placeholder="Add a custom prompt..."
+                placeholder="Add custom prompt…"
                 className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none text-gray-900 focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
               />
               <button onClick={addPrompt} className="px-4 py-2.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
@@ -354,30 +417,29 @@ function SetupContent() {
               </button>
             </div>
 
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3 mb-6">
+              <p className="text-xs font-semibold text-gray-500 mb-1.5">Prompt Tips</p>
+              <ul className="space-y-1 text-xs text-gray-400">
+                <li>· Focus on questions your customers actually ask</li>
+                <li>· Include your product category or service type</li>
+                <li>· Avoid overly specific or branded terms</li>
+              </ul>
+            </div>
+
             {(() => {
               const customCount = prompts.filter((p) => p.category === "custom").length;
               const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
-              const autoCount = prompts.filter((p) => p.category !== "custom").length;
-              const autoLimit = PLAN_AUTO_COUNTS[userPlan] ?? 20;
-              return (
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs text-gray-400">
-                    {autoCount} auto-generated · {customCount} / {customLimit} custom added
-                    <span className="text-gray-300 mx-1">·</span>
-                    {autoLimit} auto limit on {userPlan} plan
-                  </p>
-                  {customCount >= customLimit && (
-                    <p className="text-xs text-amber-600 font-medium">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
-                  )}
-                </div>
-              );
+              return customCount >= customLimit ? (
+                <p className="text-xs text-amber-600 font-medium mb-4">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
+              ) : null;
             })()}
+
             <button
               onClick={handleStart}
-              disabled={saving || prompts.length === 0}
+              disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
               className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-3 rounded-lg text-sm font-medium transition-colors"
             >
-              {saving ? "Saving…" : "Start tracking"}
+              {saving ? "Saving…" : "Generate report"}
             </button>
           </div>
         )}
