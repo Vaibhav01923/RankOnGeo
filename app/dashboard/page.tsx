@@ -322,6 +322,8 @@ function DashboardPage() {
   const [citationTypeFilter, setCitationTypeFilter] = useState("All");
   const [citationPromptFilter, setCitationPromptFilter] = useState("All");
   const [citationHistory, setCitationHistory] = useState<{ domain: string; data: { date: string; count: number }[] }[]>([]);
+  const [citationChartMode, setCitationChartMode] = useState<"line" | "bar">("line");
+  const [citationChartHover, setCitationChartHover] = useState<{ idx: number; x: number; y: number } | null>(null);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
 
@@ -1506,25 +1508,40 @@ function DashboardPage() {
                     <p className="text-xs text-gray-400 mb-3">Engage on these platforms to increase your AI visibility</p>
                     <div className="grid grid-cols-4 gap-3">
                       {/* Reddit — live */}
-                      <div className="bg-white border-2 border-orange-200 rounded-xl p-4">
+                      <div className="bg-white border-2 border-orange-200 rounded-xl p-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-8 h-8 rounded-lg bg-[#FF4500] flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-[#FF4500] flex items-center justify-center shrink-0 shadow-sm">
                             <svg viewBox="0 0 20 20" className="w-5 h-5 fill-white"><path d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z"/></svg>
                           </div>
-                          <span className="text-sm font-semibold text-gray-900">Reddit</span>
-                          <span className="ml-auto text-[10px] font-bold bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded uppercase tracking-wide">High impact</span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <div>
-                            <p className="text-[10px] text-gray-500">Instant visibility</p>
-                            <p className="text-[10px] text-gray-500">increase</p>
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-gray-900">Reddit</span>
                           </div>
-                          <div className="relative w-10 h-10 shrink-0">
-                            <svg viewBox="0 0 36 36" className="w-10 h-10 -rotate-90">
-                              <circle cx="18" cy="18" r="14" fill="none" stroke="#e5e7eb" strokeWidth="3"/>
-                              <circle cx="18" cy="18" r="14" fill="none" stroke="#14b8a6" strokeWidth="3" strokeDasharray={`${75 * 0.879} 87.9`} strokeLinecap="round"/>
+                          <span className="ml-auto text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100 whitespace-nowrap">High impact</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="flex-1">
+                            <p className="text-[11px] text-gray-500 leading-tight">Instant visibility</p>
+                            <p className="text-[11px] text-gray-500 leading-tight">increase</p>
+                          </div>
+                          <div className="relative w-12 h-12 shrink-0">
+                            <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+                              <circle cx="22" cy="22" r="17" fill="none" stroke="#e5e7eb" strokeWidth="3.5"/>
+                              <circle cx="22" cy="22" r="17" fill="none" stroke="#14b8a6" strokeWidth="3.5" strokeDasharray={`${75 * 1.068} 106.8`} strokeLinecap="round"/>
                             </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-teal-600">75%</span>
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-teal-700">75%</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <p className="text-[10px] text-gray-400 mr-0.5">Active & persona based accounts</p>
+                          <div className="flex -space-x-1.5">
+                            {["#3b82f6","#8b5cf6","#ec4899"].map((c, i) => (
+                              <div key={i} className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center" style={{backgroundColor: c}}>
+                                <svg viewBox="0 0 20 20" fill="white" className="w-2.5 h-2.5"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/></svg>
+                              </div>
+                            ))}
+                            <div className="w-5 h-5 rounded-full border-2 border-white bg-orange-400 flex items-center justify-center">
+                              <span className="text-[7px] font-bold text-white">+</span>
+                            </div>
                           </div>
                         </div>
                         <button
@@ -1538,9 +1555,9 @@ function DashboardPage() {
                               }
                             }
                           }}
-                          className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#FF4500] text-white rounded-lg py-2 hover:bg-[#e03d00] transition-colors"
+                          className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#FF4500] text-white rounded-xl py-2.5 hover:bg-[#e03d00] transition-colors shadow-sm"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                           Engage
                         </button>
                       </div>
@@ -1551,16 +1568,33 @@ function DashboardPage() {
                         { name: "Facebook", color: "#1877f2", letter: "f" },
                         { name: "YouTube", color: "#ff0000", letter: "▶" },
                       ].map((p) => (
-                        <div key={p.name} className="bg-white border border-stone-200 rounded-xl p-4 opacity-60 relative">
+                        <div key={p.name} className="relative bg-white border border-stone-200 rounded-xl p-4 flex flex-col overflow-hidden">
+                          {/* Ghost content behind blur */}
                           <div className="flex items-center gap-2 mb-3">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white text-sm font-bold" style={{ backgroundColor: p.color }}>{p.letter}</div>
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white text-base font-bold shadow-sm" style={{ backgroundColor: p.color }}>{p.letter}</div>
                             <span className="text-sm font-semibold text-gray-900">{p.name}</span>
                           </div>
-                          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/60">
-                            <span className="text-xs font-semibold border border-stone-300 bg-white text-gray-600 px-3 py-1 rounded-full">Coming soon</span>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="flex-1 space-y-1">
+                              <div className="h-2 bg-stone-100 rounded w-3/4" />
+                              <div className="h-2 bg-stone-100 rounded w-1/2" />
+                            </div>
+                            <div className="relative w-12 h-12 shrink-0">
+                              <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+                                <circle cx="22" cy="22" r="17" fill="none" stroke="#e5e7eb" strokeWidth="3.5"/>
+                                <circle cx="22" cy="22" r="17" fill="none" stroke="#d1d5db" strokeWidth="3.5" strokeDasharray={`${60 * 1.068} 106.8`} strokeLinecap="round"/>
+                              </svg>
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-400">—</span>
+                            </div>
                           </div>
-                          <div className="h-10 mb-2" />
-                          <div className="h-8 bg-stone-100 rounded-lg" />
+                          <div className="flex items-center gap-1.5 mb-3">
+                            <div className="h-2 bg-stone-100 rounded w-2/3" />
+                          </div>
+                          <div className="mt-auto h-10 bg-stone-100 rounded-xl" />
+                          {/* Coming soon overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center rounded-xl backdrop-blur-[2px] bg-white/50">
+                            <span className="text-xs font-semibold border border-stone-300 bg-white text-gray-600 px-4 py-1.5 rounded-full shadow-sm">Coming soon</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1568,73 +1602,165 @@ function DashboardPage() {
 
                   {/* Line chart + Top Cited Domains side by side */}
                   {(() => {
-                    const chartColors = ["#c8372d","#3b82f6","#10b981","#f59e0b","#8b5cf6"];
+                    const chartColors = ["#ef4444","#f97316","#eab308","#6b7280","#a78bfa","#3b82f6","#10b981","#ec4899","#06b6d4","#8b5cf6"];
                     const allDates = citationHistory[0]?.data.map((d) => d.date) ?? [];
                     const maxCount = Math.max(...citationHistory.flatMap((s) => s.data.map((d) => d.count)), 1);
-                    const W = 420, H = 160, padL = 28, padR = 8, padT = 10, padB = 28;
+                    const W = 520, H = 200, padL = 32, padR = 12, padT = 12, padB = 32;
                     const xStep = allDates.length > 1 ? (W - padL - padR) / (allDates.length - 1) : W - padL - padR;
                     const toX = (i: number) => padL + (allDates.length > 1 ? i * xStep : (W - padL - padR) / 2);
                     const toY = (v: number) => padT + (H - padT - padB) * (1 - v / maxCount);
+                    // Smooth bezier path between points
+                    const toBezierPath = (pts: {x:number;y:number}[]) => {
+                      if (pts.length < 2) return "";
+                      let d = `M ${pts[0].x} ${pts[0].y}`;
+                      for (let i = 1; i < pts.length; i++) {
+                        const cp1x = pts[i-1].x + (pts[i].x - pts[i-1].x) * 0.4;
+                        const cp1y = pts[i-1].y;
+                        const cp2x = pts[i].x - (pts[i].x - pts[i-1].x) * 0.4;
+                        const cp2y = pts[i].y;
+                        d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${pts[i].x} ${pts[i].y}`;
+                      }
+                      return d;
+                    };
+                    // Y-axis tick values
+                    const yTicks = [0, Math.round(maxCount * 0.25), Math.round(maxCount * 0.5), Math.round(maxCount * 0.75), maxCount];
+                    const hoverData = citationChartHover !== null
+                      ? citationHistory.map((s) => ({ domain: s.domain, count: s.data[citationChartHover!.idx]?.count ?? 0 })).sort((a,b) => b.count - a.count)
+                      : null;
+
                     return (
-                      <div className="grid grid-cols-[1fr_280px] gap-4 mb-5">
-                        {/* Line chart */}
+                      <div className="grid grid-cols-[1fr_300px] gap-4 mb-5">
+                        {/* Line / Bar chart */}
                         <div className="bg-white border border-stone-200 rounded-xl p-5">
-                          <p className="text-sm font-semibold text-gray-900 mb-0.5">Top Citations</p>
-                          <p className="text-xs text-gray-400 mb-3">Daily citation count for top 5 domains</p>
+                          <div className="flex items-start justify-between mb-1">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">Top Citations <span className="text-gray-400 font-normal text-xs ml-1">ⓘ</span></p>
+                              <p className="text-xs text-gray-400">Daily citation count for top 10 domains</p>
+                            </div>
+                            <div className="flex items-center gap-1 border border-stone-200 rounded-lg p-0.5">
+                              <button onClick={() => setCitationChartMode("bar")} className={`p-1.5 rounded-md transition-colors ${citationChartMode === "bar" ? "bg-stone-100 text-gray-700" : "text-gray-400 hover:text-gray-600"}`} title="Bar chart">
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16"><rect x="1" y="8" width="3" height="7"/><rect x="6" y="4" width="3" height="11"/><rect x="11" y="1" width="3" height="14"/></svg>
+                              </button>
+                              <button onClick={() => setCitationChartMode("line")} className={`p-1.5 rounded-md transition-colors ${citationChartMode === "line" ? "bg-stone-100 text-gray-700" : "text-gray-400 hover:text-gray-600"}`} title="Line chart">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2"><polyline points="1,12 5,7 9,9 13,3"/></svg>
+                              </button>
+                            </div>
+                          </div>
                           {citationHistory.length === 0 ? (
-                            <div className="flex items-center justify-center h-24 text-xs text-gray-400">Chart data loads after first few scans</div>
+                            <div className="flex items-center justify-center h-36 text-xs text-gray-400 mt-3">Chart data loads after first few daily scans</div>
                           ) : (
-                            <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
-                              {/* Y gridlines */}
-                              {[0,0.5,1].map((t) => (
-                                <line key={t} x1={padL} x2={W - padR} y1={padT + (H - padT - padB) * (1 - t)} y2={padT + (H - padT - padB) * (1 - t)} stroke="#f3f4f6" strokeWidth="1"/>
-                              ))}
-                              {/* Lines */}
-                              {citationHistory.map((series, si) => {
-                                if (allDates.length === 1) {
-                                  const x = toX(0), y = toY(series.data[0]?.count ?? 0);
-                                  return <circle key={si} cx={x} cy={y} r="4" fill={chartColors[si % chartColors.length]} />;
-                                }
-                                const pts = series.data.map((d, i) => `${toX(i)},${toY(d.count)}`).join(" ");
-                                return <polyline key={si} points={pts} fill="none" stroke={chartColors[si % chartColors.length]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;
-                              })}
-                              {/* X labels */}
-                              {allDates.map((d, i) => (
-                                <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#9ca3af">
-                                  {d.slice(5).replace("-","/")}
-                                </text>
-                              ))}
-                            </svg>
-                          )}
-                          {allDates.length === 1 && <p className="text-[10px] text-gray-400 mt-1">More data after your first week of daily scans</p>}
-                          {/* Legend */}
-                          {citationHistory.length > 0 && (
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                              {citationHistory.map((s, si) => (
-                                <div key={si} className="flex items-center gap-1">
-                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: chartColors[si % chartColors.length] }} />
-                                  <span className="text-[10px] text-gray-500 truncate max-w-[80px]">{s.domain}</span>
+                            <div className="relative mt-3">
+                              <svg
+                                viewBox={`0 0 ${W} ${H}`}
+                                className="w-full"
+                                style={{ height: H }}
+                                onMouseLeave={() => setCitationChartHover(null)}
+                                onMouseMove={(e) => {
+                                  if (allDates.length < 2) return;
+                                  const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+                                  const relX = (e.clientX - rect.left) / rect.width * W;
+                                  let closest = 0, minDist = Infinity;
+                                  allDates.forEach((_, i) => { const d = Math.abs(relX - toX(i)); if (d < minDist) { minDist = d; closest = i; } });
+                                  setCitationChartHover({ idx: closest, x: toX(closest), y: e.clientY - rect.top });
+                                }}
+                              >
+                                {/* Y gridlines + labels */}
+                                {yTicks.map((v) => (
+                                  <g key={v}>
+                                    <line x1={padL} x2={W - padR} y1={toY(v)} y2={toY(v)} stroke="#f3f4f6" strokeWidth="1"/>
+                                    <text x={padL - 4} y={toY(v) + 3} textAnchor="end" fontSize="8" fill="#9ca3af">{v}</text>
+                                  </g>
+                                ))}
+
+                                {citationChartMode === "line" ? (
+                                  citationHistory.map((series, si) => {
+                                    const col = chartColors[si % chartColors.length];
+                                    if (allDates.length === 1) {
+                                      const x = toX(0), y = toY(series.data[0]?.count ?? 0);
+                                      return <circle key={si} cx={x} cy={y} r="4" fill={col} />;
+                                    }
+                                    const pts = series.data.map((d, i) => ({ x: toX(i), y: toY(d.count) }));
+                                    return (
+                                      <g key={si}>
+                                        <path d={toBezierPath(pts)} fill="none" stroke={col} strokeWidth="2" strokeLinecap="round"/>
+                                        {citationChartHover && (
+                                          <circle cx={toX(citationChartHover.idx)} cy={toY(series.data[citationChartHover.idx]?.count ?? 0)} r="3.5" fill={col} stroke="white" strokeWidth="1.5"/>
+                                        )}
+                                      </g>
+                                    );
+                                  })
+                                ) : (
+                                  allDates.map((_, di) => {
+                                    const barW = xStep * 0.6 / (citationHistory.length || 1);
+                                    const groupStart = toX(di) - xStep * 0.3;
+                                    return citationHistory.map((series, si) => {
+                                      const col = chartColors[si % chartColors.length];
+                                      const v = series.data[di]?.count ?? 0;
+                                      const bx = groupStart + si * barW;
+                                      const by = toY(v);
+                                      return <rect key={`${di}-${si}`} x={bx} y={by} width={barW - 1} height={H - padB - by} fill={col} rx="1" opacity="0.85"/>;
+                                    });
+                                  })
+                                )}
+
+                                {/* Hover vertical line */}
+                                {citationChartHover && allDates.length > 1 && (
+                                  <line x1={toX(citationChartHover.idx)} x2={toX(citationChartHover.idx)} y1={padT} y2={H - padB} stroke="#d1d5db" strokeWidth="1" strokeDasharray="3 2"/>
+                                )}
+
+                                {/* X labels */}
+                                {allDates.map((d, i) => (
+                                  <text key={i} x={toX(i)} y={H - 6} textAnchor="middle" fontSize="8" fill={citationChartHover?.idx === i ? "#374151" : "#9ca3af"} fontWeight={citationChartHover?.idx === i ? "600" : "400"}>
+                                    {new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric"})}
+                                  </text>
+                                ))}
+                              </svg>
+
+                              {/* Hover tooltip */}
+                              {hoverData && citationChartHover && (
+                                <div
+                                  className="absolute z-10 bg-white border border-stone-200 rounded-xl shadow-lg p-3 pointer-events-none"
+                                  style={{
+                                    left: citationChartHover.x / W * 100 > 60 ? "auto" : `calc(${(citationChartHover.x / W) * 100}% + 8px)`,
+                                    right: citationChartHover.x / W * 100 > 60 ? `calc(${100 - (citationChartHover.x / W) * 100}% + 8px)` : "auto",
+                                    top: 0,
+                                  }}
+                                >
+                                  <p className="text-xs font-semibold text-gray-700 mb-2">{new Date(allDates[citationChartHover.idx]).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</p>
+                                  <div className="space-y-1.5 min-w-[160px]">
+                                    {hoverData.filter(d => d.count > 0).map((d, i) => (
+                                      <div key={i} className="flex items-center gap-2">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={`https://www.google.com/s2/favicons?domain=${d.domain}&sz=16`} alt="" width={14} height={14} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                        <span className="text-xs text-gray-600 flex-1 truncate">{d.domain}</span>
+                                        <span className="text-xs font-semibold text-gray-900">{d.count}</span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                              ))}
+                              )}
                             </div>
                           )}
+                          {allDates.length === 1 && <p className="text-[10px] text-gray-400 mt-1">More data after your first week of daily scans</p>}
                         </div>
 
                         {/* Top Cited Domains card */}
                         <div className="bg-white border border-stone-200 rounded-xl p-5">
-                          <p className="text-sm font-semibold text-gray-900 mb-0.5">Top Cited Domains</p>
-                          <p className="text-xs text-gray-400 mb-3">{citationDomains.length} domains</p>
-                          <div className="space-y-3">
-                            {citationDomains.slice(0, 5).map(([domain, info], i) => {
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-semibold text-gray-900">Top Cited Domains <span className="text-gray-400 font-normal text-xs ml-1">ⓘ</span></p>
+                          </div>
+                          <p className="text-base font-bold text-gray-900 mb-4">{citationDomains.length} Domains</p>
+                          <div className="space-y-1">
+                            {citationDomains.slice(0, 7).map(([domain, info], i) => {
                               const pct = Math.round((info.count / totalCitations) * 100);
                               return (
-                                <div key={domain} className="flex items-center gap-2">
-                                  <span className="text-[10px] text-gray-400 w-4 shrink-0">#{i+1}</span>
+                                <div key={domain} className="flex items-center gap-3 py-2 border-b border-stone-50 last:border-0">
+                                  <span className="text-xs text-gray-400 w-5 shrink-0 font-medium">#{i+1}</span>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" width={16} height={16} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
-                                  <span className="text-xs text-gray-700 truncate flex-1">{domain}</span>
+                                  <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={28} height={28} className="rounded-md shrink-0 border border-stone-100" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                  <span className="text-xs text-gray-700 truncate flex-1 font-medium">{domain}</span>
                                   <div className="text-right shrink-0">
-                                    <p className="text-xs font-semibold text-gray-900">{pct}%</p>
+                                    <p className="text-sm font-bold text-gray-900">{pct}%</p>
                                     <p className="text-[10px] text-gray-400">{info.count} citations</p>
                                   </div>
                                 </div>
@@ -1693,12 +1819,11 @@ function DashboardPage() {
                         {/* Domain table */}
                         <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                           {/* Table header */}
-                          <div className="grid grid-cols-[48px_1fr_auto_auto_160px] gap-x-4 px-5 py-2.5 border-b border-stone-100 bg-stone-50/50">
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Rank</span>
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Domain</span>
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Type</span>
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest text-right">Citations</span>
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest text-right">Details</span>
+                          <div className="grid grid-cols-[64px_1fr_80px_120px] gap-x-4 px-5 py-3 border-b border-stone-100 bg-stone-50/60">
+                            <span className="text-[11px] font-semibold text-gray-500">Rank</span>
+                            <span className="text-[11px] font-semibold text-gray-500">Domain</span>
+                            <span className="text-[11px] font-semibold text-gray-500 text-right flex items-center justify-end gap-0.5">Citations <svg className="w-3 h-3 opacity-40" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M5 10l3 3 3-3"/></svg></span>
+                            <span className="text-[11px] font-semibold text-gray-500 text-right">Details</span>
                           </div>
 
                           {orderedDomains.length === 0 && (
@@ -1714,7 +1839,7 @@ function DashboardPage() {
                             return (
                               <div
                                 key={domain}
-                                className={`border-b border-stone-100 last:border-0 ${isReddit ? "border-l-2 border-l-[#FF4500]" : ""}`}
+                                className={`border-b border-stone-100 last:border-0 ${isReddit ? "border-l-[3px] border-l-blue-400" : ""}`}
                               >
                                 {/* Domain row */}
                                 <button
@@ -1723,18 +1848,17 @@ function DashboardPage() {
                                     next.has(domain) ? next.delete(domain) : next.add(domain);
                                     return next;
                                   })}
-                                  className={`w-full grid grid-cols-[48px_1fr_auto_auto_160px] gap-x-4 px-5 py-3.5 hover:bg-stone-50/60 transition-colors text-left items-center ${isReddit ? "bg-orange-50/30" : ""}`}
+                                  className={`w-full grid grid-cols-[64px_1fr_80px_120px] gap-x-4 px-5 py-4 hover:bg-stone-50/70 transition-colors text-left items-center ${isReddit ? "bg-blue-50/20" : ""}`}
                                 >
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs text-gray-400 font-medium">#{originalRank}</span>
-                                    {isReddit && <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1 rounded uppercase">Featured</span>}
-                                  </div>
                                   <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-xs text-gray-500 font-medium shrink-0">#{originalRank}</span>
+                                    {isReddit && <span className="text-[9px] font-bold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 whitespace-nowrap">🔔 FEATURED</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2.5 min-w-0">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" width={16} height={16} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                    <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={20} height={20} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
                                     <span className="text-sm text-gray-800 font-medium truncate">{domain}</span>
                                   </div>
-                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${SOURCE_TYPE_COLORS[info.type] ?? "bg-gray-100 text-gray-600"}`}>{info.type}</span>
                                   <span className="text-sm font-semibold text-gray-900 text-right">{info.count}</span>
                                   <div className="flex items-center justify-end gap-2">
                                     {isReddit ? (
