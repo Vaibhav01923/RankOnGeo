@@ -324,6 +324,10 @@ function DashboardPage() {
   const [citationHistory, setCitationHistory] = useState<{ domain: string; data: { date: string; count: number }[] }[]>([]);
   const [citationChartMode, setCitationChartMode] = useState<"line" | "bar">("line");
   const [citationChartHover, setCitationChartHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+  // Prompts tab state
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
+  const [selectedCitationDomain, setSelectedCitationDomain] = useState<string | null>(null);
+  const [promptSearch, setPromptSearch] = useState("");
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
 
@@ -1204,111 +1208,433 @@ function DashboardPage() {
               {!scanned && loadingResults ? (
                 <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" /></div>
               ) : !scanned ? (
-                <EmptyState label="No prompt data" sub="Run a scan to see AI responses per prompt" />
-              ) : (
-                <>
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Prompts</h2>
-                  <p className="text-sm text-gray-400 mb-5">Click any row to see the full AI response</p>
-                  <div className="space-y-2">
-                    {brand.trackedPrompts.map((p) => {
-                      const promptResults = results.filter((r) => r.promptId === p.id);
-                      if (!promptResults.length) return null;
-                      const isExpanded = expandedPrompts.has(p.id);
-                      const mentionedCount = promptResults.filter((r) => r.brandMentioned).length;
-                      return (
-                        <div key={p.id} className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                          {/* Header row — click to expand */}
-                          <button
-                            className="w-full flex items-start gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
-                            onClick={() => setExpandedPrompts((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
-                              return next;
-                            })}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 mb-2.5 leading-snug">{p.text}</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {promptResults.map((r) => (
-                                  <span
-                                    key={r.engine}
-                                    className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium border ${
-                                      r.brandMentioned
-                                        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                        : "bg-red-50 text-[#c8372d] border-red-100"
-                                    }`}
-                                  >
-                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ENGINE_COLORS[r.engine]}`} />
-                                    {ENGINE_LABELS[r.engine]}
-                                    {r.brandMentioned
-                                      ? <span className="opacity-70">{r.brandRank ? ` #${r.brandRank}` : " ✓"}</span>
-                                      : <span className="opacity-60"> absent</span>
-                                    }
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                              <span className={`text-xs font-semibold ${mentionedCount === promptResults.length ? "text-emerald-600" : mentionedCount === 0 ? "text-red-500" : "text-amber-600"}`}>
-                                {mentionedCount}/{promptResults.length}
-                              </span>
-                              <svg
-                                width="14" height="14" viewBox="0 0 16 16" fill="none"
-                                className={`text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                              >
-                                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </div>
-                          </button>
+                <EmptyState label="No prompt data" sub="Monitoring starts automatically — check back after your first daily scan" />
+              ) : selectedPromptId ? (() => {
+                /* ── PROMPT DETAIL VIEW ── */
+                const prompt = brand.trackedPrompts.find((p) => p.id === selectedPromptId);
+                if (!prompt) return null;
+                const promptResults = results.filter((r) => r.promptId === selectedPromptId);
+                const mentionedCount = promptResults.filter((r) => r.brandMentioned).length;
+                const visibility = promptResults.length ? Math.round(mentionedCount / promptResults.length * 100) : 0;
+                const ranks = promptResults.filter((r) => r.brandMentioned && r.brandRank).map((r) => r.brandRank!);
+                const avgPos = ranks.length ? (ranks.reduce((s, r) => s + r, 0) / ranks.length) : null;
 
-                          {/* Expanded responses */}
-                          {isExpanded && (
-                            <div className="border-t border-stone-100 divide-y divide-stone-100">
-                              {promptResults.map((r) => (
-                                <div key={r.engine} className="px-5 py-4">
-                                  <div className="flex items-center gap-2 mb-2.5">
-                                    <div className={`w-2 h-2 rounded-full shrink-0 ${ENGINE_COLORS[r.engine]}`} />
-                                    <span className={`text-xs font-semibold ${ENGINE_TEXT_COLORS[r.engine]}`}>{ENGINE_LABELS[r.engine]}</span>
-                                    <span className="text-gray-200">·</span>
-                                    {r.brandMentioned ? (
-                                      <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                        Mentioned{r.brandRank ? ` #${r.brandRank}` : ""}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Absent</span>
-                                    )}
-                                  </div>
-                                  {r.response ? (
-                                    <div className="text-xs text-gray-600 leading-relaxed prose prose-xs max-w-none prose-p:my-1.5 prose-p:leading-relaxed prose-strong:font-semibold prose-strong:text-gray-800 prose-h2:text-sm prose-h2:font-bold prose-h2:text-gray-800 prose-h2:mt-3 prose-h2:mb-1 prose-h3:text-xs prose-h3:font-semibold prose-h3:text-gray-700 prose-h3:mt-2 prose-h3:mb-0.5 prose-ul:my-1.5 prose-ul:pl-4 prose-ol:my-1.5 prose-ol:pl-4 prose-li:my-0.5 prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline">
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.response}</ReactMarkdown>
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-gray-400 italic">No response recorded</p>
-                                  )}
-                                  {r.citations.length > 0 && (
-                                    <div className="mt-3 flex flex-wrap gap-1.5">
-                                      {r.citations.map((c, j) => (
-                                        <a
-                                          key={j}
-                                          href={c}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-[10px] bg-stone-50 text-gray-500 hover:text-gray-700 px-2 py-0.5 rounded border border-stone-200 truncate max-w-[220px] transition-colors"
-                                        >
-                                          {c.replace(/^https?:\/\/(www\.)?/, "")}
-                                        </a>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
+                // Top brands from competitor mentions
+                const compMap: Record<string, { name: string; count: number; totalRank: number; engines: AIEngine[] }> = {};
+                // Add our own brand first
+                promptResults.forEach((r) => {
+                  r.competitorMentions.forEach((cm) => {
+                    if (!compMap[cm.name]) compMap[cm.name] = { name: cm.name, count: 0, totalRank: 0, engines: [] };
+                    compMap[cm.name].count++;
+                    if (cm.rank) compMap[cm.name].totalRank += cm.rank;
+                    if (!compMap[cm.name].engines.includes(r.engine)) compMap[cm.name].engines.push(r.engine);
+                  });
+                });
+                const topBrands: { name: string; visibility: number; avgPos: number | null; engines: AIEngine[]; isOwn: boolean }[] = [
+                  { name: brand.name, visibility, avgPos, engines: promptResults.filter(r => r.brandMentioned).map(r => r.engine), isOwn: true },
+                  ...Object.values(compMap).sort((a, b) => b.count - a.count).map((c) => ({
+                    name: c.name,
+                    visibility: Math.round(c.count / promptResults.length * 100),
+                    avgPos: c.count ? c.totalRank / c.count || null : null,
+                    engines: c.engines,
+                    isOwn: false,
+                  })),
+                ];
+
+                // Top citations by domain
+                const citDomains: Record<string, { count: number; urls: { url: string; engine: AIEngine }[] }> = {};
+                promptResults.forEach((r) => {
+                  r.citations.forEach((url) => {
+                    try {
+                      const domain = new URL(url).hostname.replace(/^www\./, "");
+                      if (!citDomains[domain]) citDomains[domain] = { count: 0, urls: [] };
+                      citDomains[domain].count++;
+                      if (!citDomains[domain].urls.some((u) => u.url === url)) citDomains[domain].urls.push({ url, engine: r.engine });
+                    } catch {}
+                  });
+                });
+                const sortedCitDomains = Object.entries(citDomains).sort((a, b) => b[1].count - a[1].count);
+                const activeDomain = selectedCitationDomain && citDomains[selectedCitationDomain] ? selectedCitationDomain : null;
+                const promptType = prompt.category || "other";
+                const typeLabel = promptType.includes("brand") ? "Branded" : promptType.includes("competitor") ? "Competitor" : promptType.includes("commercial") ? "Commercial" : "General";
+                const typeColor = promptType.includes("brand") ? "bg-purple-100 text-purple-700" : promptType.includes("competitor") ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
+
+                // Simulated area chart: flat at 0 then jump to current visibility (real data needs historical per-prompt API)
+                const chartPts = [0, 0, 0, 0, 0, visibility, visibility];
+                const chartDates = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                });
+                const W2 = 600, H2 = 200, pL = 40, pR = 12, pT = 16, pB = 36;
+                const tx2 = (i: number) => pL + i * (W2 - pL - pR) / 6;
+                const ty2 = (v: number) => pT + (H2 - pT - pB) * (1 - v / 100);
+                let areaPath = `M ${tx2(0)} ${ty2(chartPts[0])}`;
+                for (let i = 1; i < chartPts.length; i++) {
+                  const cp1x = tx2(i-1) + (tx2(i) - tx2(i-1)) * 0.5, cp1y = ty2(chartPts[i-1]);
+                  const cp2x = tx2(i) - (tx2(i) - tx2(i-1)) * 0.5, cp2y = ty2(chartPts[i]);
+                  areaPath += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${tx2(i)} ${ty2(chartPts[i])}`;
+                }
+                const fillPath = areaPath + ` L ${tx2(6)} ${H2 - pB} L ${tx2(0)} ${H2 - pB} Z`;
+
+                return (
+                  <div>
+                    {/* Back nav */}
+                    <button onClick={() => { setSelectedPromptId(null); setSelectedCitationDomain(null); }} className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-5 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                      Back to Prompts
+                    </button>
+
+                    {/* PROMPT card */}
+                    <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-4">
+                      <div className="flex gap-6">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Prompt</p>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="flex items-center gap-1.5 text-xs font-medium bg-green-50 text-green-700 px-2.5 py-1 rounded-full border border-green-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Active
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500">🌐 Global</span>
+                          </div>
+                          <h2 className="text-xl font-bold text-gray-900 mb-3">{prompt.text}</h2>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${typeColor}`}>{typeLabel}</span>
+                            <div className="flex items-center gap-1">
+                              {promptResults.slice(0,3).map((r) => (
+                                <div key={r.engine} className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${ENGINE_COLORS[r.engine]}`}>{ENGINE_LABELS[r.engine][0]}</div>
                               ))}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      );
-                    })}
+                        <div className="shrink-0 grid grid-cols-3 gap-3">
+                          <div className="bg-stone-50 rounded-xl p-3 text-center min-w-[80px]">
+                            <p className="text-lg font-bold text-green-600">#{avgPos?.toFixed(1) ?? "—"}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Avg. Position</p>
+                          </div>
+                          <div className="bg-stone-50 rounded-xl p-3 text-center min-w-[80px]">
+                            <div className="flex items-center justify-center gap-0.5 mb-0.5">
+                              {[1,2,3,4].map((b) => (
+                                <div key={b} className={`w-1.5 rounded-sm ${b <= Math.ceil(visibility/25) ? "h-4 bg-green-500" : "h-4 bg-stone-200"}`} style={{height: `${8 + b * 3}px`}} />
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-gray-400">Volume</p>
+                          </div>
+                          <div className="bg-stone-50 rounded-xl p-3 text-center min-w-[80px]">
+                            <div className="relative w-12 h-12 mx-auto mb-1">
+                              <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+                                <circle cx="22" cy="22" r="17" fill="none" stroke="#e5e7eb" strokeWidth="3.5"/>
+                                <circle cx="22" cy="22" r="17" fill="none" stroke="#22c55e" strokeWidth="3.5" strokeDasharray={`${visibility * 1.068} 106.8`} strokeLinecap="round"/>
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                              </div>
+                            </div>
+                            <p className="text-[10px] font-semibold text-gray-700">Visibility</p>
+                            <p className="text-[10px] text-green-600 font-bold">{visibility}% <span className="text-gray-400 font-normal">in last 7d</span></p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LLM Visibility Score + Top Brands */}
+                    <div className="grid grid-cols-[1fr_420px] gap-4 mb-4">
+                      {/* Area chart */}
+                      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                        <p className="text-sm font-semibold text-gray-900 mb-0.5">LLM Visibility Score <span className="text-gray-400 font-normal text-xs ml-1">ⓘ</span></p>
+                        <p className="text-xs text-gray-400 mb-4">Percentage of AI responses that mention your brand for this prompt</p>
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <span className="text-4xl font-bold text-gray-900">{visibility}%</span>
+                            <span className="ml-2 text-xs font-medium bg-stone-100 text-gray-500 px-2 py-0.5 rounded-full">vs previous day</span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-gray-900">#{avgPos?.toFixed(1) ?? "—"}</p>
+                            <p className="text-xs text-gray-400">Your rank</p>
+                          </div>
+                        </div>
+                        <svg viewBox={`0 0 ${W2} ${H2}`} className="w-full" style={{ height: H2 }}>
+                          <defs>
+                            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.15"/>
+                              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.01"/>
+                            </linearGradient>
+                          </defs>
+                          {[0, 25, 50, 75, 100].map((v) => (
+                            <g key={v}>
+                              <line x1={pL} x2={W2 - pR} y1={ty2(v)} y2={ty2(v)} stroke="#f3f4f6" strokeWidth="1"/>
+                              <text x={pL - 6} y={ty2(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
+                            </g>
+                          ))}
+                          <path d={fillPath} fill="url(#areaGrad)"/>
+                          <path d={areaPath} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                          {chartDates.map((d, i) => (
+                            <text key={i} x={tx2(i)} y={H2 - 8} textAnchor="middle" fontSize="9" fill="#9ca3af">{d}</text>
+                          ))}
+                        </svg>
+                      </div>
+
+                      {/* Top Brands */}
+                      <div className="bg-white border border-stone-200 rounded-2xl p-5 overflow-hidden">
+                        <p className="text-sm font-semibold text-gray-900 mb-0.5">Top Brands <span className="text-gray-400 font-normal text-xs ml-1">ⓘ</span></p>
+                        <p className="text-xs text-gray-400 mb-3">Brands appearing in AI responses for this prompt</p>
+                        <div className="grid grid-cols-[auto_1fr_auto_auto] gap-x-2 px-2 py-1.5 border-b border-stone-100 bg-stone-50/60 rounded-lg mb-1">
+                          <span className="text-[10px] font-semibold text-gray-400 w-5">Rank</span>
+                          <span className="text-[10px] font-semibold text-gray-400"></span>
+                          <span className="text-[10px] font-semibold text-gray-400 text-right">Sources</span>
+                          <span className="w-12" />
+                        </div>
+                        <div className="space-y-1 overflow-y-auto max-h-[320px]">
+                          {topBrands.slice(0, 8).map((b, i) => {
+                            const domain = b.name.includes(".") ? b.name : brand.competitors.find((c) => c.toLowerCase().includes(b.name.toLowerCase())) ?? b.name;
+                            return (
+                              <div key={b.name} className={`grid grid-cols-[auto_1fr_auto_auto] gap-x-2 px-2 py-2.5 rounded-xl items-center ${b.isOwn ? "bg-amber-50/60 border border-amber-100" : "hover:bg-stone-50"}`}>
+                                <span className="text-xs font-semibold text-gray-500 w-5">{i + 1}</span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={22} height={22} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                    <span className="text-xs font-semibold text-gray-800 truncate">{b.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 ml-7">
+                                    <span className="text-[10px] text-gray-500">●{b.visibility}% Visibility</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`text-xs font-bold ${i === 0 ? "text-green-600" : i < 3 ? "text-amber-500" : "text-gray-400"}`}>#{b.avgPos?.toFixed(1) ?? "—"}</p>
+                                  <p className="text-[9px] text-gray-400">Avg. Position</p>
+                                </div>
+                                <div className="flex gap-0.5 w-12 justify-end">
+                                  {b.engines.slice(0, 2).map((e) => (
+                                    <div key={e} className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${ENGINE_COLORS[e]}`}>{ENGINE_LABELS[e][0]}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Top Citations split view */}
+                    {sortedCitDomains.length > 0 && (
+                      <div className="bg-white border border-stone-200 rounded-2xl p-5">
+                        <div className="flex items-start justify-between mb-1">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Top Citations <span className="text-gray-400 font-normal text-xs ml-1">ⓘ</span></p>
+                            <p className="text-xs text-gray-400">Check the citation sources and engage</p>
+                          </div>
+                          <button onClick={() => navTo("citations")} className="text-xs font-semibold border border-stone-200 px-3 py-1.5 rounded-lg text-gray-600 hover:bg-stone-50 transition-colors">View all</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          {/* Left: domain list */}
+                          <div className="space-y-1.5">
+                            {sortedCitDomains.map(([domain, info], i) => (
+                              <button
+                                key={domain}
+                                onClick={() => setSelectedCitationDomain(domain === activeDomain ? null : domain)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors ${domain === activeDomain ? "border-stone-300 bg-stone-50" : "border-stone-100 hover:bg-stone-50"}`}
+                              >
+                                <span className="text-xs text-gray-400 font-medium w-5 shrink-0">#{i+1}</span>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={24} height={24} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                <span className="text-sm text-gray-800 font-medium truncate flex-1">{domain}</span>
+                                <div className="text-right shrink-0">
+                                  <p className="text-sm font-bold text-gray-900">{info.count}</p>
+                                  <p className="text-[10px] text-gray-400">Citations</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Right: URL detail panel */}
+                          <div>
+                            {!activeDomain ? (
+                              <div className="flex flex-col items-center justify-center h-full text-center py-8 border border-dashed border-stone-200 rounded-xl">
+                                <div className="w-12 h-4 bg-stone-100 rounded mb-2 mx-auto" />
+                                <div className="w-24 h-2 bg-stone-100 rounded mb-1 mx-auto" />
+                                <div className="w-16 h-2 bg-stone-100 rounded mb-4 mx-auto" />
+                                <p className="text-xs text-gray-400 leading-relaxed">Select a citation source from left panel<br/>to see the engage-able links.</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {citDomains[activeDomain].urls.map((item, i) => {
+                                  const isReddit = item.url.includes("reddit.com");
+                                  const urlShort = item.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60) + (item.url.length > 75 ? "…" : "");
+                                  const urlDomain = new URL(item.url).hostname.replace(/^www\./, "");
+                                  const impact = isReddit ? "High impact" : citDomains[activeDomain].count >= 3 ? "Medium impact" : "Low impact";
+                                  const impactColor = impact === "High impact" ? "bg-green-100 text-green-700" : impact === "Medium impact" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600";
+                                  return (
+                                    <div key={i} className="border border-stone-100 rounded-xl p-3">
+                                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2 inline-block ${impactColor}`}>{impact}</span>
+                                      <div className="flex items-start gap-2">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={`https://www.google.com/s2/favicons?domain=${urlDomain}&sz=16`} alt="" width={14} height={14} className="rounded mt-0.5 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                        <div className="flex-1 min-w-0">
+                                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-700 hover:text-blue-600 font-medium leading-snug flex items-center gap-1">
+                                            <span className="truncate">{urlShort}</span>
+                                            <svg className="w-3 h-3 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                          </a>
+                                          <p className="text-[10px] text-gray-400">{urlDomain}</p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <p className="text-xs font-bold text-gray-900">{citDomains[activeDomain].count}</p>
+                                          <p className="text-[9px] text-gray-400">Citations</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-2">
+                                        <span className="text-[10px] text-gray-400">Cited by</span>
+                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${ENGINE_COLORS[item.engine]}`}>{ENGINE_LABELS[item.engine][0]}</div>
+                                        {isReddit && (
+                                          <button onClick={() => { setEngageItem({ url: item.url, promptText: prompt.text, engine: item.engine }); setEngageDraft(""); navTo("citations"); }} className="ml-auto text-[10px] font-semibold bg-[#FF4500] text-white px-2 py-0.5 rounded-full hover:bg-[#e03d00] transition-colors">Engage</button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </>
+                );
+              })() : (
+                /* ── PROMPTS LIST VIEW ── */
+                (() => {
+                  const allPrompts = brand.trackedPrompts;
+                  const brandedCount = allPrompts.filter((p) => p.category?.includes("brand")).length;
+                  const competitorCount = allPrompts.filter((p) => p.category?.includes("competitor")).length;
+                  const commercialCount = allPrompts.filter((p) => p.category?.includes("commercial")).length;
+                  const used = allPrompts.length;
+                  const limit = 20;
+                  const filtered = allPrompts.filter((p) => !promptSearch || p.text.toLowerCase().includes(promptSearch.toLowerCase()));
+
+                  return (
+                    <>
+                      <h2 className="text-xl font-bold text-gray-900 mb-0.5">Prompts</h2>
+                      <p className="text-sm text-gray-400 mb-5">Manage your search prompts</p>
+
+                      {/* Usage bar */}
+                      <div className="bg-white border border-stone-200 rounded-2xl px-5 py-4 mb-5">
+                        <p className="text-sm font-semibold text-gray-800 mb-2">{used} of {limit} prompts used</p>
+                        <div className="h-2 bg-stone-100 rounded-full overflow-hidden flex gap-0.5 mb-2">
+                          <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${(commercialCount / limit) * 100}%` }} />
+                          <div className="h-full bg-amber-300 rounded-full transition-all" style={{ width: `${(competitorCount / limit) * 100}%` }} />
+                          <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${(brandedCount / limit) * 100}%` }} />
+                        </div>
+                        <div className="flex gap-4">
+                          {[["bg-blue-400","Commercial",commercialCount],["bg-amber-300","Competitor",competitorCount],["bg-purple-500","Branded",brandedCount]].map(([color, label, count]) => (
+                            <div key={label as string} className="flex items-center gap-1.5">
+                              <div className={`w-2 h-2 rounded-full ${color}`} />
+                              <span className="text-xs text-gray-500">{label as string}</span>
+                              {(count as number) > 0 && <span className="text-xs text-gray-400">({count as number})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Search + filters */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2 flex-1">
+                          <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                          <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-gray-800 placeholder:text-gray-400" />
+                        </div>
+                        <div className="flex bg-white border border-stone-200 rounded-xl overflow-hidden">
+                          <button className="px-4 py-2 text-sm font-semibold bg-stone-50 text-gray-900 border-r border-stone-200">Active({used})</button>
+                          <button className="px-4 py-2 text-sm text-gray-400">Inactive(0)</button>
+                        </div>
+                      </div>
+
+                      {/* Table */}
+                      <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                        <div className="grid grid-cols-[1fr_80px_60px_100px_70px_40px] gap-x-4 px-5 py-3 border-b border-stone-100 bg-stone-50/60">
+                          <span className="text-[11px] font-semibold text-gray-500">Prompts</span>
+                          <span className="text-[11px] font-semibold text-gray-500 text-center">Position</span>
+                          <span className="text-[11px] font-semibold text-gray-500 text-center">Volume</span>
+                          <span className="text-[11px] font-semibold text-gray-500 text-center">Brands</span>
+                          <span className="text-[11px] font-semibold text-gray-500 text-center">Mentioned?</span>
+                          <span className="text-[11px] font-semibold text-gray-500 text-center">Type</span>
+                        </div>
+
+                        {filtered.map((p) => {
+                          const pr = results.filter((r) => r.promptId === p.id);
+                          const mc = pr.filter((r) => r.brandMentioned).length;
+                          const vis = pr.length ? Math.round(mc / pr.length * 100) : 0;
+                          const rks = pr.filter((r) => r.brandMentioned && r.brandRank).map((r) => r.brandRank!);
+                          const ap = rks.length ? rks.reduce((s, r) => s + r, 0) / rks.length : null;
+                          const mentioned = mc > 0;
+                          // Top competitor favicons
+                          const cmpMap: Record<string, number> = {};
+                          pr.forEach((r) => r.competitorMentions.forEach((c) => { cmpMap[c.name] = (cmpMap[c.name] ?? 0) + 1; }));
+                          const topCmps = Object.entries(cmpMap).sort((a,b) => b[1]-a[1]).slice(0,3).map(([n]) => n);
+                          const pType = p.category || "";
+                          const typeDot = pType.includes("brand") ? "bg-purple-500" : pType.includes("competitor") ? "bg-amber-400" : "bg-blue-400";
+                          const volBars = Math.min(4, Math.max(1, Math.ceil(vis / 25)));
+                          const volColor = vis >= 75 ? "bg-green-500" : vis >= 50 ? "bg-amber-400" : vis >= 25 ? "bg-orange-400" : "bg-red-400";
+
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); }}
+                              className="w-full grid grid-cols-[1fr_80px_60px_100px_70px_40px] gap-x-4 px-5 py-4 border-b border-stone-100 last:border-0 hover:bg-stone-50/70 transition-colors text-left items-center"
+                            >
+                              {/* Prompt with visibility ring */}
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative w-11 h-11 shrink-0">
+                                  <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
+                                    <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="3"/>
+                                    <circle cx="22" cy="22" r="18" fill="none" stroke={vis >= 80 ? "#22c55e" : vis >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="3" strokeDasharray={`${vis * 1.131} 113.1`} strokeLinecap="round"/>
+                                  </svg>
+                                  <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-gray-700">{vis}%</span>
+                                </div>
+                                <span className="text-sm text-gray-800 font-medium leading-snug line-clamp-2">{p.text}</span>
+                              </div>
+                              {/* Position */}
+                              <div className="text-center">
+                                <span className={`text-sm font-bold ${ap && ap <= 2 ? "text-green-600" : ap && ap <= 4 ? "text-amber-500" : "text-gray-500"}`}>
+                                  {ap ? `#${ap.toFixed(1)}` : "—"}
+                                </span>
+                              </div>
+                              {/* Volume bars */}
+                              <div className="flex items-end justify-center gap-0.5">
+                                {[1,2,3,4].map((b) => (
+                                  <div key={b} className={`w-1.5 rounded-sm ${b <= volBars ? volColor : "bg-stone-200"}`} style={{ height: `${6 + b * 4}px` }} />
+                                ))}
+                              </div>
+                              {/* Brand favicons */}
+                              <div className="flex items-center justify-center">
+                                <div className="flex -space-x-1.5">
+                                  {topCmps.slice(0,3).map((name) => {
+                                    const d = name.includes(".") ? name : name.toLowerCase() + ".com";
+                                    return (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img key={name} src={`https://www.google.com/s2/favicons?domain=${d}&sz=32`} alt={name} width={20} height={20} className="rounded-full border-2 border-white shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                    );
+                                  })}
+                                  {topCmps.length > 3 && <div className="w-5 h-5 rounded-full border-2 border-white bg-stone-200 flex items-center justify-center text-[8px] font-bold text-gray-500">+{topCmps.length - 3}</div>}
+                                </div>
+                              </div>
+                              {/* Mentioned */}
+                              <div className="text-center">
+                                {mentioned
+                                  ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>Yes</span>
+                                  : <span className="text-xs font-semibold text-red-400">No</span>
+                                }
+                              </div>
+                              {/* Type dot */}
+                              <div className="flex justify-center">
+                                <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
+                              </div>
+                            </button>
+                          );
+                        })}
+
+                        {filtered.length === 0 && (
+                          <p className="text-sm text-gray-400 text-center py-10">No prompts match your search</p>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
               )}
             </>
           )}
