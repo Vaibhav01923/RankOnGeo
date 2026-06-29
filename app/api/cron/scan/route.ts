@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       scanned: 0,
       error: error?.message ?? "No brands found",
-      debug: { serviceKeySet, serviceKeyValid, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30) }
+      debug: { serviceKeySet, serviceKeyValid, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30), keyFirst10: process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 10), keyCharCodes: Array.from(process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 5) ?? "").map(c => c.charCodeAt(0)) }
     });
   }
 
