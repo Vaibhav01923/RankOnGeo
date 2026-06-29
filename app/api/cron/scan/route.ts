@@ -5,11 +5,7 @@ import { AIEngine, BrandData } from "@/lib/types";
 
 export const maxDuration = 300;
 
-// Only 2 engines per cron run to stay within timeout
 const CRON_ENGINES: AIEngine[] = ["chatgpt", "claude"];
-
-// Max brands per cron invocation — prevents timeout
-const BRANDS_PER_RUN = 2;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -19,60 +15,54 @@ export async function GET(req: NextRequest) {
 
   const db = serverClient();
 
-  // Pick the brands least recently scanned (rotating fairness)
-  // Left join scan_runs to get max scanned_at per brand, order ascending so
-  // brands never scanned come first, then oldest scan next.
   const { data: brands, error } = await db
     .from("brands")
-    .select(`
-      id, name, domain, niche, description, target_audience, competitors,
-      scan_runs(created_at)
-    `)
-    .order("created_at", { referencedTable: "scan_runs", ascending: true })
-    .limit(BRANDS_PER_RUN * 5); // fetch extra, filter below to BRANDS_PER_RUN with prompts
+    .select("id, name, domain, niche, description, target_audience, competitors");
 
   if (error || !brands?.length) {
     return NextResponse.json({ scanned: 0, error: error?.message ?? "No brands found" });
   }
 
-  let scanned = 0;
-  let attempted = 0;
-  const errors: string[] = [];
+  // Fetch prompts for all brands in parallel, skip brands with none
+  const brandsWithPrompts: BrandData[] = (
+    await Promise.all(
+      brands.map(async (row) => {
+        const { data: promptRows } = await db
+          .from("tracked_prompts")
+          .select("id, text, category")
+          .eq("brand_id", row.id)
+          .limit(10); // 10 prompts × 2 engines = 20 calls per brand, ~1 min
+        if (!promptRows?.length) return null;
+        return {
+          id: row.id,
+          domain: row.domain,
+          name: row.name,
+          niche: row.niche,
+          description: row.description,
+          targetAudience: row.target_audience,
+          competitors: row.competitors ?? [],
+          trackedPrompts: promptRows.map((p) => ({ id: p.id, text: p.text, category: p.category })),
+        } as BrandData;
+      })
+    )
+  ).filter(Boolean) as BrandData[];
 
-  for (const brandRow of brands) {
-    if (attempted >= BRANDS_PER_RUN) break;
-
-    const { data: promptRows } = await db
-      .from("tracked_prompts")
-      .select("id, text, category")
-      .eq("brand_id", brandRow.id)
-      .limit(20); // cap prompts per brand
-
-    if (!promptRows?.length) continue;
-    attempted++;
-
-    const brand: BrandData = {
-      id: brandRow.id,
-      domain: brandRow.domain,
-      name: brandRow.name,
-      niche: brandRow.niche,
-      description: brandRow.description,
-      targetAudience: brandRow.target_audience,
-      competitors: brandRow.competitors ?? [],
-      trackedPrompts: promptRows.map((p) => ({ id: p.id, text: p.text, category: p.category })),
-    };
-
-    try {
+  // Scan all brands in parallel — each takes ~1 min, together still ~1 min
+  const results = await Promise.allSettled(
+    brandsWithPrompts.map((brand) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await runScanForBrand(brand, CRON_ENGINES, db as any);
-      scanned++;
-      console.log(`[cron] Scanned brand: ${brand.name} (${brand.id})`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`${brand.name}: ${msg}`);
-      console.error(`[cron] Failed brand ${brand.name}:`, err);
-    }
-  }
+      runScanForBrand(brand, CRON_ENGINES, db as any)
+        .then(() => ({ brand: brand.name, ok: true }))
+        .catch((e) => ({ brand: brand.name, ok: false, error: (e as Error).message }))
+    )
+  );
 
-  return NextResponse.json({ scanned, errors: errors.length ? errors : undefined });
+  const succeeded = results.filter((r) => r.status === "fulfilled" && (r.value as { ok: boolean }).ok).length;
+  const failed = results
+    .filter((r) => r.status === "rejected" || !(r as PromiseFulfilledResult<{ ok: boolean }>).value.ok)
+    .map((r) => (r as PromiseFulfilledResult<{ brand: string; error?: string }>).value?.brand ?? "unknown");
+
+  console.log(`[cron] Scanned ${succeeded}/${brandsWithPrompts.length} brands`);
+
+  return NextResponse.json({ scanned: succeeded, total: brandsWithPrompts.length, failed: failed.length ? failed : undefined });
 }
