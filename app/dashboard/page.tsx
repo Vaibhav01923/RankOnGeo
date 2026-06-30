@@ -1294,20 +1294,23 @@ function DashboardPage() {
                 const avgPos = ranks.length ? (ranks.reduce((s, r) => s + r, 0) / ranks.length) : null;
 
                 // Top brands — extract from ranked list items in the response directly (no pre-config needed)
-                const compMap: Record<string, { name: string; count: number; totalRank: number; engines: AIEngine[] }> = {};
+                const compMap: Record<string, { name: string; domain: string | null; count: number; totalRank: number; engines: AIEngine[] }> = {};
                 const brandNameLower = brand.name.toLowerCase();
                 promptResults.forEach((r) => {
                   const listItems = r.response.match(/\d+[\.\)]\s+([^\n]+)/g) ?? [];
                   const seen = new Set<string>();
 
                   listItems.forEach((item, idx) => {
-                    // Extract the brand/tool name: first bold phrase (**Name**) or first word(s) before : or ,
                     const boldMatch = item.match(/\*{1,2}([A-Za-z][A-Za-z0-9\s\.\-]+?)\*{1,2}/);
                     const plainMatch = item.match(/\d+[\.\)]\s+([A-Za-z][A-Za-z0-9\s\.\-]{1,30}?)[\s:,\(]/);
                     const name = (boldMatch?.[1] ?? plainMatch?.[1] ?? "").trim();
                     if (!name || name.toLowerCase() === brandNameLower || seen.has(name.toLowerCase())) return;
                     seen.add(name.toLowerCase());
-                    if (!compMap[name]) compMap[name] = { name, count: 0, totalRank: 0, engines: [] };
+                    // Try to extract a domain from a URL in the same list item
+                    const urlMatch = item.match(/https?:\/\/(?:www\.)?([^\s\)\"<>\/]+)/);
+                    const domain = urlMatch ? urlMatch[1] : null;
+                    if (!compMap[name]) compMap[name] = { name, domain, count: 0, totalRank: 0, engines: [] };
+                    if (!compMap[name].domain && domain) compMap[name].domain = domain;
                     compMap[name].count++;
                     compMap[name].totalRank += idx + 1;
                     if (!compMap[name].engines.includes(r.engine)) compMap[name].engines.push(r.engine);
@@ -1317,22 +1320,29 @@ function DashboardPage() {
                   r.competitorMentions.forEach((cm) => {
                     if (seen.has(cm.name.toLowerCase()) || cm.name.toLowerCase() === brandNameLower) return;
                     seen.add(cm.name.toLowerCase());
-                    if (!compMap[cm.name]) compMap[cm.name] = { name: cm.name, count: 0, totalRank: 0, engines: [] };
+                    if (!compMap[cm.name]) compMap[cm.name] = { name: cm.name, domain: null, count: 0, totalRank: 0, engines: [] };
                     compMap[cm.name].count++;
                     if (cm.rank) compMap[cm.name].totalRank += cm.rank;
                     if (!compMap[cm.name].engines.includes(r.engine)) compMap[cm.name].engines.push(r.engine);
                   });
                 });
-                const topBrands: { name: string; visibility: number; avgPos: number | null; engines: AIEngine[]; isOwn: boolean }[] = [
-                  { name: brand.name, visibility, avgPos, engines: promptResults.filter(r => r.brandMentioned).map(r => r.engine), isOwn: true },
-                  ...Object.values(compMap).sort((a, b) => b.count - a.count).map((c) => ({
+                const topBrands: { name: string; domain: string; visibility: number; avgPos: number | null; engines: AIEngine[]; isOwn: boolean }[] = [
+                  { name: brand.name, domain: brand.domain, visibility, avgPos, engines: promptResults.filter(r => r.brandMentioned).map(r => r.engine), isOwn: true },
+                  ...Object.values(compMap).map((c) => ({
                     name: c.name,
+                    domain: c.domain ?? `${c.name.toLowerCase()}.com`,
                     visibility: Math.round(c.count / promptResults.length * 100),
                     avgPos: c.count ? c.totalRank / c.count || null : null,
                     engines: c.engines,
                     isOwn: false,
                   })),
-                ];
+                ].sort((a, b) => {
+                  // Sort by avg position ascending (rank #1 first); nulls last
+                  if (a.avgPos === null && b.avgPos === null) return 0;
+                  if (a.avgPos === null) return 1;
+                  if (b.avgPos === null) return -1;
+                  return a.avgPos - b.avgPos;
+                });
 
                 // Top citations by domain
                 const citDomains: Record<string, { count: number; urls: { url: string; engine: AIEngine }[] }> = {};
@@ -1476,14 +1486,13 @@ function DashboardPage() {
                         </div>
                         <div className="space-y-1 overflow-y-auto max-h-[320px]">
                           {topBrands.slice(0, 8).map((b, i) => {
-                            const domain = b.name.includes(".") ? b.name : brand.competitors.find((c) => c.toLowerCase().includes(b.name.toLowerCase())) ?? b.name;
                             return (
                               <div key={b.name} className={`grid grid-cols-[auto_1fr_auto_auto] gap-x-2 px-2 py-2.5 rounded-xl items-center ${b.isOwn ? "bg-amber-50/60 border border-amber-100" : "hover:bg-stone-50"}`}>
                                 <span className="text-xs font-semibold text-gray-500 w-5">{i + 1}</span>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 mb-0.5">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={22} height={22} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                    <img src={`https://www.google.com/s2/favicons?domain=${b.domain}&sz=32`} alt="" width={22} height={22} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
                                     <span className="text-xs font-semibold text-gray-800 truncate">{b.name}</span>
                                   </div>
                                   <div className="flex items-center gap-2 ml-7">
