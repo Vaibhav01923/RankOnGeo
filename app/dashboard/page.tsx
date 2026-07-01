@@ -352,6 +352,7 @@ function DashboardPage() {
   const [selectedCitationDomain, setSelectedCitationDomain] = useState<string | null>(null);
   const [selectedResponseResult, setSelectedResponseResult] = useState<ScanResult | null>(null);
   const [promptSearch, setPromptSearch] = useState("");
+  const [regeneratingPrompts, setRegeneratingPrompts] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
 
@@ -1711,16 +1712,46 @@ function DashboardPage() {
                 /* ── PROMPTS LIST VIEW ── */
                 (() => {
                   const allPrompts = brand.trackedPrompts;
-                  const brandedCount = allPrompts.filter((p) => p.category?.includes("brand")).length;
-                  const competitorCount = allPrompts.filter((p) => p.category?.includes("competitor")).length;
-                  const commercialCount = allPrompts.filter((p) => p.category?.includes("commercial")).length;
+                  const brandedCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("brand")).length;
+                  const competitorCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("competitor")).length;
+                  const commercialCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("commercial")).length;
                   const used = allPrompts.length;
                   const limit = 20;
                   const filtered = allPrompts.filter((p) => !promptSearch || p.text.toLowerCase().includes(promptSearch.toLowerCase()));
 
                   return (
                     <>
-                      <h2 className="text-xl font-bold text-gray-900 mb-0.5">Prompts</h2>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h2 className="text-xl font-bold text-gray-900">Prompts</h2>
+                        <button
+                          onClick={async () => {
+                            if (!brand?.id || regeneratingPrompts) return;
+                            setRegeneratingPrompts(true);
+                            try {
+                              const res = await fetch("/api/prompts/generate", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ brandId: brand.id }),
+                              });
+                              const data = await res.json();
+                              if (data.prompts?.length) {
+                                setBrand((b) => b ? { ...b, trackedPrompts: data.prompts.map((p: {id: string; text: string; category: string}) => ({ id: p.id, text: p.text, category: p.category })) } : b);
+                              }
+                            } finally {
+                              setRegeneratingPrompts(false);
+                            }
+                          }}
+                          disabled={regeneratingPrompts}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                        >
+                          {regeneratingPrompts ? (
+                            <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                          )}
+                          {regeneratingPrompts ? "Regenerating…" : "Regenerate with AI"}
+                        </button>
+                      </div>
                       <p className="text-sm text-gray-400 mb-5">Manage your search prompts</p>
 
                       {/* Usage bar */}

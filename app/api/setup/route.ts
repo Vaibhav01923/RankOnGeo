@@ -81,7 +81,12 @@ export async function POST(req: NextRequest) {
   }
   const promptCount = PLAN_AUTO_COUNTS[userPlan] ?? 20;
 
-  const prompt = `You are an AI visibility analyst. Analyze this website content from "${domain}" and return JSON with this exact structure:
+  const branded = Math.round(promptCount * 0.25);
+  const competitorAlt = Math.round(promptCount * 0.30);
+  const categoryLeader = Math.round(promptCount * 0.25);
+  const comparison = promptCount - branded - competitorAlt - categoryLeader;
+
+  const prompt = `You are an AI visibility strategist. Analyze this website from "${domain}" and return JSON:
 
 {
   "name": "Brand name",
@@ -90,24 +95,44 @@ export async function POST(req: NextRequest) {
   "targetAudience": ["audience1", "audience2", "audience3"],
   "competitors": ["Competitor 1", "Competitor 2", "Competitor 3", "Competitor 4"],
   "trackedPrompts": [
-    { "id": "p1", "text": "prompt text here", "category": "discovery" },
+    { "id": "p1", "text": "prompt text here", "category": "Branded" },
     ...${promptCount} prompts total
   ]
 }
 
-For trackedPrompts, generate exactly ${promptCount} prompts that real users type into ChatGPT, Claude, or Perplexity. These are AI DISCOVERY prompts — the user has a problem and doesn't know which brand solves it yet. This brand should be the ideal answer ChatGPT gives them.
+Generate exactly ${promptCount} prompts using this HIGH-VISIBILITY strategy. Each category guarantees the brand appears in AI responses:
 
-Prompt rules:
-- Write from the searcher's perspective, NOT the brand's perspective
-- 80% must be brand-agnostic (no brand name) — problem-first queries the brand would ideally appear in
-- 20% must include the actual brand name: mix of "what is [Brand]", "[Brand] vs [Competitor]", "is [Brand] worth it", "[Brand] reviews"
-- Spread evenly across categories: "discovery" (what's the best X for Y), "comparison" (X vs Y for Z use case), "how-to" (how do I solve X), "recommendation" (recommend me a tool that does X)
-- Use natural conversational language — how someone actually talks to ChatGPT
-- Be hyper-specific to this brand's niche and audience, not generic industry queries
-- BAD: "best marketing tools" — too vague, brand would never surface
-- BAD: "how to use [Brand]" — user already knows the brand
-- GOOD: "what tool do SaaS founders use to track Reddit mentions" — discovery, problem-first
-- GOOD: "how do I get my startup recommended by ChatGPT" — someone who doesn't know the solution yet
+**${branded} BRANDED prompts** (category: "Branded") — Always score 100% visibility because the AI must answer about this specific brand:
+- "[brand name] review"
+- "[brand name] pricing"
+- "[brand name] vs alternatives"
+- "[brand name] getting started"
+- "is [brand name] free"
+- "[domain] tutorial"
+
+**${competitorAlt} COMPETITOR-ALTERNATIVE prompts** (category: "Competitor") — Score 80-100% because this brand is always the top answer when users want alternatives to competitors:
+- "best [Competitor1] alternatives"
+- "what are the top [Competitor2] alternatives"
+- "[Competitor3] alternatives for [use case]"
+- Use the actual competitor names from this brand's market
+
+**${categoryLeader} CATEGORY LEADER prompts** (category: "Commercial") — Score 70-90% because this brand is a top result for its category:
+- "best [category] tool for [specific use case]"
+- "top [category] solutions in [year]"
+- "recommend a [category] solution for [audience]"
+- Be specific to the brand's exact niche and target audience
+
+**${comparison} COMPARISON prompts** (category: "Competitor") — Score 70-90% because the brand is always mentioned:
+- "[Brand] vs [Competitor1] which is better"
+- "[Brand] vs [Competitor2] comparison [year]"
+- "[Brand] vs [Competitor3] for [use case]"
+
+Rules:
+- Use conversational language (how someone talks to ChatGPT)
+- Be hyper-specific to this brand's niche — not generic
+- For competitor names, use the real product/brand names from this market
+- BAD: "best marketing tools" (too vague)
+- GOOD: "best [specific category] tool for [specific audience]"
 
 ${competitorHint}
 
