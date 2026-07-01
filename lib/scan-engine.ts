@@ -77,7 +77,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
 
   if (engine === "gemini") {
     const model = getGemini().getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [{ googleSearch: {} } as any],
     });
