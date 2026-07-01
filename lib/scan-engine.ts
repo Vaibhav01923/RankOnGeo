@@ -54,12 +54,12 @@ export function extractMentions(
 }
 
 export async function queryEngine(engine: AIEngine, prompt: string): Promise<string> {
-  const systemMsg = "You are a helpful assistant. Answer the user's question with specific product/service recommendations. Be concise and list your top recommendations.";
+  const systemMsg = "You are a helpful assistant. Answer the user's question with specific product/service recommendations. List your top recommendations and include URLs to their official websites or relevant resources where applicable.";
 
   if (engine === "claude") {
     const msg = await getAnthropic().messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
+      max_tokens: 1000,
       system: systemMsg,
       messages: [{ role: "user", content: prompt }],
     });
@@ -69,7 +69,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
   if (engine === "chatgpt") {
     const res = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 600,
+      max_tokens: 1000,
       messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
     });
     return res.choices[0]?.message?.content ?? "";
@@ -88,17 +88,20 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       body: JSON.stringify({
         model: "llama-3.1-sonar-small-128k-online",
         messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
-        max_tokens: 600,
+        max_tokens: 1000,
       }),
     });
     const data = await res.json();
-    return data.choices?.[0]?.message?.content ?? "";
+    const text = data.choices?.[0]?.message?.content ?? "";
+    // Perplexity returns cited URLs in a top-level citations array — append so extractMentions picks them up
+    const citationUrls: string[] = data.citations ?? [];
+    return citationUrls.length ? `${text}\n\nSources:\n${citationUrls.join("\n")}` : text;
   }
 
   if (engine === "grok") {
     const res = await getGrok().chat.completions.create({
       model: "grok-3-mini",
-      max_tokens: 600,
+      max_tokens: 1000,
       messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
     });
     return res.choices[0]?.message?.content ?? "";
