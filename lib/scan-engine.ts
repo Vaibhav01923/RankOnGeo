@@ -76,9 +76,18 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
   }
 
   if (engine === "gemini") {
-    const model = getGemini().getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const model = getGemini().getGenerativeModel({
+      model: "gemini-2.5-flash-lite",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ googleSearch: {} } as any],
+    });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
-    return result.response.text();
+    const text = result.response.text();
+    // Extract grounding source URLs returned by Google Search
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
+    const groundingUrls: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean);
+    return groundingUrls.length ? `${text}\n\nSources:\n${groundingUrls.join("\n")}` : text;
   }
 
   if (engine === "perplexity") {
