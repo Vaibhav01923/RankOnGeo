@@ -30,7 +30,7 @@ const ENGINE_ICONS: Record<AIEngine, string> = {
   claude: "/engines/claude.png",
   gemini: "/engines/gemini.png",
   perplexity: "/engines/perplexity.svg",
-  google: "/engines/gemini.png",
+  google: "/engines/google.png",
   grok: "/engines/grok.png",
 };
 
@@ -309,7 +309,7 @@ function DashboardPage() {
   const [overallScore, setOverallScore] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [scanned, setScanned] = useState(false);
-  const [selectedEngines] = useState<AIEngine[]>(["chatgpt", "claude", "gemini", "perplexity", "grok"]);
+  const [selectedEngines] = useState<AIEngine[]>(["chatgpt", "claude", "gemini", "google", "perplexity", "grok"]);
   const [nextCheckIn, setNextCheckIn] = useState<string>("");
   const [error, setError] = useState("");
   const [scanHistory, setScanHistory] = useState<ScanRun[]>([]);
@@ -352,7 +352,9 @@ function DashboardPage() {
   const [selectedCitationDomain, setSelectedCitationDomain] = useState<string | null>(null);
   const [selectedResponseResult, setSelectedResponseResult] = useState<ScanResult | null>(null);
   const [promptSearch, setPromptSearch] = useState("");
-  const [regeneratingPrompts, setRegeneratingPrompts] = useState(false);
+  const [newPromptText, setNewPromptText] = useState("");
+  const [addingPrompt, setAddingPrompt] = useState(false);
+  const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
 
@@ -819,6 +821,17 @@ function DashboardPage() {
   const brandInitial = brand.name[0]?.toUpperCase() ?? "B";
 
   // Citations derived data
+  const CITATION_BLOCKED = [
+    "vertexaisearch.cloud.google.com", "google.com", "googleapis.com", "googleusercontent.com",
+    "gstatic.com", "googlesyndication.com", "doubleclick.net",
+    "bing.com", "search.yahoo.com", "duckduckgo.com", "baidu.com",
+    "t.co", "bit.ly", "tinyurl.com", "goo.gl",
+    "example.com", "example.org", "example.net", "localhost",
+    "your-domain.com", "yourdomain.com", "domain.com", "myapp.com",
+  ];
+  const isCitationBlocked = (domain: string) =>
+    CITATION_BLOCKED.some((b) => domain === b || domain.endsWith("." + b));
+
   const citationDomains = (() => {
     const map: Record<string, { count: number; engines: Set<string>; type: string }> = {};
     const brandHost = brand.domain.replace(/^www\./, "");
@@ -828,6 +841,7 @@ function DashboardPage() {
         const domain = url.replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, "");
         if (!domain) return;
         if (domain === brandHost || domain.endsWith("." + brandHost)) return;
+        if (isCitationBlocked(domain)) return;
         if (seenInThisResult.has(domain)) return;
         seenInThisResult.add(domain);
         if (!map[domain]) map[domain] = { count: 0, engines: new Set(), type: getSourceType(domain) };
@@ -847,6 +861,7 @@ function DashboardPage() {
           const domain = new URL(url).hostname.replace(/^www\./, "");
           if (!domain) return;
           if (domain === brandHost || domain.endsWith("." + brandHost)) return;
+          if (isCitationBlocked(domain)) return;
           if (!map[domain]) map[domain] = [];
           const exists = map[domain].some((x) => x.url === url && x.engine === r.engine);
           if (!exists) map[domain].push({ url, engine: r.engine, promptText: r.promptText });
@@ -1721,37 +1736,7 @@ function DashboardPage() {
 
                   return (
                     <>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <h2 className="text-xl font-bold text-gray-900">Prompts</h2>
-                        <button
-                          onClick={async () => {
-                            if (!brand?.id || regeneratingPrompts) return;
-                            setRegeneratingPrompts(true);
-                            try {
-                              const res = await fetch("/api/prompts/generate", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ brandId: brand.id }),
-                              });
-                              const data = await res.json();
-                              if (data.prompts?.length) {
-                                setBrand((b) => b ? { ...b, trackedPrompts: data.prompts.map((p: {id: string; text: string; category: string}) => ({ id: p.id, text: p.text, category: p.category })) } : b);
-                              }
-                            } finally {
-                              setRegeneratingPrompts(false);
-                            }
-                          }}
-                          disabled={regeneratingPrompts}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                        >
-                          {regeneratingPrompts ? (
-                            <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                          )}
-                          {regeneratingPrompts ? "Regenerating…" : "Regenerate with AI"}
-                        </button>
-                      </div>
+                      <h2 className="text-xl font-bold text-gray-900 mb-0.5">Prompts</h2>
                       <p className="text-sm text-gray-400 mb-5">Manage your search prompts</p>
 
                       {/* Usage bar */}
@@ -1773,27 +1758,22 @@ function DashboardPage() {
                         </div>
                       </div>
 
-                      {/* Search + filters */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2 flex-1">
-                          <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                          <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-gray-800 placeholder:text-gray-400" />
-                        </div>
-                        <div className="flex bg-white border border-stone-200 rounded-xl overflow-hidden">
-                          <button className="px-4 py-2 text-sm font-semibold bg-stone-50 text-gray-900 border-r border-stone-200">Active({used})</button>
-                          <button className="px-4 py-2 text-sm text-gray-400">Inactive(0)</button>
-                        </div>
+                      {/* Search */}
+                      <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2 mb-4">
+                        <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-gray-800 placeholder:text-gray-400" />
                       </div>
 
                       {/* Table */}
                       <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-                        <div className="grid grid-cols-[1fr_80px_60px_100px_70px_40px] gap-x-4 px-5 py-3 border-b border-stone-100 bg-stone-50/60">
+                        <div className="grid grid-cols-[1fr_80px_60px_100px_70px_40px_32px] gap-x-4 px-5 py-3 border-b border-stone-100 bg-stone-50/60">
                           <span className="text-[11px] font-semibold text-gray-500">Prompts</span>
                           <span className="text-[11px] font-semibold text-gray-500 text-center">Position</span>
                           <span className="text-[11px] font-semibold text-gray-500 text-center">Volume</span>
                           <span className="text-[11px] font-semibold text-gray-500 text-center">Brands</span>
                           <span className="text-[11px] font-semibold text-gray-500 text-center">Mentioned?</span>
                           <span className="text-[11px] font-semibold text-gray-500 text-center">Type</span>
+                          <span />
                         </div>
 
                         {filtered.map((p) => {
@@ -1803,23 +1783,21 @@ function DashboardPage() {
                           const rks = pr.filter((r) => r.brandMentioned && r.brandRank).map((r) => r.brandRank!);
                           const ap = rks.length ? rks.reduce((s, r) => s + r, 0) / rks.length : null;
                           const mentioned = mc > 0;
-                          // Top competitor favicons
                           const cmpMap: Record<string, number> = {};
                           pr.forEach((r) => r.competitorMentions.forEach((c) => { cmpMap[c.name] = (cmpMap[c.name] ?? 0) + 1; }));
                           const topCmps = Object.entries(cmpMap).sort((a,b) => b[1]-a[1]).slice(0,3).map(([n]) => n);
                           const pType = p.category || "";
-                          const typeDot = pType.includes("brand") ? "bg-purple-500" : pType.includes("competitor") ? "bg-amber-400" : "bg-blue-400";
+                          const typeDot = pType.toLowerCase().includes("brand") ? "bg-purple-500" : pType.toLowerCase().includes("competitor") ? "bg-amber-400" : "bg-blue-400";
                           const volBars = Math.min(4, Math.max(1, Math.ceil(vis / 25)));
                           const volColor = vis >= 75 ? "bg-green-500" : vis >= 50 ? "bg-amber-400" : vis >= 25 ? "bg-orange-400" : "bg-red-400";
 
                           return (
-                            <button
+                            <div
                               key={p.id}
-                              onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); }}
-                              className="w-full grid grid-cols-[1fr_80px_60px_100px_70px_40px] gap-x-4 px-5 py-4 border-b border-stone-100 last:border-0 hover:bg-stone-50/70 transition-colors text-left items-center"
+                              className="group grid grid-cols-[1fr_80px_60px_100px_70px_40px_32px] gap-x-4 px-5 py-4 border-b border-stone-100 last:border-0 hover:bg-stone-50/70 transition-colors items-center"
                             >
-                              {/* Prompt with visibility ring */}
-                              <div className="flex items-center gap-3 min-w-0">
+                              {/* Prompt with visibility ring — clickable */}
+                              <button onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); }} className="flex items-center gap-3 min-w-0 text-left">
                                 <div className="relative w-11 h-11 shrink-0">
                                   <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
                                     <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="3"/>
@@ -1828,7 +1806,7 @@ function DashboardPage() {
                                   <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-gray-700">{vis}%</span>
                                 </div>
                                 <span className="text-sm text-gray-800 font-medium leading-snug line-clamp-2">{p.text}</span>
-                              </div>
+                              </button>
                               {/* Position */}
                               <div className="text-center">
                                 <span className={`text-sm font-bold ${ap && ap <= 2 ? "text-green-600" : ap && ap <= 4 ? "text-amber-500" : "text-gray-500"}`}>
@@ -1865,13 +1843,91 @@ function DashboardPage() {
                               <div className="flex justify-center">
                                 <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
                               </div>
-                            </button>
+                              {/* Delete */}
+                              <div className="flex justify-center">
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (deletingPromptId === p.id) return;
+                                    setDeletingPromptId(p.id);
+                                    try {
+                                      await fetch(`/api/prompts/${p.id}`, { method: "DELETE" });
+                                      setBrand((b) => b ? { ...b, trackedPrompts: b.trackedPrompts.filter((x) => x.id !== p.id) } : b);
+                                    } finally {
+                                      setDeletingPromptId(null);
+                                    }
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400"
+                                  title="Delete prompt"
+                                >
+                                  {deletingPromptId === p.id
+                                    ? <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin block" />
+                                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                  }
+                                </button>
+                              </div>
+                            </div>
                           );
                         })}
 
                         {filtered.length === 0 && (
                           <p className="text-sm text-gray-400 text-center py-10">No prompts match your search</p>
                         )}
+                      </div>
+
+                      {/* Add prompt */}
+                      <div className="mt-3 flex gap-2">
+                        <input
+                          value={newPromptText}
+                          onChange={(e) => setNewPromptText(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === "Enter" && newPromptText.trim() && !addingPrompt) {
+                              e.preventDefault();
+                              setAddingPrompt(true);
+                              try {
+                                const res = await fetch("/api/prompts", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ brandId: brand.id, text: newPromptText.trim(), category: "Commercial" }),
+                                });
+                                const data = await res.json();
+                                if (data.prompt) {
+                                  setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
+                                  setNewPromptText("");
+                                }
+                              } finally {
+                                setAddingPrompt(false);
+                              }
+                            }
+                          }}
+                          placeholder="Add a new prompt…"
+                          className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-stone-300"
+                        />
+                        <button
+                          disabled={!newPromptText.trim() || addingPrompt}
+                          onClick={async () => {
+                            if (!newPromptText.trim() || addingPrompt) return;
+                            setAddingPrompt(true);
+                            try {
+                              const res = await fetch("/api/prompts", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ brandId: brand.id, text: newPromptText.trim(), category: "Commercial" }),
+                              });
+                              const data = await res.json();
+                              if (data.prompt) {
+                                setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
+                                setNewPromptText("");
+                              }
+                            } finally {
+                              setAddingPrompt(false);
+                            }
+                          }}
+                          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        >
+                          {addingPrompt ? <span className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" /> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>}
+                          Add
+                        </button>
                       </div>
                     </>
                   );

@@ -64,7 +64,9 @@ export function extractMentions(
 }
 
 export async function queryEngine(engine: AIEngine, prompt: string): Promise<string> {
-  const systemMsg = "You are a helpful assistant. Answer the user's question with specific product/service recommendations. List your top recommendations and include URLs to their official websites or relevant resources where applicable.";
+  // Neutral system prompt — does NOT say "official websites only", lets search grounding
+  // cite whatever it finds (YouTube, Reddit, blogs, documentation, etc.)
+  const systemMsg = "You are a helpful assistant. Answer the user's question thoroughly. Include links to any relevant resources you reference — tutorials, community discussions, documentation, videos, or articles.";
 
   if (engine === "claude") {
     const msg = await getAnthropic().messages.create({
@@ -93,7 +95,22 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
     });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
     const text = result.response.text();
-    // Extract grounding source URLs returned by Google Search
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
+    const groundingUrls: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean);
+    return groundingUrls.length ? `${text}\n\nSources:\n${groundingUrls.join("\n")}` : text;
+  }
+
+  if (engine === "google") {
+    // Google AI Mode: same model as gemini engine but no system prompt — raw query lets
+    // Google Search grounding surface YouTube, Reddit, community content like google.com AI Mode
+    const model = getGemini().getGenerativeModel({
+      model: "gemini-3.5-flash",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ googleSearch: {} } as any],
+    });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
     const groundingUrls: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean);
@@ -112,7 +129,6 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
     });
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content ?? "";
-    // Perplexity returns cited URLs in a top-level citations array — append so extractMentions picks them up
     const citationUrls: string[] = data.citations ?? [];
     return citationUrls.length ? `${text}\n\nSources:\n${citationUrls.join("\n")}` : text;
   }
@@ -124,10 +140,6 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
     });
     return res.choices[0]?.message?.content ?? "";
-  }
-
-  if (engine === "google") {
-    throw new Error("Google AI Mode scanning temporarily disabled");
   }
 
   return "";

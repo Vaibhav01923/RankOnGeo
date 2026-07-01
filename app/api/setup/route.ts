@@ -81,58 +81,58 @@ export async function POST(req: NextRequest) {
   }
   const promptCount = PLAN_AUTO_COUNTS[userPlan] ?? 20;
 
-  const branded = Math.round(promptCount * 0.25);
-  const competitorAlt = Math.round(promptCount * 0.30);
-  const categoryLeader = Math.round(promptCount * 0.25);
-  const comparison = promptCount - branded - competitorAlt - categoryLeader;
+  const branded = Math.round(promptCount * 0.20);
+  const competitorAlt = Math.round(promptCount * 0.25);
+  const categoryLeader = Math.round(promptCount * 0.20);
+  const comparison = Math.round(promptCount * 0.15);
+  const community = promptCount - branded - competitorAlt - categoryLeader - comparison;
 
-  const prompt = `You are an AI visibility strategist. Analyze this website from "${domain}" and return JSON:
+  const prompt = `You are an AI visibility strategist. Analyze this website from "${domain}" and return JSON with EXACTLY ${promptCount} prompts.
 
+Return this exact structure:
 {
   "name": "Brand name",
   "niche": "One-line niche description",
-  "description": "2-3 sentence description of what the brand does",
+  "description": "2-3 sentence description",
   "targetAudience": ["audience1", "audience2", "audience3"],
   "competitors": ["Competitor 1", "Competitor 2", "Competitor 3", "Competitor 4"],
   "trackedPrompts": [
-    { "id": "p1", "text": "prompt text here", "category": "Branded" },
-    ...${promptCount} prompts total
+    { "id": "p1", "text": "...", "category": "Branded" },
+    ...EXACTLY ${promptCount} items
   ]
 }
 
-Generate exactly ${promptCount} prompts using this HIGH-VISIBILITY strategy. Each category guarantees the brand appears in AI responses:
+Generate EXACTLY ${promptCount} prompts using this strategy:
 
-**${branded} BRANDED prompts** (category: "Branded") — Always score 100% visibility because the AI must answer about this specific brand:
-- "[brand name] review"
-- "[brand name] pricing"
-- "[brand name] vs alternatives"
-- "[brand name] getting started"
-- "is [brand name] free"
-- "[domain] tutorial"
+**${branded} BRANDED** (category: "Branded") — 100% visibility, brand is always the answer:
+- "[brand] review"
+- "[brand] pricing"
+- "is [brand] free"
+- "[brand] getting started"
+- "[brand] vs alternatives"
 
-**${competitorAlt} COMPETITOR-ALTERNATIVE prompts** (category: "Competitor") — Score 80-100% because this brand is always the top answer when users want alternatives to competitors:
-- "best [Competitor1] alternatives"
-- "what are the top [Competitor2] alternatives"
-- "[Competitor3] alternatives for [use case]"
-- Use the actual competitor names from this brand's market
+**${competitorAlt} COMPETITOR-ALTERNATIVE** (category: "Competitor") — user wants alternative to a named competitor:
+- "alternative to [Competitor]"
+- "best [Competitor] alternatives"
+- "[Competitor] alternative that [specific benefit]"
+Use real competitor names from this market.
 
-**${categoryLeader} CATEGORY LEADER prompts** (category: "Commercial") — Score 70-90% because this brand is a top result for its category:
-- "best [category] tool for [specific use case]"
-- "top [category] solutions in [year]"
-- "recommend a [category] solution for [audience]"
-- Be specific to the brand's exact niche and target audience
+**${categoryLeader} CATEGORY LEADER** (category: "Commercial") — user wants best tool in category:
+- "best [specific tool type] for [specific audience]"
+- "top [category] tools in 2026"
+- "recommend a [category] solution for [use case]"
+Be hyper-specific to this brand's exact niche.
 
-**${comparison} COMPARISON prompts** (category: "Competitor") — Score 70-90% because the brand is always mentioned:
-- "[Brand] vs [Competitor1] which is better"
-- "[Brand] vs [Competitor2] comparison [year]"
-- "[Brand] vs [Competitor3] for [use case]"
+**${comparison} COMPARISON** (category: "Competitor") — head-to-head that always mentions both brands:
+- "[Brand] vs [Competitor] which is better"
+- "[Brand] vs [Competitor] for [use case]"
 
-Rules:
-- Use conversational language (how someone talks to ChatGPT)
-- Be hyper-specific to this brand's niche — not generic
-- For competitor names, use the real product/brand names from this market
-- BAD: "best marketing tools" (too vague)
-- GOOD: "best [specific category] tool for [specific audience]"
+**${community} COMMUNITY/DISCUSSION** (category: "Commercial") — SHORT casual questions (3-7 words) that match Reddit thread titles and YouTube tutorials. These trigger AI to cite real community discussions:
+- "how good is [brand]"
+- "switching from [Competitor] to [brand]"
+- "which [category] tool should I use"
+- "is [brand] worth it"
+Keep these conversational, like Reddit post titles.
 
 ${competitorHint}
 

@@ -26,51 +26,56 @@ export async function POST(req: NextRequest) {
   const { data: planRow } = await db.from("user_plans").select("plan").eq("user_id", user.id).single();
   const promptCount = PLAN_PROMPT_COUNTS[planRow?.plan ?? "starter"] ?? 20;
 
-  const branded = Math.round(promptCount * 0.25);
-  const competitorAlt = Math.round(promptCount * 0.30);
-  const categoryLeader = Math.round(promptCount * 0.25);
-  const comparison = promptCount - branded - competitorAlt - categoryLeader;
+  const branded = Math.round(promptCount * 0.20);
+  const competitorAlt = Math.round(promptCount * 0.25);
+  const categoryLeader = Math.round(promptCount * 0.20);
+  const comparison = Math.round(promptCount * 0.15);
+  const community = promptCount - branded - competitorAlt - categoryLeader - comparison;
 
   const competitors = (brand.competitors ?? []).join(", ");
 
-  const systemPrompt = `You are an AI visibility strategist. Generate exactly ${promptCount} search prompts for the brand "${brand.name}" (${brand.domain}) in the "${brand.niche}" space.
+  const systemPrompt = `You are an AI visibility strategist. Generate EXACTLY ${promptCount} search prompts for "${brand.name}" (${brand.domain}) in the "${brand.niche}" space. You MUST return exactly ${promptCount} items — not one more, not one less.
 
 Description: ${brand.description}
-Competitors: ${competitors || "unknown — infer from the niche"}
+Competitors: ${competitors || "unknown — infer from niche"}
 
-Return JSON array only:
-[
-  { "text": "prompt text", "category": "Branded" },
-  ...
-]
+Return a JSON object with a "prompts" array:
+{ "prompts": [ { "text": "...", "category": "Branded" }, ... ] }
 
-Use this HIGH-VISIBILITY strategy:
+Strategy — EXACTLY this distribution:
 
-**${branded} BRANDED** (category: "Branded") — User searches for this brand directly → always 100% visibility:
+**${branded} BRANDED** (category: "Branded") — brand is always the answer:
 - "${brand.name} review"
 - "${brand.name} pricing"
-- "${brand.domain} getting started"
 - "is ${brand.name} free"
+- "${brand.name} getting started"
 - "${brand.name} vs alternatives"
 
-**${competitorAlt} COMPETITOR-ALTERNATIVE** (category: "Competitor") — User wants alternatives to a competitor → this brand is always the answer:
-- "best [competitor] alternatives"
-- "top [competitor] alternatives for [use case]"
-- "[competitor] alternative that [specific benefit]"
-Use the actual competitor names: ${competitors || "infer from niche"}
+**${competitorAlt} COMPETITOR-ALTERNATIVE** (category: "Competitor") — user wants alternative to a named competitor:
+- "alternative to [Competitor]"
+- "best [Competitor] alternatives"
+- "[Competitor] alternative that [specific benefit]"
+Use real competitor names: ${competitors || "infer from niche"}
 
-**${categoryLeader} CATEGORY LEADER** (category: "Commercial") — User searches for the best in category → this brand wins:
-- "best [specific tool type] for [specific audience/use case]"
+**${categoryLeader} CATEGORY LEADER** (category: "Commercial") — user wants the best tool in this niche:
+- "best [specific tool type] for [specific audience]"
 - "top [category] tools in 2026"
-- "recommend a [category] solution for [target audience]"
-Be hyper-specific to niche: ${brand.niche}
+- "recommend a [category] solution for [use case]"
+Be hyper-specific to: ${brand.niche}
 
-**${comparison} COMPARISON** (category: "Competitor") — Direct comparisons where both brands are mentioned:
-- "${brand.name} vs [competitor] which is better in 2026"
-- "${brand.name} vs [competitor] for [use case]"
+**${comparison} COMPARISON** (category: "Competitor") — direct head-to-head that always mentions both brands:
+- "${brand.name} vs [Competitor] which is better"
+- "${brand.name} vs [Competitor] for [use case]"
 
-Rules: conversational language, specific to niche, no generic queries like "best marketing tools".
-Return ONLY a JSON array, no markdown.`;
+**${community} COMMUNITY/DISCUSSION** (category: "Commercial") — short casual questions that match Reddit thread titles and YouTube tutorial searches, which AI cites from real community discussions:
+- "how good is [brand name]"
+- "[category] tools discussion"
+- "which [category] tool should I use"
+- "is [brand name] worth it"
+- "switching from [Competitor] to [brand name]"
+Keep these SHORT (3-7 words), casual, like how someone would title a Reddit post.
+
+IMPORTANT: Return exactly ${promptCount} total prompts. Use JSON { "prompts": [...] }`;
 
   const response = await getClient().chat.completions.create({
     model: "gpt-4o-mini",
