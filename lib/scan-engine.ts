@@ -8,7 +8,17 @@ const getOpenAI = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const getGrok = () => new OpenAI({ apiKey: process.env.XAI_API_KEY ?? "", baseURL: "https://api.x.ai/v1" });
 const getGemini = () => new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY ?? "");
 
-const BLOCKED_DOMAINS = ["example.com", "example.org", "example.net", "localhost", "your-domain.com", "yourdomain.com", "domain.com"];
+const BLOCKED_DOMAINS = [
+  // Placeholder/generic domains
+  "example.com", "example.org", "example.net", "localhost", "your-domain.com", "yourdomain.com", "domain.com",
+  // Google internal/search infrastructure leaked by Gemini grounding
+  "vertexaisearch.cloud.google.com", "google.com", "googleapis.com", "googleusercontent.com",
+  "gstatic.com", "googlesyndication.com", "doubleclick.net",
+  // Generic search engines (not relevant citations)
+  "bing.com", "search.yahoo.com", "duckduckgo.com", "baidu.com",
+  // Generic social aggregators with no page-specific value
+  "t.co", "bit.ly", "tinyurl.com", "goo.gl",
+];
 
 export function extractMentions(
   response: string,
