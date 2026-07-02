@@ -1,12 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { AIEngine, BrandData, ScanResult, VisibilityScore } from "@/lib/types";
 
 const getAnthropic = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const getOpenAI = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const getGrok = () => new OpenAI({ apiKey: process.env.XAI_API_KEY ?? "", baseURL: "https://api.x.ai/v1" });
 const getGemini = () => new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY ?? "");
+const getGoogleAI = () => new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY ?? "" });
 
 const BLOCKED_DOMAINS = [
   // Placeholder/generic domains
@@ -102,19 +104,29 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
   }
 
   if (engine === "google") {
-    // Google AI Mode: same model as gemini engine but no system prompt — raw query lets
-    // Google Search grounding surface YouTube, Reddit, community content like google.com AI Mode
-    const model = getGemini().getGenerativeModel({
-      model: "gemini-3.5-flash",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ googleSearch: {} } as any],
-    });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // Google AI Mode via new @google/genai Interactions API with google_search tool
+    const ai = getGoogleAI();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
-    const groundingUrls: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean);
-    return groundingUrls.length ? `${text}\n\nSources:\n${groundingUrls.join("\n")}` : text;
+    const interaction = await (ai as any).interactions.create({
+      model: "gemini-3.5-flash",
+      input: prompt,
+      tools: [{ type: "google_search" }],
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const text: string = (interaction as any).output_text ?? "";
+    // Extract cited URLs from search result steps
+    const urls: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const steps: any[] = (interaction as any).steps ?? [];
+    for (const step of steps) {
+      if (step.type === "google_search_result") {
+        const results: any[] = step.results ?? []; // eslint-disable-line @typescript-eslint/no-explicit-any
+        for (const r of results) {
+          if (r.url) urls.push(r.url);
+        }
+      }
+    }
+    return urls.length ? `${text}\n\nSources:\n${urls.join("\n")}` : text;
   }
 
   if (engine === "perplexity") {
