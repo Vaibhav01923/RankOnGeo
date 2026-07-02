@@ -70,7 +70,7 @@ const AVAILABLE_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexit
 
 type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
-  | "gaps" | "keywords" | "articles" | "social" | "tasks"
+  | "gaps" | "keywords" | "articles" | "tasks"
   | "publishing" | "schedule"
   | "brands" | "alerts"
   | "agent" | "admin";
@@ -84,7 +84,7 @@ const TAB_LABELS: Record<Tab, string> = {
   gaps: "Research",
   keywords: "Keywords",
   articles: "Articles",
-  social: "Social",
+
   tasks: "Tasks",
   publishing: "Publishing",
   schedule: "Schedule",
@@ -419,8 +419,6 @@ function DashboardPage() {
       setRedditUsername(d.username);
     });
 
-    if (searchParams.get("reddit") === "connected") setActiveTab("social");
-    if (searchParams.get("tab") === "social") setActiveTab("social");
 
     const brandId = searchParams.get("brandId");
 
@@ -999,7 +997,6 @@ function DashboardPage() {
               <NavItem label="Research" active={activeTab === "gaps"} onClick={() => navTo("gaps")} badge={gaps.length || undefined} />
               <NavItem label="Keywords" active={activeTab === "keywords"} onClick={() => navTo("keywords")} />
               <NavItem label="Articles" active={activeTab === "articles"} onClick={() => navTo("articles")} badge={draftCount || undefined} />
-              <NavItem label="Social" active={activeTab === "social"} onClick={() => navTo("social")} badge={newThreadCount || undefined} />
               <NavItem label="Tasks" active={activeTab === "tasks"} onClick={() => navTo("tasks")} badge={engageTasks.filter(t => t.status === "pending").length || undefined} />
             </div>
           </div>
@@ -2916,171 +2913,6 @@ function DashboardPage() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* SOCIAL */}
-          {activeTab === "social" && (
-            <div>
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Social</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">Monitor Reddit for keyword-relevant conversations</p>
-                </div>
-                {redditConnected ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      u/{redditUsername}
-                    </div>
-                    <button onClick={disconnectReddit} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Disconnect</button>
-                  </div>
-                ) : (
-                  <a
-                    href={`/api/reddit/auth?brandId=${brand.id}`}
-                    className="flex items-center gap-2 text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M20 10c0-5.523-4.477-10-10-10S0 4.477 0 10c0 5.522 4.478 10 10 10 5.523 0 10-4.478 10-10zm-7.432 4.434a4.91 4.91 0 01-2.568.712 4.91 4.91 0 01-2.568-.712.312.312 0 01.345-.518c.596.394 1.374.618 2.223.618s1.627-.224 2.223-.618a.312.312 0 01.345.518zm.138-2.506a.937.937 0 110-1.874.937.937 0 010 1.874zm-5.412 0a.937.937 0 110-1.874.937.937 0 010 1.874zm8.354-1.962a1.25 1.25 0 00-2.12-.896 6.166 6.166 0 00-3.124-.846l.6-2.375 1.741.41a.937.937 0 101.017-1.08l-1.955-.46a.313.313 0 00-.37.218l-.683 2.712a6.172 6.172 0 00-3.094.843 1.25 1.25 0 10-1.388 2.016 2.47 2.47 0 000 .305c0 1.875 2.187 3.398 4.888 3.398s4.888-1.523 4.888-3.398c0-.104-.006-.206-.017-.305.383-.23.617-.644.617-1.112z"/></svg>
-                    Connect Reddit
-                  </a>
-                )}
-              </div>
-
-              <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900">Reddit keywords</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Keywords we watch for relevant conversations</p>
-                  </div>
-                  <button onClick={syncReddit} disabled={syncing || socialKeywords.length === 0} className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors">
-                    {syncing && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                    {syncing ? "Syncing…" : "Sync Reddit"}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {socialKeywords.map((k) => (
-                    <span key={k.id} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1 rounded-full">
-                      {k.keyword}
-                      <button onClick={() => removeKeyword(k.id)} className="text-blue-400 hover:text-blue-700 ml-0.5">×</button>
-                    </span>
-                  ))}
-                  {socialKeywords.length === 0 && <span className="text-xs text-gray-400">No keywords yet — add one below</span>}
-                </div>
-                <div className="flex gap-2">
-                  <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(); } }} placeholder="Add keyword (e.g. AI visibility tool)" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
-                  <button onClick={addKeyword} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Add</button>
-                </div>
-              </div>
-
-              {redditThreads.length === 0 ? (
-                <div className="bg-white border border-dashed border-stone-200 rounded-xl p-10 text-center">
-                  <p className="text-sm text-gray-500 mb-1">No threads found yet</p>
-                  <p className="text-xs text-gray-400">Add keywords above and click &quot;Sync Reddit&quot; to find relevant conversations</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-400 mb-2">{redditThreads.length} threads · {newThreadCount} new</p>
-                  {redditThreads.map((thread) => (
-                    <div key={thread.id} className="bg-white border border-stone-200 rounded-xl p-4 hover:border-blue-200 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium text-blue-600">r/{thread.subreddit}</span>
-                            <span className="text-gray-200">·</span>
-                            <span className="text-xs bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{thread.keyword}</span>
-                            {thread.status === "new" && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
-                          </div>
-                          <p className="text-sm font-medium text-gray-800 truncate mb-1">{thread.title}</p>
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span>↑ {thread.score}</span>
-                            <span>{thread.numComments} comments</span>
-                            {thread.redditCreatedAt && <span>{new Date(thread.redditCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <a href={thread.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-gray-600">View ↗</a>
-                          <button onClick={() => draftReplyForThread(thread)} className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
-                            {thread.draftedReply ? "View reply" : "Draft reply"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* AGENT */}
-          {activeTab === "agent" && (
-            <div className="flex flex-col flex-1 min-h-0">
-              <div className="px-6 pt-5 pb-2 shrink-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-red-600 text-lg">✳</span>
-                  <span className="font-semibold text-gray-900">GROG</span>
-                  <span className="text-xs text-gray-400">· live tracking data</span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
-                {agentMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    {msg.role === "assistant" && (
-                      <span className="text-red-600 mr-2 mt-0.5 shrink-0">✳</span>
-                    )}
-                    <div
-                      className={`max-w-lg text-sm leading-relaxed rounded-2xl px-4 py-3 ${
-                        msg.role === "user"
-                          ? "bg-gray-900 text-white"
-                          : "bg-transparent text-gray-800"
-                      }`}
-                    >
-                      {msg.content.split("**").map((part, j) =>
-                        j % 2 === 1 ? <strong key={j}>{part}</strong> : <span key={j}>{part}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {agentLoading && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-600">✳</span>
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "200ms" }} />
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "400ms" }} />
-                    </div>
-                  </div>
-                )}
-                <div ref={agentEndRef} />
-              </div>
-
-              <div className="px-6 pb-5 shrink-0">
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm">
-                  <textarea
-                    value={agentInput}
-                    onChange={(e) => setAgentInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } }}
-                    placeholder="Ask GROG about your AI visibility…"
-                    rows={1}
-                    className="w-full px-4 pt-3 pb-1 text-sm text-gray-800 placeholder-gray-400 resize-none outline-none rounded-t-2xl"
-                  />
-                  <div className="flex items-center justify-between px-4 pb-3">
-                    <span className="text-xs text-gray-400">
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full inline-block mr-1" />
-                      GROG · reads your live data
-                    </span>
-                    <button
-                      onClick={sendAgentMessage}
-                      disabled={!agentInput.trim() || agentLoading}
-                      className="w-7 h-7 bg-gray-900 disabled:opacity-30 text-white rounded-lg flex items-center justify-center transition-opacity"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 19V5M5 12l7-7 7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
