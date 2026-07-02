@@ -99,18 +99,18 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
   }
 
   if (engine === "google") {
-    // Google AI Mode — Gemini with Google Search grounding enabled
+    // Google AI Search — new @google/genai SDK with googleSearch grounding
     console.log(`[google] starting prompt="${prompt.slice(0, 50)}"`);
     try {
-      const model = getGemini().getGenerativeModel({
-        model: "gemini-3.5-flash",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tools: [{ googleSearch: {} } as any],
+      const ai = getGoogleAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `${systemMsg}\n\nUser: ${prompt}`,
+        config: { tools: [{ googleSearch: {} }] },
       });
-      const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
-      const text = result.response.text();
+      const text = response.text ?? "";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
+      const chunks: any[] = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
       const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
       console.log(`[google] OK text=${text.length}chars citations=${citations.length}`);
       return { text, citations };
