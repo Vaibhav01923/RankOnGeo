@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
       const runEngine = async (engine: import("@/lib/types").AIEngine) => {
         for (let i = 0; i < promptsToRun.length; i++) {
           const prompt = promptsToRun[i];
-          // gemini-2.0-flash paid: 1000 RPM — 2s gap is safe. chatgpt: 200ms.
-          const delay = (engine === "gemini" || engine === "google") ? 2000 : 200;
+          // gemini-2.5-flash paid: 1000 RPM — 500ms gap keeps us well under quota.
+          const delay = (engine === "gemini" || engine === "google") ? 500 : 200;
           if (i > 0) await new Promise((r) => setTimeout(r, delay));
           try {
             const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);
@@ -97,18 +97,10 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      // chatgpt runs in parallel; gemini and google share the same Google API quota
-      // so run them sequentially to avoid doubling RPM against the same key
-      const googleEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e === "gemini" || e === "google");
-      const otherEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e !== "gemini" && e !== "google");
-      console.log(`[scan] engines received=${JSON.stringify(engines)} googleEngines=${JSON.stringify(googleEngines)} otherEngines=${JSON.stringify(otherEngines)}`);
-
-      await Promise.allSettled([
-        ...otherEngines.map(runEngine),
-        (async () => {
-          for (const e of googleEngines) await runEngine(e);
-        })(),
-      ]);
+      // All engines run in parallel. gemini-2.5-flash has 1000 RPM on paid tier
+      // so running gemini + google simultaneously (40 req / 20 prompts) is fine.
+      console.log(`[scan] engines=${JSON.stringify(engines)} prompts=${promptsToRun.length}`);
+      await Promise.allSettled(engines.map((e) => runEngine(e as import("@/lib/types").AIEngine)));
 
       const { scores, overallScore } = computeScores(allResults, engines);
 

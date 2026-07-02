@@ -212,7 +212,7 @@ export async function runScanForBrand(
   const runEngine = async (engine: AIEngine) => {
     for (let i = 0; i < brand.trackedPrompts.length; i++) {
       const prompt = brand.trackedPrompts[i];
-      const delay = (engine === "gemini" || engine === "google") ? 2000 : 200;
+      const delay = (engine === "gemini" || engine === "google") ? 500 : 200;
       if (i > 0) await new Promise((r) => setTimeout(r, delay));
       try {
         const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);
@@ -248,13 +248,8 @@ export async function runScanForBrand(
     }
   };
 
-  // chatgpt runs in parallel; gemini and google share the same Google API quota
-  const googleEngines = engines.filter((e) => e === "gemini" || e === "google");
-  const otherEngines = engines.filter((e) => e !== "gemini" && e !== "google");
-  await Promise.allSettled([
-    ...otherEngines.map(runEngine),
-    (async () => { for (const e of googleEngines) await runEngine(e); })(),
-  ]);
+  // All engines in parallel — gemini-2.5-flash has 1000 RPM on paid tier.
+  await Promise.allSettled(engines.map(runEngine));
 
   const { scores, overallScore } = computeScores(allResults, engines);
 
