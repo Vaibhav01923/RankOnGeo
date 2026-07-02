@@ -71,7 +71,7 @@ const AVAILABLE_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexit
 type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
   | "gaps" | "keywords" | "articles" | "tasks"
-  | "publishing" | "schedule"
+  | "publishing"
   | "brands" | "alerts"
   | "agent" | "admin";
 
@@ -87,7 +87,7 @@ const TAB_LABELS: Record<Tab, string> = {
 
   tasks: "Tasks",
   publishing: "Publishing",
-  schedule: "Schedule",
+
   brands: "Brands",
   alerts: "Alerts",
   agent: "Agent",
@@ -1005,7 +1005,7 @@ function DashboardPage() {
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2.5 mb-1.5">Distribute</p>
             <div className="space-y-0.5">
               <NavItem label="Publishing" active={activeTab === "publishing"} onClick={() => navTo("publishing")} />
-              <NavItem label="Schedule" active={activeTab === "schedule"} onClick={() => navTo("schedule")} />
+
             </div>
           </div>
 
@@ -1058,14 +1058,14 @@ function DashboardPage() {
 
           <div className="flex items-center gap-3">
             {/* "Next check in" countdown — shown once scanned, hidden during scan or non-scan tabs */}
-            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "schedule" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
               <div className="flex items-center gap-1.5 text-xs text-gray-400 border border-stone-200 rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 Next check in: <span className="font-medium text-gray-600">{nextCheckIn}</span>
               </div>
             )}
             {/* Scan button — hidden on tabs where it doesn't apply */}
-            {!scanning && !loadingResults && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "schedule" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {!scanning && !loadingResults && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
@@ -3002,115 +3002,6 @@ function DashboardPage() {
             );
           })()}
 
-          {/* SCHEDULE */}
-          {activeTab === "schedule" && (() => {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
-            const publishedDays = new Set(
-              publishingLog.filter((e) => e.status === "published").map((e) => {
-                const d = new Date(e.created_at);
-                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
-              }).filter((d) => d > 0)
-            );
-            const failedDays = new Set(
-              publishingLog.filter((e) => e.status === "failed").map((e) => {
-                const d = new Date(e.created_at);
-                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
-              }).filter((d) => d > 0)
-            );
-            const scheduledDays = new Set(
-              savedArticles.filter((a) => a.status === "scheduled" && a.createdAt).map((a) => {
-                const d = new Date(a.createdAt);
-                return d.getFullYear() === year && d.getMonth() === month ? d.getDate() : -1;
-              }).filter((d) => d > 0)
-            );
-
-            const pipeline = savedArticles.filter((a) => ["review", "scheduled", "writing"].includes(a.status));
-            const publishedThisMonth = publishingLog.filter((e) => {
-              const d = new Date(e.created_at);
-              return e.status === "published" && d.getFullYear() === year && d.getMonth() === month;
-            }).length;
-
-            return (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">Schedule</h2>
-                    <p className="text-sm text-gray-400 mt-0.5">Content pipeline, scheduling &amp; publishing calendar</p>
-                  </div>
-                  <button onClick={() => navTo("articles")} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">Manage articles</button>
-                </div>
-
-                <div className="grid grid-cols-4 gap-3 mb-5">
-                  <StatCard label="In Pipeline" value={pipeline.length} sub="queued + review" />
-                  <StatCard label="Published / Mo" value={publishedThisMonth} sub="this month" />
-                  <StatCard label="Scheduled" value={savedArticles.filter(a => a.status === "scheduled").length} sub="upcoming slots" />
-                  <StatCard label="Total Articles" value={savedArticles.length} sub="all time" />
-                </div>
-
-                <div className="bg-white border border-stone-200 rounded-xl p-5 mb-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-gray-900">Content pipeline · {pipeline.length} items</p>
-                    <button onClick={() => navTo("articles")} className="text-xs text-gray-400 hover:text-gray-600">View all</button>
-                  </div>
-                  {pipeline.length === 0 ? (
-                    <p className="text-xs text-gray-400 py-4 text-center">No content in pipeline — generate articles from Research gaps</p>
-                  ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-1">
-                      {pipeline.map((item) => (
-                        <div key={item.id} className="border border-stone-200 rounded-xl p-4 shrink-0 w-52">
-                          <p className="text-[10px] text-gray-400 font-mono mb-1 truncate">{item.keyword || "—"}</p>
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-600"}`}>{item.status}</span>
-                          <p className="text-sm font-medium text-gray-800 mt-2 leading-snug line-clamp-2">{item.title}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white border border-stone-200 rounded-xl p-5">
-                  <p className="text-sm font-semibold text-gray-900 mb-4">Publishing calendar · {monthLabel}</p>
-                  <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                      <div key={d} className="text-[10px] font-semibold text-gray-400 uppercase">{d}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: daysInMonth }, (_, i) => {
-                      const day = i + 1;
-                      const isPublished = publishedDays.has(day);
-                      const isScheduled = scheduledDays.has(day);
-                      const isFailed = failedDays.has(day);
-                      const isToday = day === now.getDate();
-                      return (
-                        <div key={day} className={`rounded-lg p-1.5 min-h-[44px] text-xs ${isPublished ? "bg-green-500 text-white" : isFailed ? "bg-red-500 text-white" : isScheduled ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-500"}`}>
-                          <span className={isToday ? "font-bold" : ""}>{day}</span>
-                          {isPublished && <div className="text-[9px] mt-0.5 opacity-90">Published</div>}
-                          {isScheduled && !isPublished && <div className="text-[9px] mt-0.5 opacity-90">Scheduled</div>}
-                          {isFailed && <div className="text-[9px] mt-0.5 opacity-90">Failed</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-4 mt-3">
-                    {[["bg-gray-900", "Scheduled"], ["bg-green-500", "Published"], ["bg-red-500", "Failed"]].map(([color, label]) => (
-                      <div key={label} className="flex items-center gap-1.5">
-                        <div className={`w-2.5 h-2.5 rounded ${color}`} />
-                        <span className="text-[10px] text-gray-500">{label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-
-          {/* BRANDS */}
           {activeTab === "brands" && (
             <>
               <div className="flex items-center justify-between mb-5">
