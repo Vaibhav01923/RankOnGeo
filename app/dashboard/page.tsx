@@ -823,7 +823,7 @@ function DashboardPage() {
 
   // Citations derived data
   const CITATION_BLOCKED = [
-    "vertexaisearch.cloud.google.com", "google.com", "googleapis.com", "googleusercontent.com",
+    "google.com", "googleapis.com", "googleusercontent.com",
     "gstatic.com", "googlesyndication.com", "doubleclick.net",
     "bing.com", "search.yahoo.com", "duckduckgo.com", "baidu.com",
     "t.co", "bit.ly", "tinyurl.com", "goo.gl",

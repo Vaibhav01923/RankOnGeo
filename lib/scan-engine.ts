@@ -55,6 +55,7 @@ export function extractMentions(
   const filterUrl = (u: string) => {
     try {
       const host = new URL(u).hostname.replace(/^www\./, "");
+      if (host === "vertexaisearch.cloud.google.com") return true;
       if (host === brandHost || host.endsWith("." + brandHost)) return false;
       return !BLOCKED_DOMAINS.some((b) => host === b || host.endsWith("." + b));
     } catch { return false; }
@@ -64,9 +65,20 @@ export function extractMentions(
     .map((u) => u.replace(/['".,;:!?)\]}>]+$/, ""))
     .filter(filterUrl);
 
-  const citations = [...new Set([...textUrls, ...(extraCitations ?? []).filter(filterUrl)])].slice(0, 10);
+  const extraFiltered = (extraCitations ?? []).filter(filterUrl);
+  console.log(`[extractMentions] extraCitations=${JSON.stringify(extraCitations)} extraFiltered=${JSON.stringify(extraFiltered)}`);
+  const citations = [...new Set([...textUrls, ...extraFiltered])].slice(0, 10);
 
   return { brandMentioned, brandRank, competitorMentions, citations };
+}
+
+async function resolveRedirect(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(3000) });
+    return res.headers.get("location") ?? url;
+  } catch {
+    return url;
+  }
 }
 
 export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ text: string; citations: string[] }> {
@@ -93,34 +105,31 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
 
   if (engine === "gemini") {
     // Plain LLM call — NO search grounding tool (grounding costs ~$35/1000 req)
-    const model = getGemini().getGenerativeModel({ model: "gemini-3.5-flash" });
+    const model = getGemini().getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
     return { text: result.response.text(), citations: [] };
   }
 
   if (engine === "google") {
-    // Google AI Search — new @google/genai SDK with googleSearch grounding
-    console.log(`[google] starting prompt="${prompt.slice(0, 50)}"`);
-    try {
-      const ai = getGoogleAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `${systemMsg}\n\nUser: ${prompt}`,
-        config: { tools: [{ googleSearch: {} }] },
-      });
-      const text = response.text ?? "";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const gm = response.candidates?.[0]?.groundingMetadata as any;
-      console.log(`[google] groundingMetadata=${JSON.stringify(gm)?.slice(0, 300)}`);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chunks: any[] = gm?.groundingChunks ?? [];
-      const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.log(`[google] OK text=${text.length}chars citations=${citations.length}`);
-      return { text, citations };
-    } catch (err) {
-      console.error(`[google] FAILED status=${(err as { status?: number })?.status} msg=${(err as Error).message?.slice(0, 150)}`);
-      throw err;
-    }
+    const ai = getGoogleAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `${systemMsg}\n\nUser: ${prompt}`,
+      config: { tools: [{ googleSearch: {} }] },
+    });
+    const text = response.text ?? "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gm = response.candidates?.[0]?.groundingMetadata as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawUris: string[] = (gm?.groundingChunks ?? []).map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
+    console.log(`[google] chunks=${gm?.groundingChunks?.length ?? 0} rawUris=${JSON.stringify(rawUris)}`);
+    const citations = await Promise.all(rawUris.map(async (u) => {
+      const resolved = await resolveRedirect(u);
+      console.log(`[google] redirect ${u.slice(0, 80)} -> ${resolved.slice(0, 80)}`);
+      return resolved;
+    }));
+    console.log(`[google] final citations=${JSON.stringify(citations)}`);
+    return { text, citations };
   }
 
   if (engine === "perplexity") {
