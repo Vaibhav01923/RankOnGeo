@@ -67,7 +67,7 @@ export function extractMentions(
 
   const extraFiltered = (extraCitations ?? []).filter(filterUrl);
   console.log(`[extractMentions] extraCitations=${JSON.stringify(extraCitations)} extraFiltered=${JSON.stringify(extraFiltered)}`);
-  const citations = [...new Set([...textUrls, ...extraFiltered])].slice(0, 10);
+  const citations = [...new Set([...textUrls, ...extraFiltered])];
 
   return { brandMentioned, brandRank, competitorMentions, citations };
 }
