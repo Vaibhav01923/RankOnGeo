@@ -13,8 +13,8 @@ const getGoogleAI = () => new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_AP
 const BLOCKED_DOMAINS = [
   // Placeholder/generic domains
   "example.com", "example.org", "example.net", "localhost", "your-domain.com", "yourdomain.com", "domain.com",
-  // Google internal/search infrastructure leaked by Gemini grounding
-  "vertexaisearch.cloud.google.com", "google.com", "googleapis.com", "googleusercontent.com",
+  // Google internal/search infrastructure (NOT vertexaisearch.cloud.google.com — that's grounding citations)
+  "google.com", "googleapis.com", "googleusercontent.com",
   "gstatic.com", "googlesyndication.com", "doubleclick.net",
   // Generic search engines (not relevant citations)
   "bing.com", "search.yahoo.com", "duckduckgo.com", "baidu.com",
