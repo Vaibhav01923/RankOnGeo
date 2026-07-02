@@ -110,7 +110,10 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
       });
       const text = response.text ?? "";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chunks: any[] = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+      const gm = response.candidates?.[0]?.groundingMetadata as any;
+      console.log(`[google] groundingMetadata=${JSON.stringify(gm)?.slice(0, 300)}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chunks: any[] = gm?.groundingChunks ?? [];
       const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
       console.log(`[google] OK text=${text.length}chars citations=${citations.length}`);
       return { text, citations };
