@@ -53,22 +53,20 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(enc.encode(JSON.stringify(obj) + "\n")); } catch {}
       };
 
-      await Promise.allSettled(engines.map(async (engine) => {
-        // Stagger Google-family engines so gemini + google don't hammer the same quota simultaneously
-        if (engine === "google") await new Promise((r) => setTimeout(r, 3000));
+      const runEngine = async (engine: import("@/lib/types").AIEngine) => {
         for (let i = 0; i < promptsToRun.length; i++) {
           const prompt = promptsToRun[i];
-          // Gemini/Google: 1s between prompts to stay under RPM; others: 200ms
-          const delay = (engine === "gemini" || engine === "google") ? 1000 : 200;
+          // gemini-2.0-flash paid: 1000 RPM — 2s gap is safe. chatgpt: 200ms.
+          const delay = (engine === "gemini" || engine === "google") ? 2000 : 200;
           if (i > 0) await new Promise((r) => setTimeout(r, delay));
           try {
-            const response = await queryWithRetry(engine, prompt.text);
-            const mentions = extractMentions(response, brand.name, brand.domain, brand.competitors);
+            const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);
+            const mentions = extractMentions(text, brand.name, brand.domain, brand.competitors, engineCitations);
             const result: import("@/lib/types").ScanResult = {
               promptId: prompt.id,
               promptText: prompt.text,
               engine,
-              response,
+              response: text,
               ...mentions,
               scannedAt: new Date().toISOString(),
             };
@@ -96,7 +94,19 @@ export async function POST(req: NextRequest) {
             send({ type: "error", engine, promptId: prompt.id });
           }
         }
-      }));
+      };
+
+      // chatgpt runs in parallel; gemini and google share the same Google API quota
+      // so run them sequentially to avoid doubling RPM against the same key
+      const googleEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e === "gemini" || e === "google");
+      const otherEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e !== "gemini" && e !== "google");
+
+      await Promise.allSettled([
+        ...otherEngines.map(runEngine),
+        (async () => {
+          for (const e of googleEngines) await runEngine(e);
+        })(),
+      ]);
 
       const { scores, overallScore } = computeScores(allResults, engines);
 

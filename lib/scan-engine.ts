@@ -26,7 +26,8 @@ export function extractMentions(
   response: string,
   brandName: string,
   brandDomain: string,
-  competitors: string[]
+  competitors: string[],
+  extraCitations?: string[]
 ): { brandMentioned: boolean; brandRank: number | null; competitorMentions: { name: string; rank: number | null }[]; citations: string[] } {
   const lower = response.toLowerCase();
   const brandLower = brandName.toLowerCase();
@@ -51,24 +52,25 @@ export function extractMentions(
     .filter(Boolean) as { name: string; rank: number | null }[];
 
   const brandHost = brandDomain.replace(/^www\./, "");
-  const urlMatches = (response.match(/https?:\/\/[^\s\)\"<>]+/g) ?? [])
+  const filterUrl = (u: string) => {
+    try {
+      const host = new URL(u).hostname.replace(/^www\./, "");
+      if (host === brandHost || host.endsWith("." + brandHost)) return false;
+      return !BLOCKED_DOMAINS.some((b) => host === b || host.endsWith("." + b));
+    } catch { return false; }
+  };
+
+  const textUrls = (response.match(/https?:\/\/[^\s\)\"<>]+/g) ?? [])
     .map((u) => u.replace(/['".,;:!?)\]}>]+$/, ""))
-    .filter((u) => {
-      try {
-        const host = new URL(u).hostname.replace(/^www\./, "");
-        if (host === brandHost || host.endsWith("." + brandHost)) return false;
-        return !BLOCKED_DOMAINS.some((b) => host === b || host.endsWith("." + b));
-      } catch { return false; }
-    });
-  const citations = [...new Set(urlMatches)].slice(0, 10);
+    .filter(filterUrl);
+
+  const citations = [...new Set([...textUrls, ...(extraCitations ?? []).filter(filterUrl)])].slice(0, 10);
 
   return { brandMentioned, brandRank, competitorMentions, citations };
 }
 
-export async function queryEngine(engine: AIEngine, prompt: string): Promise<string> {
-  // Neutral system prompt — does NOT say "official websites only", lets search grounding
-  // cite whatever it finds (YouTube, Reddit, blogs, documentation, etc.)
-  const systemMsg = "You are a helpful assistant. Answer the user's question thoroughly. Include links to any relevant resources you reference — tutorials, community discussions, documentation, videos, or articles.";
+export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ text: string; citations: string[] }> {
+  const systemMsg = "You are a helpful assistant. Answer the user's question thoroughly and naturally.";
 
   if (engine === "claude") {
     const msg = await getAnthropic().messages.create({
@@ -77,7 +79,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       system: systemMsg,
       messages: [{ role: "user", content: prompt }],
     });
-    return (msg.content[0] as { type: string; text: string }).text;
+    return { text: (msg.content[0] as { type: string; text: string }).text, citations: [] };
   }
 
   if (engine === "chatgpt") {
@@ -86,25 +88,18 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       max_tokens: 1000,
       messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
     });
-    return res.choices[0]?.message?.content ?? "";
+    return { text: res.choices[0]?.message?.content ?? "", citations: [] };
   }
 
   if (engine === "gemini") {
-    const model = getGemini().getGenerativeModel({
-      model: "gemini-3.5-flash",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ googleSearch: {} } as any],
-    });
+    // Plain LLM call — NO search grounding tool (grounding costs ~$35/1000 req)
+    const model = getGemini().getGenerativeModel({ model: "gemini-3.5-flash" });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
-    const text = result.response.text();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
-    const groundingUrls: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean);
-    return groundingUrls.length ? `${text}\n\nSources:\n${groundingUrls.join("\n")}` : text;
+    return { text: result.response.text(), citations: [] };
   }
 
   if (engine === "google") {
-    // Google AI Mode via new @google/genai Interactions API with google_search tool
+    // Google AI Mode — search grounding ON via @google/genai Interactions API
     const ai = getGoogleAI();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const interaction = await (ai as any).interactions.create({
@@ -114,19 +109,15 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text: string = (interaction as any).output_text ?? "";
-    // Extract cited URLs from search result steps
     const urls: string[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const steps: any[] = (interaction as any).steps ?? [];
-    for (const step of steps) {
+    for (const step of (interaction as any).steps ?? []) {
       if (step.type === "google_search_result") {
-        const results: any[] = step.results ?? []; // eslint-disable-line @typescript-eslint/no-explicit-any
-        for (const r of results) {
-          if (r.url) urls.push(r.url);
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const r of step.results ?? []) { if (r.url) urls.push(r.url); }
       }
     }
-    return urls.length ? `${text}\n\nSources:\n${urls.join("\n")}` : text;
+    return { text, citations: urls };
   }
 
   if (engine === "perplexity") {
@@ -140,9 +131,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       }),
     });
     const data = await res.json();
-    const text = data.choices?.[0]?.message?.content ?? "";
-    const citationUrls: string[] = data.citations ?? [];
-    return citationUrls.length ? `${text}\n\nSources:\n${citationUrls.join("\n")}` : text;
+    return { text: data.choices?.[0]?.message?.content ?? "", citations: data.citations ?? [] };
   }
 
   if (engine === "grok") {
@@ -151,13 +140,13 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<str
       max_tokens: 1000,
       messages: [{ role: "system", content: systemMsg }, { role: "user", content: prompt }],
     });
-    return res.choices[0]?.message?.content ?? "";
+    return { text: res.choices[0]?.message?.content ?? "", citations: [] };
   }
 
-  return "";
+  return { text: "", citations: [] };
 }
 
-export async function queryWithRetry(engine: AIEngine, promptText: string, retries = 1): Promise<string> {
+export async function queryWithRetry(engine: AIEngine, promptText: string, retries = 1): Promise<{ text: string; citations: string[] }> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await queryEngine(engine, promptText);
@@ -169,7 +158,7 @@ export async function queryWithRetry(engine: AIEngine, promptText: string, retri
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
   }
-  return "";
+  return { text: "", citations: [] };
 }
 
 export function computeScores(results: ScanResult[], engines: AIEngine[]): { scores: VisibilityScore[]; overallScore: number } {
@@ -213,13 +202,13 @@ export async function runScanForBrand(
       const prompt = brand.trackedPrompts[i];
       if (i > 0) await new Promise((r) => setTimeout(r, 200));
       try {
-        const response = await queryWithRetry(engine, prompt.text);
-        const mentions = extractMentions(response, brand.name, brand.domain, brand.competitors);
+        const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);
+        const mentions = extractMentions(text, brand.name, brand.domain, brand.competitors, engineCitations);
         const result: ScanResult = {
           promptId: prompt.id,
           promptText: prompt.text,
           engine,
-          response,
+          response: text,
           ...mentions,
           scannedAt: new Date().toISOString(),
         };

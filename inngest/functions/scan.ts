@@ -3,7 +3,7 @@ import { serverClient } from "@/lib/supabase";
 import { runScanForBrand } from "@/lib/scan-engine";
 import { AIEngine, BrandData } from "@/lib/types";
 
-const SCAN_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexity", "grok"];
+const SCAN_ENGINES: AIEngine[] = ["chatgpt", "gemini"];
 
 // Triggered daily at 8am UTC — fans out one scan job per brand
 export const scheduledScanAll = inngest.createFunction(
@@ -36,7 +36,7 @@ export const scheduledScanAll = inngest.createFunction(
 
 // Runs once per brand — fetches prompts and calls the scan engine
 export const scanBrand = inngest.createFunction(
-  { id: "scan-brand", retries: 2, triggers: [{ event: "scan/brand.requested" }] },
+  { id: "scan-brand", retries: 0, triggers: [{ event: "scan/brand.requested" }] },
   async ({ event, step }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { brandId } = (event as any).data as { brandId: string };
