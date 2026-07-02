@@ -3453,6 +3453,73 @@ function DashboardPage() {
               </div>
             </>
           )}
+
+          {/* TASKS TAB */}
+          {activeTab === "tasks" && (
+            <div className="max-w-3xl mx-auto w-full">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Replies and upvote orders you've submitted from the Citations tab.</p>
+              </div>
+
+              {engageTasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                  </div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">No tasks yet</p>
+                  <p className="text-xs text-gray-400 max-w-xs">Go to Citations, click Engage on a Reddit link, draft a reply and submit a task to track it here.</p>
+                  <button onClick={() => navTo("citations")} className="mt-4 text-xs font-medium text-[#FF4500] hover:underline">Go to Citations →</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {engageTasks.map((task) => (
+                    <div key={task.id} className="bg-white border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-[#FF4500] flex items-center justify-center shrink-0 mt-0.5">
+                          <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none">
+                            <circle cx="10" cy="10" r="10" fill="white" fillOpacity="0.2"/>
+                            <path fill="white" d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z"/>
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              In Progress
+                            </span>
+                            {task.engine && <span className="text-[10px] text-gray-400">{ENGINE_LABELS[task.engine as AIEngine] ?? task.engine}</span>}
+                            <span className="text-[10px] text-gray-400 ml-auto">{new Date(task.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                          <a href={task.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate block max-w-full mb-2">
+                            {task.url.replace(/^https?:\/\/(www\.)?/, "")}
+                          </a>
+                          {task.replyText && (
+                            <p className="text-xs text-gray-600 bg-stone-50 rounded-lg px-3 py-2 border border-stone-100 line-clamp-2 mb-2">{task.replyText}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-[10px] text-gray-400">
+                            {task.upvotesOrdered > 0 ? (
+                              <>
+                                <span className="flex items-center gap-1">
+                                  <svg className="w-3 h-3 text-[#FF4500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 8H4z"/></svg>
+                                  {task.upvotesOrdered} upvotes ordered
+                                </span>
+                                <span className="capitalize">{task.deliverySpeed} delivery</span>
+                                <span className="font-medium text-gray-600">${(task.upvotesOrdered * 0.10).toFixed(2)}</span>
+                              </>
+                            ) : (
+                              <span>No upvotes ordered</span>
+                            )}
+                            {task.promptText && <span className="truncate max-w-[160px]">for: <span className="italic">{task.promptText}</span></span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
@@ -3807,84 +3874,6 @@ function DashboardPage() {
           </div>
         </div>
       )}
-      {/* TASKS TAB */}
-      {activeTab === "tasks" && (
-        <div className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Replies and upvote orders you've submitted from the Citations tab.</p>
-          </div>
-
-          {engageTasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-              </div>
-              <p className="text-sm font-medium text-gray-700 mb-1">No tasks yet</p>
-              <p className="text-xs text-gray-400 max-w-xs">Go to Citations, click Engage on a Reddit link, draft a reply and submit a task to track it here.</p>
-              <button onClick={() => navTo("citations")} className="mt-4 text-xs font-medium text-[#FF4500] hover:underline">Go to Citations →</button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {engageTasks.map((task) => (
-                <div key={task.id} className="bg-white border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
-                  <div className="flex items-start gap-3">
-                    {/* Reddit icon */}
-                    <div className="w-8 h-8 rounded-lg bg-[#FF4500] flex items-center justify-center shrink-0 mt-0.5">
-                      <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none">
-                        <circle cx="10" cy="10" r="10" fill="white" fillOpacity="0.2"/>
-                        <path fill="white" d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z"/>
-                      </svg>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                          In Progress
-                        </span>
-                        {task.engine && (
-                          <span className="text-[10px] text-gray-400">{ENGINE_LABELS[task.engine as AIEngine] ?? task.engine}</span>
-                        )}
-                        <span className="text-[10px] text-gray-400 ml-auto">{new Date(task.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                      </div>
-
-                      <a href={task.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate block max-w-full mb-2">
-                        {task.url.replace(/^https?:\/\/(www\.)?/, "")}
-                      </a>
-
-                      {task.replyText && (
-                        <p className="text-xs text-gray-600 bg-stone-50 rounded-lg px-3 py-2 border border-stone-100 line-clamp-2 mb-2">
-                          {task.replyText}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-4 text-[10px] text-gray-400">
-                        {task.upvotesOrdered > 0 ? (
-                          <>
-                            <span className="flex items-center gap-1">
-                              <svg className="w-3 h-3 text-[#FF4500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 8H4z"/></svg>
-                              {task.upvotesOrdered} upvotes ordered
-                            </span>
-                            <span className="capitalize">{task.deliverySpeed} delivery</span>
-                            <span className="font-medium text-gray-600">${(task.upvotesOrdered * 0.10).toFixed(2)}</span>
-                          </>
-                        ) : (
-                          <span>No upvotes ordered</span>
-                        )}
-                        {task.promptText && (
-                          <span className="truncate max-w-[160px]">for: <span className="italic">{task.promptText}</span></span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ENGAGE PANEL */}
       {engageItem && (
         <div className="fixed inset-0 z-50 flex">
