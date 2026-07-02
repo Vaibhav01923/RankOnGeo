@@ -706,15 +706,16 @@ function DashboardPage() {
     if (!brand) return;
     setScanning(true);
     setError("");
-    const total = brand.trackedPrompts.length * selectedEngines.length;
+    const total = Math.min(5, brand.trackedPrompts.length) * selectedEngines.length;
     setScanProgress({ done: 0, total });
     const accumulated: ScanResult[] = [];
 
     try {
+      const promptIds = brand.trackedPrompts.slice(0, 5).map((p) => p.id);
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId: brand.id, engines: selectedEngines }),
+        body: JSON.stringify({ brandId: brand.id, engines: selectedEngines, promptIds }),
       });
 
       if (!res.ok) {
