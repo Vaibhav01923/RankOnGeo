@@ -54,9 +54,13 @@ export async function POST(req: NextRequest) {
       };
 
       await Promise.allSettled(engines.map(async (engine) => {
+        // Stagger Google-family engines so gemini + google don't hammer the same quota simultaneously
+        if (engine === "google") await new Promise((r) => setTimeout(r, 3000));
         for (let i = 0; i < promptsToRun.length; i++) {
           const prompt = promptsToRun[i];
-          if (i > 0) await new Promise((r) => setTimeout(r, 200));
+          // Gemini/Google: 1s between prompts to stay under RPM; others: 200ms
+          const delay = (engine === "gemini" || engine === "google") ? 1000 : 200;
+          if (i > 0) await new Promise((r) => setTimeout(r, delay));
           try {
             const response = await queryWithRetry(engine, prompt.text);
             const mentions = extractMentions(response, brand.name, brand.domain, brand.competitors);
