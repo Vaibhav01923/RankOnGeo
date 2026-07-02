@@ -100,17 +100,24 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
 
   if (engine === "google") {
     // Google AI Mode — Gemini with Google Search grounding enabled
-    const model = getGemini().getGenerativeModel({
-      model: "gemini-3.5-flash",
+    console.log(`[google] starting prompt="${prompt.slice(0, 50)}"`);
+    try {
+      const model = getGemini().getGenerativeModel({
+        model: "gemini-3.5-flash",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tools: [{ googleSearch: {} } as any],
+      });
+      const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
+      const text = result.response.text();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ googleSearch: {} } as any],
-    });
-    const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
-    const text = result.response.text();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
-    const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
-    return { text, citations };
+      const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
+      const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.log(`[google] OK text=${text.length}chars citations=${citations.length}`);
+      return { text, citations };
+    } catch (err) {
+      console.error(`[google] FAILED status=${(err as { status?: number })?.status} msg=${(err as Error).message?.slice(0, 150)}`);
+      throw err;
+    }
   }
 
   if (engine === "perplexity") {

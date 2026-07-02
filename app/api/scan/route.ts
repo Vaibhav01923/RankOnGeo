@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
       // so run them sequentially to avoid doubling RPM against the same key
       const googleEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e === "gemini" || e === "google");
       const otherEngines = (engines as import("@/lib/types").AIEngine[]).filter((e) => e !== "gemini" && e !== "google");
+      console.log(`[scan] engines received=${JSON.stringify(engines)} googleEngines=${JSON.stringify(googleEngines)} otherEngines=${JSON.stringify(otherEngines)}`);
 
       await Promise.allSettled([
         ...otherEngines.map(runEngine),
