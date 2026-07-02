@@ -58,6 +58,19 @@ export type SocialKeyword = {
   createdAt: string;
 };
 
+export type EngageTask = {
+  id: string;
+  brandId: string;
+  url: string;
+  promptText: string | null;
+  engine: string | null;
+  replyText: string | null;
+  upvotesOrdered: number;
+  deliverySpeed: string;
+  status: "in_progress" | "completed" | "cancelled";
+  createdAt: string;
+};
+
 export type RedditThread = {
   id: string;
   keyword: string;
