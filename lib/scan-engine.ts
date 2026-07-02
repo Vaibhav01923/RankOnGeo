@@ -99,32 +99,18 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
   }
 
   if (engine === "google") {
-    // Google AI Mode — search grounding ON via @google/genai Interactions API
-    const ai = getGoogleAI();
-    console.log(`[google] starting interaction prompt="${prompt.slice(0, 40)}"`);
-    try {
+    // Google AI Mode — Gemini with Google Search grounding enabled
+    const model = getGemini().getGenerativeModel({
+      model: "gemini-3.5-flash",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const interaction = await (ai as any).interactions.create({
-        model: "gemini-3.5-flash",
-        input: prompt,
-        tools: [{ type: "google_search" }],
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const text: string = (interaction as any).output_text ?? "";
-      const urls: string[] = [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const step of (interaction as any).steps ?? []) {
-        if (step.type === "google_search_result") {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const r of step.results ?? []) { if (r.url) urls.push(r.url); }
-        }
-      }
-      console.log(`[google] OK text=${text.length}chars citations=${urls.length}`);
-      return { text, citations: urls };
-    } catch (err) {
-      console.error(`[google] FAILED status=${(err as { status?: number })?.status} msg=${(err as Error).message?.slice(0, 200)}`);
-      throw err;
-    }
+      tools: [{ googleSearch: {} } as any],
+    });
+    const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
+    const text = result.response.text();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chunks: any[] = (result.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? [];
+    const citations: string[] = chunks.map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
+    return { text, citations };
   }
 
   if (engine === "perplexity") {
