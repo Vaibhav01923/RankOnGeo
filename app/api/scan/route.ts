@@ -127,12 +127,12 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Fire alerts in background — don't block the stream response
-      fireAlerts(brand.id!, brand.name, overallScore, scores).catch((e) =>
+      // Send done to client first, then await alerts before closing so the
+      // Vercel function stays alive long enough to deliver webhooks.
+      send({ type: "done", scores, overallScore });
+      await fireAlerts(brand.id!, brand.name, overallScore, scores).catch((e) =>
         console.error("[alerts] fireAlerts failed:", e)
       );
-
-      send({ type: "done", scores, overallScore });
       controller.close();
     },
   });
