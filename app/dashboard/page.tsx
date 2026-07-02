@@ -1022,27 +1022,27 @@ function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* "Next check in" countdown — shown once scanned, hidden during initial scan */}
+            {/* "Next check in" countdown — shown once scanned, hidden during scan */}
             {scanned && !scanning && (
               <div className="flex items-center gap-1.5 text-xs text-gray-400 border border-stone-200 rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 Next check in: <span className="font-medium text-gray-600">{nextCheckIn}</span>
               </div>
             )}
-            {/* First-time scan — only shown when no data exists yet */}
-            {!scanned && !scanning && !loadingResults && (
+            {/* Scan button — always visible when not scanning */}
+            {!scanning && !loadingResults && (
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
                 className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
-                Start monitoring
+                {scanned ? "Re-scan" : "Start monitoring"}
               </button>
             )}
             {scanning && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500 border border-stone-200 rounded-lg px-3 py-1.5">
                 <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                Running initial scan…
+                {scanned ? "Scanning…" : "Running initial scan…"}
               </div>
             )}
             {activeTab === "articles" && (
