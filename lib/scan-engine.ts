@@ -212,7 +212,7 @@ export async function runScanForBrand(
   const runEngine = async (engine: AIEngine) => {
     for (let i = 0; i < brand.trackedPrompts.length; i++) {
       const prompt = brand.trackedPrompts[i];
-      const delay = (engine === "gemini" || engine === "google") ? 500 : 200;
+      const delay = (engine === "gemini" || engine === "google") ? 1000 : 200;
       if (i > 0) await new Promise((r) => setTimeout(r, delay));
       try {
         const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);

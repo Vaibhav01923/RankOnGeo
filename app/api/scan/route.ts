@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
       const runEngine = async (engine: import("@/lib/types").AIEngine) => {
         for (let i = 0; i < promptsToRun.length; i++) {
           const prompt = promptsToRun[i];
-          // gemini-2.5-flash paid: 1000 RPM — 500ms gap keeps us well under quota.
-          const delay = (engine === "gemini" || engine === "google") ? 500 : 200;
+          // gemini-2.5-flash paid: 1000 RPM — 1s gap keeps us well under quota.
+          const delay = (engine === "gemini" || engine === "google") ? 1000 : 200;
           if (i > 0) await new Promise((r) => setTimeout(r, delay));
           try {
             const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text);
