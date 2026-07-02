@@ -2902,6 +2902,79 @@ function DashboardPage() {
             </div>
           )}
 
+          {/* AGENT */}
+          {activeTab === "agent" && (
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="px-6 pt-5 pb-2 shrink-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-red-600 text-lg">✳</span>
+                  <span className="font-semibold text-gray-900">GROG</span>
+                  <span className="text-xs text-gray-400">· live tracking data</span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+                {agentMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    {msg.role === "assistant" && (
+                      <span className="text-red-600 mr-2 mt-0.5 shrink-0">✳</span>
+                    )}
+                    <div
+                      className={`max-w-lg text-sm leading-relaxed rounded-2xl px-4 py-3 ${
+                        msg.role === "user"
+                          ? "bg-gray-900 text-white"
+                          : "bg-transparent text-gray-800"
+                      }`}
+                    >
+                      {msg.content.split("**").map((part, j) =>
+                        j % 2 === 1 ? <strong key={j}>{part}</strong> : <span key={j}>{part}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {agentLoading && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-600">✳</span>
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "200ms" }} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot" style={{ animationDelay: "400ms" }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={agentEndRef} />
+              </div>
+
+              <div className="px-6 pb-5 shrink-0">
+                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm">
+                  <textarea
+                    value={agentInput}
+                    onChange={(e) => setAgentInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } }}
+                    placeholder="Ask GROG about your AI visibility…"
+                    rows={1}
+                    className="w-full px-4 pt-3 pb-1 text-sm text-gray-800 placeholder-gray-400 resize-none outline-none rounded-t-2xl"
+                  />
+                  <div className="flex items-center justify-between px-4 pb-3">
+                    <span className="text-xs text-gray-400">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full inline-block mr-1" />
+                      GROG · reads your live data
+                    </span>
+                    <button
+                      onClick={sendAgentMessage}
+                      disabled={!agentInput.trim() || agentLoading}
+                      className="w-7 h-7 bg-gray-900 disabled:opacity-30 text-white rounded-lg flex items-center justify-center transition-opacity"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 19V5M5 12l7-7 7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* PUBLISHING */}
           {activeTab === "publishing" && (() => {
             const activeChannels = publishingChannels.filter((c) => c.status === "active");
