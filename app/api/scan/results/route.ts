@@ -3,30 +3,38 @@ import { clientFromRequest } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
+  const runId = req.nextUrl.searchParams.get("runId"); // optional — poll a specific run
+
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: latestRun } = await db
-    .from("scan_runs")
-    .select("id, engines, overall_score")
-    .eq("brand_id", brandId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (!latestRun) return NextResponse.json({ results: [], scores: [], overallScore: 0 });
+  // Resolve which scan_run to read
+  let resolvedRunId: string;
+  if (runId) {
+    resolvedRunId = runId;
+  } else {
+    const { data: latestRun } = await db
+      .from("scan_runs")
+      .select("id")
+      .eq("brand_id", brandId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (!latestRun) return NextResponse.json({ results: [], scores: [], overallScore: 0, completed: true });
+    resolvedRunId = latestRun.id;
+  }
 
   const [{ data: rows, error }, { data: scoreRows }] = await Promise.all([
     db.from("scan_results")
       .select("prompt_id, prompt_text, engine, response, brand_mentioned, brand_rank, competitor_mentions, citations, scanned_at")
-      .eq("scan_run_id", latestRun.id)
+      .eq("scan_run_id", resolvedRunId)
       .eq("brand_id", brandId),
     db.from("visibility_scores")
       .select("engine, score, mention_count, total_prompts, avg_rank")
-      .eq("scan_run_id", latestRun.id),
+      .eq("scan_run_id", resolvedRunId),
   ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -43,8 +51,9 @@ export async function GET(req: NextRequest) {
     scannedAt: r.scanned_at,
   }));
 
-  // If visibility_scores weren't written (scan interrupted mid-way),
-  // compute them on-the-fly from scan_results so scores are never 0.
+  // visibility_scores are written last — their presence means the scan finished
+  const completed = (scoreRows?.length ?? 0) > 0;
+
   let scores = (scoreRows ?? []).map((s) => ({
     engine: s.engine,
     score: s.score,
@@ -53,28 +62,13 @@ export async function GET(req: NextRequest) {
     avgRank: s.avg_rank,
   }));
 
-  if (scores.length === 0 && results.length > 0) {
-    const engines = [...new Set(results.map((r) => r.engine))];
-    scores = engines.map((engine) => {
-      const er = results.filter((r) => r.engine === engine);
-      const mentions = er.filter((r) => r.brandMentioned);
-      const ranked = mentions.filter((r) => r.brandRank !== null);
-      const avgRank = ranked.length
-        ? ranked.reduce((s, r) => s + (r.brandRank ?? 0), 0) / ranked.length
-        : null;
-      return {
-        engine,
-        score: Math.round((mentions.length / er.length) * 100),
-        mentionCount: mentions.length,
-        totalPrompts: er.length,
-        avgRank,
-      };
-    });
-  }
+  // If scan finished but no scores (all failed), compute from results
+  if (!completed && results.length > 0) scores = [];
 
+  // If non-runId call and scores were written, compute overall from them
   const overallScore = scores.length
     ? Math.round(scores.reduce((s, sc) => s + sc.score, 0) / scores.length)
-    : latestRun.overall_score ?? 0;
+    : 0;
 
-  return NextResponse.json({ results, scores, overallScore });
+  return NextResponse.json({ results, scores, overallScore, completed });
 }

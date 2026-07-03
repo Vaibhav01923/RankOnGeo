@@ -731,54 +731,65 @@ function DashboardPage() {
     if (!brand) return;
     setScanning(true);
     setError("");
-    const total = Math.min(20, brand.trackedPrompts.length) * selectedEngines.length;
+    const promptIds = brand.trackedPrompts.slice(0, 20).map((p) => p.id);
+    const total = promptIds.length * selectedEngines.length;
     setScanProgress({ done: 0, total });
-    const accumulated: ScanResult[] = [];
 
     try {
-      const promptIds = brand.trackedPrompts.slice(0, 20).map((p) => p.id);
+      // Fire the scan — returns immediately with a scanRunId
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId: brand.id, engines: selectedEngines, promptIds }),
       });
+      const triggerData = await res.json();
+      if (!res.ok || !triggerData.scanRunId) throw new Error(triggerData.error ?? "Failed to start scan");
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Scan failed");
-      }
+      const { scanRunId } = triggerData;
+      const seen = new Set<string>();
+      const accumulated: ScanResult[] = [];
 
-      if (!res.body) throw new Error("No response stream");
+      // Poll every 2.5s for results written by Inngest
+      await new Promise<void>((resolve, reject) => {
+        const TIMEOUT = 20 * 60 * 1000; // 20 min hard stop
+        const deadline = setTimeout(() => { clearInterval(poll); reject(new Error("Scan timed out")); }, TIMEOUT);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
+        const poll = setInterval(async () => {
           try {
-            const msg = JSON.parse(line);
-            if (msg.type === "result") {
-              accumulated.push(msg.result);
+            const statusRes = await fetch(`/api/scan/results?brandId=${brand.id}&runId=${scanRunId}`);
+            if (!statusRes.ok) return;
+            const { results: fresh, scores: finalScores, overallScore: finalScore, completed } = await statusRes.json();
+
+            // Accumulate only new results
+            let added = false;
+            for (const r of (fresh ?? []) as ScanResult[]) {
+              const key = `${r.promptId}::${r.engine}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                accumulated.push(r);
+                added = true;
+              }
+            }
+            if (added) {
               setResults([...accumulated]);
               setScanned(true);
-              setScanProgress((p) => p ? { ...p, done: p.done + 1 } : null);
-            } else if (msg.type === "done") {
-              if (msg.scores) setScores(msg.scores);
-              if (msg.overallScore !== undefined) setOverallScore(msg.overallScore);
+              setScanProgress({ done: accumulated.length, total });
+            }
+
+            if (completed) {
+              clearInterval(poll);
+              clearTimeout(deadline);
+              if (finalScores?.length) setScores(finalScores);
+              if (finalScore !== undefined) setOverallScore(finalScore);
               setGaps(computeGaps(accumulated, brand));
               if (brand.id) fetch(`/api/history?brandId=${brand.id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
+              resolve();
             }
-          } catch {}
-        }
-      }
+          } catch (e) {
+            console.error("[poll] error:", e);
+          }
+        }, 2500);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {

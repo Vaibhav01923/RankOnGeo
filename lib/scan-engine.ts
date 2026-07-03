@@ -1,19 +1,23 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleGenAI } from "@google/genai";
 import { AIEngine, BrandData, ScanResult, VisibilityScore } from "@/lib/types";
 
 const getAnthropic = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const getOpenAI = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const getGrok = () => new OpenAI({ apiKey: process.env.XAI_API_KEY ?? "", baseURL: "https://api.x.ai/v1" });
 const getGemini = () => new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY ?? "");
-const getGoogleAI = () => new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY ?? "" });
+
+function dataForSEOAuth() {
+  const login = process.env.DATAFORSEO_LOGIN ?? "";
+  const password = process.env.DATAFORSEO_PASSWORD ?? "";
+  return "Basic " + Buffer.from(`${login}:${password}`).toString("base64");
+}
 
 const BLOCKED_DOMAINS = [
   // Placeholder/generic domains
   "example.com", "example.org", "example.net", "localhost", "your-domain.com", "yourdomain.com", "domain.com",
-  // Google internal/search infrastructure (NOT vertexaisearch.cloud.google.com — that's grounding citations)
+  // Google internal/search infrastructure (vertexaisearch.cloud.google.com is handled in filterUrl below)
   "google.com", "googleapis.com", "googleusercontent.com",
   "gstatic.com", "googlesyndication.com", "doubleclick.net",
   // Generic search engines (not relevant citations)
@@ -55,7 +59,8 @@ export function extractMentions(
   const filterUrl = (u: string) => {
     try {
       const host = new URL(u).hostname.replace(/^www\./, "");
-      if (host === "vertexaisearch.cloud.google.com") return true;
+      // Drop Google infrastructure but keep everything else (reddit, youtube, linkedin, etc.)
+      if (host === "vertexaisearch.cloud.google.com") return false;
       if (host === brandHost || host.endsWith("." + brandHost)) return false;
       return !BLOCKED_DOMAINS.some((b) => host === b || host.endsWith("." + b));
     } catch { return false; }
@@ -66,19 +71,9 @@ export function extractMentions(
     .filter(filterUrl);
 
   const extraFiltered = (extraCitations ?? []).filter(filterUrl);
-  console.log(`[extractMentions] extraCitations=${JSON.stringify(extraCitations)} extraFiltered=${JSON.stringify(extraFiltered)}`);
-  const citations = [...new Set([...textUrls, ...extraFiltered])];
+  const citations = [...new Set([...extraFiltered, ...textUrls])];
 
   return { brandMentioned, brandRank, competitorMentions, citations };
-}
-
-async function resolveRedirect(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(3000) });
-    return res.headers.get("location") ?? url;
-  } catch {
-    return url;
-  }
 }
 
 export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ text: string; citations: string[] }> {
@@ -111,24 +106,34 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
   }
 
   if (engine === "google") {
-    const ai = getGoogleAI();
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `${systemMsg}\n\nUser: ${prompt}`,
-      config: { tools: [{ googleSearch: {} }] },
+    // DataForSEO SERP API — scrapes real Google AI Overview
+    const res = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: dataForSEOAuth() },
+      body: JSON.stringify([{
+        keyword: prompt,
+        location_name: "United States",
+        language_code: "en",
+        device: "desktop",
+        os: "windows",
+        load_async_ai_overview: true, // required — AI Overview loads async via JS
+      }]),
+      signal: AbortSignal.timeout(45000),
     });
-    const text = response.text ?? "";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gm = response.candidates?.[0]?.groundingMetadata as any;
+    const data: any = await res.json();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawUris: string[] = (gm?.groundingChunks ?? []).map((c: any) => c?.web?.uri).filter(Boolean); // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.log(`[google] chunks=${gm?.groundingChunks?.length ?? 0} rawUris=${JSON.stringify(rawUris)}`);
-    const citations = await Promise.all(rawUris.map(async (u) => {
-      const resolved = await resolveRedirect(u);
-      console.log(`[google] redirect ${u.slice(0, 80)} -> ${resolved.slice(0, 80)}`);
-      return resolved;
-    }));
-    console.log(`[google] final citations=${JSON.stringify(citations)}`);
+    const serpItems: any[] = data?.tasks?.[0]?.result?.[0]?.items ?? [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const aiOverview = serpItems.find((item: any) => item.type === "ai_overview");
+
+    // markdown holds the full AI Overview text with inline citations stripped
+    const text = aiOverview?.markdown ?? "";
+
+    // top-level references[] has all source URLs, deduplicated by DataForSEO
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const citations: string[] = (aiOverview?.references ?? []).map((r: any) => r.url).filter(Boolean);
+
     return { text, citations };
   }
 
