@@ -99,8 +99,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
   }
 
   if (engine === "gemini") {
-    // gemini-2.0-flash: no thinking overhead, ~3x faster than 2.5-flash for simple queries
-    const model = getGemini().getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = getGemini().getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
     return { text: result.response.text(), citations: [] };
   }
