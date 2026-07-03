@@ -1611,7 +1611,7 @@ function DashboardPage() {
                                 <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 pr-3">Response</th>
                                 <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 pr-3 w-16">Position</th>
                                 <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 pr-3 w-20">Mentioned?</th>
-                                <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 pr-3 w-16">Citations</th>
+                                <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 pr-3 w-24">Citations</th>
                                 <th className="text-left text-[10px] font-semibold text-gray-400 pb-2 w-20">Created</th>
                               </tr>
                             </thead>
@@ -1641,15 +1641,15 @@ function DashboardPage() {
                                       }
                                     </td>
                                     <td className="py-3 pr-3">
-                                      <div className="flex items-center gap-1">
-                                        {r.citations.slice(0, 3).map((url, ci) => {
+                                      <div className="flex items-center gap-1 flex-nowrap">
+                                        {r.citations.slice(0, 2).map((url, ci) => {
                                           try {
                                             const d = new URL(url).hostname.replace(/^www\./, "");
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            return <img key={ci} src={`https://www.google.com/s2/favicons?domain=${d}&sz=16`} alt={d} width={14} height={14} className="rounded" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />;
+                                            return <img key={ci} src={`https://www.google.com/s2/favicons?domain=${d}&sz=16`} alt={d} width={14} height={14} className="rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />;
                                           } catch { return null; }
                                         })}
-                                        {r.citations.length > 3 && <span className="text-[10px] text-gray-400">+{r.citations.length - 3}</span>}
+                                        {r.citations.length > 2 && <span className="text-[10px] text-gray-400 shrink-0">+{r.citations.length - 2}</span>}
                                         {r.citations.length === 0 && <span className="text-gray-300">—</span>}
                                       </div>
                                     </td>
