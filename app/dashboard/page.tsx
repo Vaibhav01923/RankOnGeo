@@ -384,6 +384,8 @@ function DashboardPage() {
   const [competitorDraft, setCompetitorDraft] = useState<string[]>([]);
   const [newCompetitorInput, setNewCompetitorInput] = useState("");
   const [savingCompetitors, setSavingCompetitors] = useState(false);
+  const [suggestedCompetitors, setSuggestedCompetitors] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [addingPrompt, setAddingPrompt] = useState(false);
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
@@ -2627,7 +2629,21 @@ function DashboardPage() {
                         <p className="text-xs text-gray-400 mt-0.5">Added to every scan — AI engines are checked for mentions of these brands</p>
                       </div>
                       {!editingCompetitors && (
-                        <button onClick={() => { setCompetitorDraft(brand.competitors); setEditingCompetitors(true); }} className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-stone-200 rounded-lg px-3 py-1.5 hover:bg-stone-50 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompetitorDraft(brand.competitors);
+                            setSuggestedCompetitors([]);
+                            setEditingCompetitors(true);
+                            setLoadingSuggestions(true);
+                            fetch(`/api/competitors/suggest?brandId=${brand.id}`)
+                              .then((r) => r.json())
+                              .then((d) => setSuggestedCompetitors((d.suggestions ?? []).filter((s: string) => !brand.competitors.includes(s))))
+                              .catch(() => {})
+                              .finally(() => setLoadingSuggestions(false));
+                          }}
+                          className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-stone-200 rounded-lg px-3 py-1.5 hover:bg-stone-50 transition-colors"
+                        >
                           Edit
                         </button>
                       )}
@@ -2666,6 +2682,28 @@ function DashboardPage() {
                             className="text-xs font-medium bg-gray-900 text-white rounded-lg px-3 py-1.5"
                           >Add</button>
                         </div>
+                        {/* AI suggestions */}
+                        <div className="mb-4">
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                            {loadingSuggestions ? "AI is detecting competitors…" : suggestedCompetitors.length > 0 ? "Suggested by AI — click to add" : ""}
+                          </p>
+                          {loadingSuggestions && <span className="w-4 h-4 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin inline-block" />}
+                          {!loadingSuggestions && suggestedCompetitors.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {suggestedCompetitors.filter((s) => !competitorDraft.includes(s)).map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => setCompetitorDraft((prev) => [...prev, s])}
+                                  className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
+                                >
+                                  + {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         <div className="flex gap-2">
                           <button
                             type="button"
