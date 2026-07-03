@@ -365,6 +365,15 @@ function DashboardPage() {
   // Prompts tab state
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [selectedCitationDomain, setSelectedCitationDomain] = useState<string | null>(null);
+
+  // Browser back button exits prompt detail view instead of leaving the page
+  useEffect(() => {
+    const handler = () => {
+      setSelectedPromptId((cur) => { if (cur) { setSelectedCitationDomain(null); return null; } return cur; });
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
   const [selectedResponseResult, setSelectedResponseResult] = useState<ScanResult | null>(null);
   const [promptSearch, setPromptSearch] = useState("");
   const [newPromptText, setNewPromptText] = useState("");
@@ -1464,7 +1473,7 @@ function DashboardPage() {
                 return (
                   <div>
                     {/* Back nav */}
-                    <button onClick={() => { setSelectedPromptId(null); setSelectedCitationDomain(null); }} className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-5 transition-colors">
+                    <button onClick={() => history.back()} className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-5 transition-colors">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                       Back to Prompts
                     </button>
@@ -1844,7 +1853,7 @@ function DashboardPage() {
                               className="group grid grid-cols-[1fr_130px_120px_40px_32px] gap-x-4 px-5 py-4 border-b border-stone-100 last:border-0 hover:bg-stone-50/70 transition-colors items-center"
                             >
                               {/* Prompt with visibility ring — clickable */}
-                              <button onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); }} className="flex items-center gap-3 min-w-0 text-left">
+                              <button onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); history.pushState(null, ""); }} className="flex items-center gap-3 min-w-0 text-left">
                                 <div className="relative w-11 h-11 shrink-0">
                                   <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
                                     <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="3"/>
