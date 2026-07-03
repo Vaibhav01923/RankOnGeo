@@ -115,7 +115,7 @@ type SavedArticle = {
 };
 
 type AgentMessage = { role: "user" | "assistant"; content: string };
-type ChatSession = { id: string; title: string; messages: AgentMessage[]; createdAt: number };
+type ChatSession = { id: string; title: string; created_at: string; updated_at: string };
 
 type PublishingChannel = {
   id: string;
@@ -387,13 +387,13 @@ function DashboardPage() {
   const agentMessagesRef = useRef<AgentMessage[]>([]);
   agentMessagesRef.current = agentMessages;
 
-  // Load chat history from localStorage when brand loads
+  // Load chat history from DB when brand loads
   useEffect(() => {
     if (!brand?.id) return;
-    try {
-      const stored = localStorage.getItem(`grog_chats_${brand.id}`);
-      if (stored) setChatSessions(JSON.parse(stored));
-    } catch {}
+    fetch(`/api/agent/chats?brandId=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.chats) setChatSessions(d.chats); })
+      .catch(() => {});
   }, [brand?.id]);
 
   // Articles state
@@ -820,36 +820,44 @@ function DashboardPage() {
     }
   }
 
-  function saveChatToStorage(msgs: AgentMessage[], chatId: string | null, sessions: ChatSession[], brandId: string) {
+  async function saveOrUpdateChat(msgs: AgentMessage[], currentChatId: string | null): Promise<string | null> {
+    if (!brand?.id) return currentChatId;
     const userMsgs = msgs.filter((m) => m.role === "user");
-    if (!userMsgs.length) return sessions;
+    if (!userMsgs.length) return currentChatId;
     const title = userMsgs[0].content.slice(0, 45) + (userMsgs[0].content.length > 45 ? "…" : "");
-    const id = chatId ?? Date.now().toString();
-    const session: ChatSession = { id, title, messages: msgs, createdAt: Date.now() };
-    const updated = chatId
-      ? sessions.map((s) => s.id === chatId ? session : s)
-      : [session, ...sessions].slice(0, 20);
-    try { localStorage.setItem(`grog_chats_${brandId}`, JSON.stringify(updated)); } catch {}
-    return updated;
+    try {
+      if (!currentChatId) {
+        const res = await fetch("/api/agent/chats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brandId: brand.id, title, messages: msgs }),
+        });
+        if (!res.ok) return null;
+        const d = await res.json();
+        return d.id as string;
+      } else {
+        await fetch(`/api/agent/chats/${currentChatId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: msgs, title }),
+        });
+        return currentChatId;
+      }
+    } catch { return currentChatId; }
   }
 
   function startNewChat() {
-    if (brand?.id) {
-      const updated = saveChatToStorage(agentMessagesRef.current, activeChatId, chatSessions, brand.id);
-      setChatSessions(updated);
-    }
     setActiveChatId(null);
     setAgentMessages([]);
     setAgentInitialized(false);
   }
 
-  function loadChatSession(session: ChatSession) {
-    if (brand?.id) {
-      const updated = saveChatToStorage(agentMessagesRef.current, activeChatId, chatSessions, brand.id);
-      setChatSessions(updated);
-    }
+  async function loadChatSession(session: ChatSession) {
+    const res = await fetch(`/api/agent/chats/${session.id}`);
+    if (!res.ok) return;
+    const d = await res.json();
     setActiveChatId(session.id);
-    setAgentMessages(session.messages);
+    setAgentMessages(d.chat?.messages ?? []);
     setAgentInitialized(true);
   }
 
@@ -877,7 +885,7 @@ function DashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: newMessages.slice(-20),
           scanContext: {
             brandName: brand.name,
             domain: brand.domain,
@@ -898,11 +906,16 @@ function DashboardPage() {
       setAgentMessages(finalMessages);
 
       // Auto-save after each reply
-      if (brand.id) {
-        const newId = activeChatId ?? Date.now().toString();
-        if (!activeChatId) setActiveChatId(newId);
-        const updated = saveChatToStorage(finalMessages, newId, chatSessions, brand.id);
-        setChatSessions(updated);
+      if (brand?.id) {
+        const savedId = await saveOrUpdateChat(finalMessages, activeChatId);
+        if (savedId) {
+          if (!activeChatId) {
+            setActiveChatId(savedId);
+            const title = userMsg.content.slice(0, 45) + (userMsg.content.length > 45 ? "…" : "");
+            const now = new Date().toISOString();
+            setChatSessions((prev) => [{ id: savedId, title, created_at: now, updated_at: now }, ...prev].slice(0, 30));
+          }
+        }
       }
     } catch {
       setAgentMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I couldn't reach the server. Try again in a moment." }]);
@@ -2262,32 +2275,7 @@ function DashboardPage() {
                           </div>
                           <span className="ml-auto text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100 whitespace-nowrap">High impact</span>
                         </div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="flex-1">
-                            <p className="text-[11px] text-gray-500 leading-tight">Instant visibility</p>
-                            <p className="text-[11px] text-gray-500 leading-tight">increase</p>
-                          </div>
-                          <div className="relative w-12 h-12 shrink-0">
-                            <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
-                              <circle cx="22" cy="22" r="17" fill="none" stroke="#e5e7eb" strokeWidth="3.5"/>
-                              <circle cx="22" cy="22" r="17" fill="none" stroke="#14b8a6" strokeWidth="3.5" strokeDasharray={`${75 * 1.068} 106.8`} strokeLinecap="round"/>
-                            </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-teal-700">75%</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 mb-3">
-                          <p className="text-[10px] text-gray-400 mr-0.5">Active & persona based accounts</p>
-                          <div className="flex -space-x-1.5">
-                            {["#3b82f6","#8b5cf6","#ec4899"].map((c, i) => (
-                              <div key={i} className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center" style={{backgroundColor: c}}>
-                                <svg viewBox="0 0 20 20" fill="white" className="w-2.5 h-2.5"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/></svg>
-                              </div>
-                            ))}
-                            <div className="w-5 h-5 rounded-full border-2 border-white bg-orange-400 flex items-center justify-center">
-                              <span className="text-[7px] font-bold text-white">+</span>
-                            </div>
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-gray-500 mb-3">Engage on Reddit threads to get cited in AI responses and boost your visibility.</p>
                         <button
                           onClick={() => {
                             const redditEntry = citationDomains.find(([d]) => d.includes("reddit.com"));
