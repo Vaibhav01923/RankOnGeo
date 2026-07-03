@@ -118,7 +118,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<{ t
         os: "windows",
         load_async_ai_overview: true, // required — AI Overview loads async via JS
       }]),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(20000),
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = await res.json();
