@@ -93,33 +93,23 @@ async function runOnePrompt(
   brandId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
-  results: ScanResult[],
   retries = 1,
 ) {
   try {
     const { text, citations: engineCitations } = await queryWithRetry(engine, prompt.text, retries);
     const mentions = extractMentions(text, brand.name, brand.domain, brand.competitors, engineCitations);
-    const result: ScanResult = {
-      promptId: prompt.id,
-      promptText: prompt.text,
-      engine,
-      response: text,
-      ...mentions,
-      scannedAt: new Date().toISOString(),
-    };
-    results.push(result);
     await db.from("scan_results").insert({
       scan_run_id: scanRunId,
       brand_id: brandId,
-      prompt_id: result.promptId,
-      prompt_text: result.promptText,
-      engine: result.engine,
-      response: result.response,
-      brand_mentioned: result.brandMentioned,
-      brand_rank: result.brandRank,
-      competitor_mentions: result.competitorMentions,
-      citations: result.citations,
-      scanned_at: result.scannedAt,
+      prompt_id: prompt.id,
+      prompt_text: prompt.text,
+      engine,
+      response: text,
+      brand_mentioned: mentions.brandMentioned,
+      brand_rank: mentions.brandRank,
+      competitor_mentions: mentions.competitorMentions,
+      citations: mentions.citations,
+      scanned_at: new Date().toISOString(),
     });
   } catch (err) {
     console.error(`[manual-scan] ${engine} × "${prompt.text.slice(0, 50)}" FAILED:`, err);
@@ -127,7 +117,9 @@ async function runOnePrompt(
 }
 
 // Triggered by the manual "Run Scan" button — uses a pre-created scan_run row.
-// Each engine runs in its own Inngest step → own 300s Vercel window → no total timeout.
+// Prompts are processed in chunks of 5 per engine. Each chunk is its own Inngest step
+// (own 300s Vercel window), so scans scale to 500+ prompts without ever timing out.
+// Works in the background — user can close the browser tab and the scan continues.
 export const manualScanBrand = inngest.createFunction(
   { id: "manual-scan-brand", retries: 0, triggers: [{ event: "scan/manual.requested" }] },
   async ({ event, step }) => {
@@ -173,34 +165,50 @@ export const manualScanBrand = inngest.createFunction(
       return { brand: b, promptsToRun: prompts };
     });
 
-    // Steps 2+: one Inngest step per engine — each runs in parallel with its own 300s window.
-    // .catch(() => []) ensures a single engine failure doesn't abort the others.
-    const engineResultArrays = await Promise.all(
-      engines.map((engine) =>
-        step.run(`scan-engine-${engine}`, async () => {
-          const db = serverClient(); // fresh connection per step invocation
-          const results: ScanResult[] = [];
+    // Steps 2+: process prompts in chunks of 5 per engine.
+    // Each chunk runs all engines in parallel (Promise.all over step.run calls).
+    // Each step.run = separate Vercel invocation with its own 300s window.
+    // 500 prompts / 5 per chunk = 100 chunks × 3 engines = 300 step invocations, all safe.
+    const CHUNK_SIZE = 5;
+    const numChunks = Math.ceil(promptsToRun.length / CHUNK_SIZE);
 
-          // All engines run in concurrent batches — no sequential delays needed.
-          // Batch sizes are conservative to stay well within API rate limits.
-          const BATCH = engine === "google" ? 4 : 3; // google=4, chatgpt/gemini=3
-          const retries = engine === "google" ? 2 : 1;
-          for (let i = 0; i < promptsToRun.length; i += BATCH) {
-            const batch = promptsToRun.slice(i, i + BATCH);
+    for (let c = 0; c < numChunks; c++) {
+      const chunk = promptsToRun.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE);
+      await Promise.all(
+        engines.map((engine) =>
+          step.run(`scan-${engine}-chunk-${c}`, async () => {
+            const db = serverClient();
+            const retries = engine === "google" ? 2 : 1;
             await Promise.all(
-              batch.map((prompt) => runOnePrompt(engine, prompt, brand, scanRunId, brandId, db, results, retries))
+              chunk.map((prompt) => runOnePrompt(engine, prompt, brand, scanRunId, brandId, db, retries))
             );
-          }
-          return results;
-        }).catch(() => [] as ScanResult[]) // engine failure → empty array, not a crash
-      )
-    );
+            return { done: chunk.length };
+          }).catch(() => ({ done: 0 })) // chunk failure → skip, don't abort other engines
+        )
+      );
+    }
 
-    // Step 3: compute + write scores — this is the completion signal the poller waits for.
-    // Runs even if some engines returned empty (partial results > no results).
+    // Final step: read all results from DB, compute scores, signal completion to the poller.
+    // Reads from DB rather than accumulating through Inngest state (avoids large payload issues at scale).
     await step.run("write-scores", async () => {
       const db = serverClient();
-      const allResults = engineResultArrays.flat();
+      const { data: rows } = await db
+        .from("scan_results")
+        .select("engine, brand_mentioned, brand_rank, competitor_mentions, prompt_id, prompt_text, response, scanned_at")
+        .eq("scan_run_id", scanRunId);
+
+      const allResults: ScanResult[] = (rows ?? []).map((r) => ({
+        promptId: r.prompt_id,
+        promptText: r.prompt_text,
+        engine: r.engine as AIEngine,
+        response: r.response,
+        brandMentioned: r.brand_mentioned,
+        brandRank: r.brand_rank,
+        competitorMentions: r.competitor_mentions ?? [],
+        citations: [],
+        scannedAt: r.scanned_at,
+      }));
+
       const { scores, overallScore } = computeScores(allResults, engines);
       await db.from("scan_runs").update({ overall_score: overallScore }).eq("id", scanRunId);
       await db.from("visibility_scores").insert(
