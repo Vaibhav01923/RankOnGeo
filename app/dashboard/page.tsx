@@ -2646,14 +2646,29 @@ function DashboardPage() {
                           <input
                             value={newCompetitorInput}
                             onChange={(e) => setNewCompetitorInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const t = newCompetitorInput.trim(); if (t && !competitorDraft.includes(t)) setCompetitorDraft([...competitorDraft, t]); setNewCompetitorInput(""); }}}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const t = e.currentTarget.value.trim();
+                                if (t) { setCompetitorDraft((prev) => prev.includes(t) ? prev : [...prev, t]); setNewCompetitorInput(""); }
+                              }
+                            }}
                             placeholder="Add competitor name…"
                             className="flex-1 text-sm border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-stone-300"
                           />
-                          <button onClick={() => { const t = newCompetitorInput.trim(); if (t && !competitorDraft.includes(t)) setCompetitorDraft([...competitorDraft, t]); setNewCompetitorInput(""); }} className="text-xs font-medium bg-gray-900 text-white rounded-lg px-3 py-1.5">Add</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const t = newCompetitorInput.trim();
+                              if (t) { setCompetitorDraft((prev) => prev.includes(t) ? prev : [...prev, t]); setNewCompetitorInput(""); }
+                            }}
+                            className="text-xs font-medium bg-gray-900 text-white rounded-lg px-3 py-1.5"
+                          >Add</button>
                         </div>
                         <div className="flex gap-2">
                           <button
+                            type="button"
                             disabled={savingCompetitors}
                             onClick={async () => {
                               setSavingCompetitors(true);
@@ -2666,7 +2681,7 @@ function DashboardPage() {
                           >
                             {savingCompetitors ? "Saving…" : "Save"}
                           </button>
-                          <button onClick={() => setEditingCompetitors(false)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
+                          <button type="button" onClick={() => setEditingCompetitors(false)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
                         </div>
                       </div>
                     ) : brand.competitors.length === 0 ? (
