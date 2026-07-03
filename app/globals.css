@@ -31,6 +31,10 @@ body {
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
+input, textarea, select {
+  color: #111111;
+}
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
