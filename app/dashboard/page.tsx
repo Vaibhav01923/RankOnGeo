@@ -2680,34 +2680,85 @@ function DashboardPage() {
                     )}
                   </div>
 
-                  {/* Share of voice chart — only when scanned and competitors exist */}
-                  {scanned && brand.competitors.length > 0 && (
-                    <div className="bg-white border border-stone-200 rounded-xl p-5">
-                      <h3 className="text-base font-semibold text-gray-900 mb-1">Share of Voice</h3>
-                      <p className="text-xs text-gray-400 mb-4">Across all AI engines</p>
-                      {[...brand.competitors, brand.name].map((name) => {
-                        const isBrand = name === brand.name;
-                        const mentions = isBrand
-                          ? results.filter((r) => r.brandMentioned).length
-                          : results.filter((r) => r.competitorMentions.some((c) => c.name === name)).length;
-                        const pct = results.length ? Math.round((mentions / results.length) * 100) : 0;
-                        return (
-                          <div key={name} className={`flex items-center gap-3 mb-3 ${isBrand ? "pt-3 border-t border-gray-100 mt-1" : ""}`}>
-                            <span className={`text-sm w-40 truncate ${isBrand ? "font-semibold text-gray-900" : "text-gray-600"}`}>{name}</span>
-                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${isBrand ? "bg-red-500" : "bg-gray-300"}`} style={{ width: `${pct}%` }} />
+                  {/* Share of voice chart */}
+                  {scanned && (() => {
+                    const allNames = [brand.name, ...brand.competitors];
+                    const rows = allNames.map((name) => {
+                      const isBrand = name === brand.name;
+                      const mentions = isBrand
+                        ? results.filter((r) => r.brandMentioned).length
+                        : results.filter((r) => r.competitorMentions.some((c) => c.name === name)).length;
+                      const pct = results.length ? Math.round((mentions / results.length) * 100) : 0;
+                      return { name, isBrand, pct };
+                    }).sort((a, b) => b.pct - a.pct);
+
+                    const brandRow = rows.find((r) => r.isBrand);
+                    const brandPct = brandRow?.pct ?? 0;
+                    const maxPct = Math.max(...rows.map((r) => r.pct), 1);
+
+                    // Previous scan comparison
+                    const prevRun = scanHistory[1];
+                    const prevScore = prevRun?.overall_score ?? null;
+                    const diff = prevScore !== null ? brandPct - prevScore : null;
+
+                    return (
+                      <div className="bg-white border border-stone-200 rounded-xl p-6">
+                        {/* Header */}
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="text-base font-semibold text-gray-900">Share of Voice</h3>
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01"/></svg>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-4">Your Brand AI mentions vs competitors</p>
+
+                        {/* Big number */}
+                        <div className="flex items-center gap-3 mb-6">
+                          <span className="text-4xl font-bold text-gray-900">{brandPct}%</span>
+                          {diff !== null && (
+                            <span className={`flex items-center gap-1 text-sm font-semibold px-2.5 py-1 rounded-full ${diff >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                              {diff >= 0 ? "↑" : "↓"} {Math.abs(diff)}%
+                            </span>
+                          )}
+                          {diff !== null && <span className="text-xs text-gray-400">vs previous scan</span>}
+                        </div>
+
+                        {/* Bars */}
+                        {brand.competitors.length === 0 ? (
+                          <p className="text-sm text-gray-400">Add competitors above, then re-scan to see share of voice data.</p>
+                        ) : (
+                          <>
+                            <div className="space-y-2.5 mb-5">
+                              {rows.map(({ name, isBrand, pct }) => (
+                                <div key={name} className="flex items-center gap-3">
+                                  <div className="flex items-center gap-1.5 w-32 shrink-0">
+                                    <span className={`w-2 h-2 rounded-full shrink-0 ${isBrand ? "bg-red-500" : "bg-blue-500"}`} />
+                                    <span className={`text-xs truncate ${isBrand ? "font-semibold text-gray-900" : "text-gray-600"}`}>{name}</span>
+                                  </div>
+                                  <div className="flex-1 h-7 bg-stone-100 rounded-lg overflow-hidden relative">
+                                    <div
+                                      className={`h-full rounded-lg flex items-center justify-end pr-2 transition-all duration-500 ${isBrand ? "bg-red-400" : "bg-blue-500"}`}
+                                      style={{ width: `${(pct / maxPct) * 100}%` }}
+                                    >
+                                      <span className="text-[11px] font-semibold text-white">{pct}%</span>
+                                    </div>
+                                  </div>
+                                  <img
+                                    src={`https://www.google.com/s2/favicons?domain=${name.toLowerCase().replace(/\s+/g, "")}.com&sz=24`}
+                                    className="w-6 h-6 rounded-full shrink-0 bg-stone-100"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    alt=""
+                                  />
+                                </div>
+                              ))}
                             </div>
-                            <span className={`text-sm font-medium w-10 text-right ${isBrand ? "text-red-600" : "text-gray-500"}`}>{pct}%</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {scanned && brand.competitors.length === 0 && (
-                    <div className="bg-white border border-stone-200 rounded-xl p-8 text-center">
-                      <p className="text-sm text-gray-400">Add competitors above, then re-scan to see share of voice data.</p>
-                    </div>
-                  )}
+                            {/* X-axis */}
+                            <div className="flex justify-between text-[10px] text-gray-400 border-t border-stone-100 pt-2">
+                              {[0, 25, 50, 75, 100].map((v) => <span key={v}>{v}%</span>)}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </>
