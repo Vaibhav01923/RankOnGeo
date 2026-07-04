@@ -34,6 +34,20 @@ const ENGINE_ICONS: Record<AIEngine, string> = {
   grok: "/engines/grok.png",
 };
 
+type EngagePlatform = "reddit" | "linkedin" | "other";
+
+const ENGAGE_PLATFORMS: Record<EngagePlatform, { label: string; bg: string; hoverBg: string; text: string }> = {
+  reddit: { label: "Reddit", bg: "bg-[#FF4500]", hoverBg: "hover:bg-[#e03d00]", text: "text-[#FF4500]" },
+  linkedin: { label: "LinkedIn", bg: "bg-[#0A66C2]", hoverBg: "hover:bg-[#004182]", text: "text-[#0A66C2]" },
+  other: { label: "this source", bg: "bg-gray-800", hoverBg: "hover:bg-gray-700", text: "text-gray-800" },
+};
+
+function getEngagePlatform(url: string): EngagePlatform {
+  if (url.includes("reddit.com")) return "reddit";
+  if (url.includes("linkedin.com")) return "linkedin";
+  return "other";
+}
+
 function EngineIcon({ engine, size = 20 }: { engine: AIEngine; size?: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -2300,6 +2314,37 @@ function DashboardPage() {
                         </button>
                       </div>
 
+                      {/* LinkedIn — appears only when a LinkedIn citation is detected */}
+                      {citationDomains.some(([d]) => d.includes("linkedin.com")) && (
+                        <div className="bg-white border-2 border-blue-200 rounded-xl p-4 flex flex-col">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-9 h-9 rounded-xl bg-[#0A66C2] flex items-center justify-center shrink-0 shadow-sm">
+                              <span className="text-white font-bold text-sm leading-none">in</span>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-gray-900">LinkedIn</span>
+                            </div>
+                            <span className="ml-auto text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100 whitespace-nowrap">High impact</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mb-3">Engage on LinkedIn posts to get cited in AI responses and boost your visibility.</p>
+                          <button
+                            onClick={() => {
+                              const linkedinEntry = citationDomains.find(([d]) => d.includes("linkedin.com"));
+                              if (linkedinEntry) {
+                                const instances = citationInstances[linkedinEntry[0]];
+                                if (instances?.[0]) {
+                                  setEngageItem({ url: instances[0].url, promptText: instances[0].promptText, engine: instances[0].engine });
+                                  setEngageDraft("");
+                                }
+                              }
+                            }}
+                            className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#0A66C2] text-white rounded-xl py-2.5 hover:bg-[#004182] transition-colors shadow-sm"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                            Engage
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -4009,20 +4054,27 @@ function DashboardPage() {
         </div>
       )}
       {/* ENGAGE PANEL */}
-      {engageItem && (
+      {engageItem && (() => {
+        const engagePlatform = getEngagePlatform(engageItem.url);
+        const platformMeta = ENGAGE_PLATFORMS[engagePlatform];
+        return (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); }} />
           <div className="w-[420px] h-full bg-white shadow-2xl flex flex-col overflow-hidden border-l border-stone-200">
             {/* Header */}
             <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#FF4500] flex items-center justify-center shrink-0">
-                <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none">
-                  <circle cx="10" cy="10" r="10" fill="white" fillOpacity="0.2"/>
-                  <path fill="white" d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z"/>
-                </svg>
+              <div className={`w-8 h-8 rounded-lg ${platformMeta.bg} flex items-center justify-center shrink-0`}>
+                {engagePlatform === "linkedin" ? (
+                  <span className="text-white font-bold text-xs leading-none">in</span>
+                ) : (
+                  <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none">
+                    <circle cx="10" cy="10" r="10" fill="white" fillOpacity="0.2"/>
+                    <path fill="white" d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z"/>
+                  </svg>
+                )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">Engage on Reddit</p>
+                <p className="text-sm font-semibold text-gray-900">Engage on {platformMeta.label}</p>
                 <p className="text-xs text-gray-400">Draft a reply to influence this citation</p>
               </div>
               <button onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); }} className="ml-auto text-gray-400 hover:text-gray-600">
@@ -4064,9 +4116,9 @@ function DashboardPage() {
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-semibold text-gray-900 mb-1">Task submitted!</p>
-                    <p className="text-xs text-gray-500">Your reply + upvote order is being processed.</p>
+                    <p className="text-xs text-gray-500">{upvoteEnabled ? "Your reply + upvote order is being processed." : "Your reply is being processed."}</p>
                   </div>
-                  <button onClick={() => { navTo("tasks"); setEngageItem(null); setTaskSubmitted(false); }} className="text-xs font-medium text-[#FF4500] hover:underline">
+                  <button onClick={() => { navTo("tasks"); setEngageItem(null); setTaskSubmitted(false); }} className={`text-xs font-medium ${platformMeta.text} hover:underline`}>
                     View in Tasks →
                   </button>
                 </div>
@@ -4084,7 +4136,7 @@ function DashboardPage() {
                             body: JSON.stringify({
                               messages: [{
                                 role: "user",
-                                content: `Write a short, helpful Reddit comment (2-3 sentences) that naturally and authentically mentions ${brand.name} in the context of this thread. The thread appeared when someone searched: "${engageItem.promptText}". Keep it genuine and conversational — not promotional. Just reply with the comment text, no preamble.`,
+                                content: `Write a short, helpful ${platformMeta.label} comment (2-3 sentences) that naturally and authentically mentions ${brand.name} in the context of this post. The post appeared when someone searched: "${engageItem.promptText}". Keep it genuine and conversational — not promotional. Just reply with the comment text, no preamble.`,
                               }],
                               scanContext: { brandName: brand.name, domain: brand.domain, niche: brand.niche },
                             }),
@@ -4117,54 +4169,56 @@ function DashboardPage() {
                     <p className="text-xs text-gray-400">{engageDraft.trim().split(/\s+/).length} words · edit freely before posting</p>
                   )}
 
-                  {/* Upvote ordering */}
-                  <div className="border border-stone-200 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => setUpvoteEnabled((v) => !v)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors"
-                    >
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${upvoteEnabled ? "bg-[#FF4500] border-[#FF4500]" : "border-gray-300"}`}>
-                        {upvoteEnabled && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                      </div>
-                      <div className="text-left">
-                        <p className="text-xs font-semibold text-gray-800">Order upvotes to rank this reply</p>
-                        <p className="text-[10px] text-gray-400">Boost visibility so AI engines surface your comment</p>
-                      </div>
-                      <svg className={`w-4 h-4 text-gray-400 ml-auto shrink-0 transition-transform ${upvoteEnabled ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                    </button>
+                  {/* Upvote ordering — Reddit only, no equivalent concept on other platforms */}
+                  {engagePlatform === "reddit" && (
+                    <div className="border border-stone-200 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setUpvoteEnabled((v) => !v)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors"
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${upvoteEnabled ? "bg-[#FF4500] border-[#FF4500]" : "border-gray-300"}`}>
+                          {upvoteEnabled && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-semibold text-gray-800">Order upvotes to rank this reply</p>
+                          <p className="text-[10px] text-gray-400">Boost visibility so AI engines surface your comment</p>
+                        </div>
+                        <svg className={`w-4 h-4 text-gray-400 ml-auto shrink-0 transition-transform ${upvoteEnabled ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                      </button>
 
-                    {upvoteEnabled && (
-                      <div className="px-4 pb-4 pt-1 border-t border-stone-100 space-y-3">
-                        <div className="flex gap-3">
-                          <div className="flex-1">
-                            <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Quantity</p>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => setUpvoteQty((q) => Math.max(1, q - 5))} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-gray-600 hover:bg-stone-50 font-medium text-sm">−</button>
-                              <span className="text-sm font-semibold text-gray-900 w-8 text-center">{upvoteQty}</span>
-                              <button onClick={() => setUpvoteQty((q) => q + 5)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-gray-600 hover:bg-stone-50 font-medium text-sm">+</button>
+                      {upvoteEnabled && (
+                        <div className="px-4 pb-4 pt-1 border-t border-stone-100 space-y-3">
+                          <div className="flex gap-3">
+                            <div className="flex-1">
+                              <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Quantity</p>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => setUpvoteQty((q) => Math.max(1, q - 5))} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-gray-600 hover:bg-stone-50 font-medium text-sm">−</button>
+                                <span className="text-sm font-semibold text-gray-900 w-8 text-center">{upvoteQty}</span>
+                                <button onClick={() => setUpvoteQty((q) => q + 5)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-gray-600 hover:bg-stone-50 font-medium text-sm">+</button>
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Speed</p>
+                              <select
+                                value={upvoteSpeed}
+                                onChange={(e) => setUpvoteSpeed(e.target.value as "slow" | "normal" | "fast")}
+                                className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand/30"
+                              >
+                                <option value="slow">Slow (safer)</option>
+                                <option value="normal">Normal</option>
+                                <option value="fast">Fast</option>
+                              </select>
                             </div>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Speed</p>
-                            <select
-                              value={upvoteSpeed}
-                              onChange={(e) => setUpvoteSpeed(e.target.value as "slow" | "normal" | "fast")}
-                              className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand/30"
-                            >
-                              <option value="slow">Slow (safer)</option>
-                              <option value="normal">Normal</option>
-                              <option value="fast">Fast</option>
-                            </select>
+                          <div className="flex items-center justify-between text-[10px] text-gray-400 bg-stone-50 rounded-lg px-3 py-2">
+                            <span>{upvoteQty} upvotes × $0.10</span>
+                            <span className="font-semibold text-gray-700">${(upvoteQty * 0.10).toFixed(2)}</span>
                           </div>
+                          <p className="text-[10px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">Comments under 200 chars have ~35% removal rate. Keep replies natural and helpful.</p>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 bg-stone-50 rounded-lg px-3 py-2">
-                          <span>{upvoteQty} upvotes × $0.10</span>
-                          <span className="font-semibold text-gray-700">${(upvoteQty * 0.10).toFixed(2)}</span>
-                        </div>
-                        <p className="text-[10px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">Comments under 200 chars have ~35% removal rate. Keep replies natural and helpful.</p>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -4223,9 +4277,9 @@ function DashboardPage() {
                       href={engageItem.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 text-sm font-medium bg-[#FF4500] text-white text-center py-2.5 rounded-lg hover:bg-[#e03d00] transition-colors"
+                      className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} transition-colors`}
                     >
-                      Open Reddit →
+                      Open {platformMeta.label} →
                     </a>
                   </div>
                 )}
@@ -4258,14 +4312,15 @@ function DashboardPage() {
                     disabled={taskSubmitting}
                     className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors"
                   >
-                    {taskSubmitting ? "Saving…" : "Track without upvotes"}
+                    {taskSubmitting ? "Saving…" : engagePlatform === "reddit" ? "Track without upvotes" : "Track engagement"}
                   </button>
                 )}
               </div>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
