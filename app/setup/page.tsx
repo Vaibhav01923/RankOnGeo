@@ -38,7 +38,6 @@ function SetupContent() {
       triggerAnalyze(d, c ? c.split(",").map((s) => s.trim()).filter(Boolean) : []);
     }
   }, []);
-  const [competitorInput, setCompetitorInput] = useState("");
   const [competitors, setCompetitors] = useState<string[]>([]);
 
   // Step 2 & 3 data
@@ -56,14 +55,6 @@ function SetupContent() {
   const [userPlan, setUserPlan] = useState("starter");
   const [saving, setSaving] = useState(false);
 
-  function addCompetitor() {
-    const trimmed = competitorInput.trim();
-    if (trimmed && !competitors.includes(trimmed)) {
-      setCompetitors([...competitors, trimmed]);
-    }
-    setCompetitorInput("");
-  }
-
   async function triggerAnalyze(d: string, comps: string[]) {
     if (!d.trim()) return;
     setLoading(true);
@@ -79,8 +70,9 @@ function SetupContent() {
       setBrand(data);
       setEditedName(data.name);
       setEditedNiche(data.niche);
-      setSuggestedCompetitors(data.competitors ?? []);
-      setEditedCompetitors(comps.length ? comps : []);
+      const autoDetected: string[] = data.competitors ?? [];
+      setSuggestedCompetitors(autoDetected);
+      setEditedCompetitors(Array.from(new Set([...comps, ...autoDetected])));
       setEditedAudience(data.targetAudience ?? []);
       setDeselectedIds(new Set());
       setPrompts(data.trackedPrompts);
@@ -204,34 +196,6 @@ function SetupContent() {
                   className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm outline-none text-gray-900 focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Known competitors <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={competitorInput}
-                    onChange={(e) => setCompetitorInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCompetitor(); } }}
-                    placeholder="Competitor name"
-                    className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none text-gray-900 focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-                  />
-                  <button type="button" onClick={addCompetitor} className="px-4 py-2.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                    Add
-                  </button>
-                </div>
-                {competitors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {competitors.map((c) => (
-                      <span key={c} className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
-                        {c}
-                        <button onClick={() => setCompetitors(competitors.filter((x) => x !== c))} className="text-gray-400 hover:text-gray-600">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
               {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</p>}
               <button
                 type="submit"
@@ -288,21 +252,11 @@ function SetupContent() {
                     placeholder="Add audience segment"
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
                   />
-                  <button type="button" onClick={addAudience} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Add</button>
+                  <button type="button" onClick={addAudience} className="px-3 py-2 text-sm font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">Add</button>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Competitors</label>
-                {editedCompetitors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {editedCompetitors.map((c) => (
-                      <span key={c} className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full">
-                        {c}
-                        <button onClick={() => setEditedCompetitors(editedCompetitors.filter((x) => x !== c))} className="text-emerald-400 hover:text-emerald-700 ml-0.5">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
                 <div className="flex gap-2 mb-3">
                   <input
                     value={newCompetitorInput}
@@ -311,45 +265,49 @@ function SetupContent() {
                     placeholder="Add competitor domain"
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
                   />
-                  <button type="button" onClick={addEditedCompetitor} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Add</button>
+                  <button type="button" onClick={addEditedCompetitor} className="px-3 py-2 text-sm font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">Add</button>
                 </div>
-                {suggestedCompetitors.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-2">Suggested competitors</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestedCompetitors.map((c) => {
-                        const added = editedCompetitors.includes(c);
-                        const domain = c.includes(".") ? c : `${c}.com`;
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() =>
-                              added
-                                ? setEditedCompetitors(editedCompetitors.filter((x) => x !== c))
-                                : setEditedCompetitors([...editedCompetitors, c])
-                            }
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                              added
-                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                            }`}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                              alt=""
-                              className="w-3.5 h-3.5 rounded-sm"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                            />
-                            {c}
-                            <span className={`ml-0.5 ${added ? "text-emerald-500" : "text-gray-400"}`}>{added ? "✓" : "+"}</span>
-                          </button>
-                        );
-                      })}
+                {(() => {
+                  const allCompetitorOptions = Array.from(new Set([...suggestedCompetitors, ...editedCompetitors]));
+                  if (allCompetitorOptions.length === 0) return null;
+                  return (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-2">Detected automatically — click to remove any you don&apos;t want tracked</p>
+                      <div className="flex flex-wrap gap-2">
+                        {allCompetitorOptions.map((c) => {
+                          const added = editedCompetitors.includes(c);
+                          const domain = c.includes(".") ? c : `${c}.com`;
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() =>
+                                added
+                                  ? setEditedCompetitors(editedCompetitors.filter((x) => x !== c))
+                                  : setEditedCompetitors([...editedCompetitors, c])
+                              }
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                                added
+                                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                                alt=""
+                                className="w-3.5 h-3.5 rounded-sm"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              />
+                              {c}
+                              <span className={`ml-0.5 ${added ? "text-emerald-500" : "text-gray-400"}`}>{added ? "✓" : "+"}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
               <button
                 onClick={handleBrandNext}
@@ -412,7 +370,7 @@ function SetupContent() {
                 placeholder="Add custom prompt…"
                 className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none text-gray-900 focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
               />
-              <button onClick={addPrompt} className="px-4 py-2.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <button onClick={addPrompt} className="px-4 py-2.5 text-sm font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">
                 Add
               </button>
             </div>
