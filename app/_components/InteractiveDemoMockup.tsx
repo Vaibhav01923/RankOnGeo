@@ -283,62 +283,37 @@ function ResearchContent() {
   );
 }
 
-// ── KEYWORDS ──────────────────────────────────────────────────────
-function KeywordsContent() {
-  const rows = [
-    { kw: "what is Playwright and how does it work for web automation?", pct: 67, competing: "—" },
-    { kw: "what tool do I use for testing across multiple browsers…", pct: 0, competing: "Selenium" },
-    { kw: "how can I automate my web app testing without flaky tests?", pct: 67, competing: "Selenium" },
-    { kw: "what's the best way to run parallel tests in different browsers?", pct: 33, competing: "Selenium" },
-    { kw: "how do I set up a testing environment for modern web…", pct: 67, competing: "Cypress" },
-    { kw: "recommend a tool that offers auto-waiting and assertions fo…", pct: 67, competing: "Selenium" },
-    { kw: "how do I get a fresh browser context for each test?", pct: 67, competing: "—" },
+// ── TASKS ─────────────────────────────────────────────────────────
+function TasksContent() {
+  const tasks = [
+    { platform: "Reddit", color: "#FF4500", status: "Completed", url: "reddit.com/r/QualityAssurance/comments/…", reply: "Playwright's auto-waiting alone cut our flaky test rate way down — worth a look if you're fighting Selenium timeouts.", upvotes: 25, engine: "ChatGPT" },
+    { platform: "LinkedIn", color: "#0A66C2", status: "Pending", url: "linkedin.com/posts/…", reply: "We moved our E2E suite from Selenium to Playwright and cut CI time in half.", upvotes: 0, engine: "Perplexity" },
+    { platform: "Reddit", color: "#FF4500", status: "Pending", url: "reddit.com/r/webdev/comments/…", reply: "If cross-browser flakiness is the issue, Playwright's built-in retries handle it better than Selenium out of the box.", upvotes: 10, engine: "Gemini" },
   ];
+  const pending = tasks.filter((t) => t.status === "Pending").length;
   return (
     <div className="p-5" style={{ animation: "fadeUp 0.2s ease forwards" }}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-bold text-[#111] mb-0.5">Keywords</h2>
-          <p className="text-xs text-[#aaa]">Tracked prompts &amp; visibility opportunities for playwright.dev</p>
-        </div>
-        <button className="text-xs font-semibold bg-[#111] text-white px-3 py-1.5 rounded-lg">+ Add keyword</button>
-      </div>
-      <div className="grid grid-cols-4 gap-2.5 mb-3">
-        {[{ label: "KEYWORDS", val: "20", sub: "tracked prompts" }, { label: "WITH GAPS", val: "20", sub: "need articles" }, { label: "AVG VISIBILITY", val: "53%", sub: "across engines" }, { label: "ENGINES", val: "6", sub: "being tracked" }].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-[#e5e0da] p-3.5">
-            <p className="text-[9px] font-semibold text-[#bbb] tracking-wider uppercase mb-1">{s.label}</p>
-            <p className="text-2xl font-black text-[#111]">{s.val}</p>
-            <p className="text-[10px] text-[#aaa] mt-0.5">{s.sub}</p>
+      <h2 className="text-lg font-bold text-[#111] mb-0.5">Tasks</h2>
+      <p className="text-xs text-[#aaa] mb-4">Replies and upvote orders submitted from Citations · {pending} pending</p>
+      <div className="space-y-2.5">
+        {tasks.map((t, i) => (
+          <div key={i} className="bg-white rounded-xl border border-[#e5e0da] p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white text-[10px] font-bold" style={{ background: t.color }}>
+                {t.platform === "LinkedIn" ? "in" : "R"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${t.status === "Completed" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{t.status}</span>
+                  <span className="text-[10px] text-[#aaa]">{t.engine}</span>
+                  <span className="text-[10px] text-[#ccc] ml-auto">{t.url}</span>
+                </div>
+                <p className="text-xs text-[#444] bg-[#faf8f5] border border-[#f0ece6] rounded-lg px-3 py-2 mb-1.5">{t.reply}</p>
+                <p className="text-[10px] text-[#aaa]">{t.upvotes > 0 ? `${t.upvotes} upvotes ordered` : "No upvotes ordered"}</p>
+              </div>
+            </div>
           </div>
         ))}
-      </div>
-      <div className="bg-white rounded-xl border border-[#e5e0da]">
-        <div className="p-3 border-b border-[#f0ece6]">
-          <div className="w-full text-xs px-3 py-2 rounded-lg border border-[#e5e0da] bg-[#fafaf8] text-[#bbb]">Search keywords…</div>
-        </div>
-        <div className="px-4 py-2 flex gap-3 text-[9px] font-semibold text-[#bbb] tracking-wider uppercase border-b border-[#f0ece6]">
-          <span className="flex-1">Prompt / Keyword</span>
-          <span className="w-28 text-center">Visibility</span>
-          <span className="w-12 text-center">Status</span>
-          <span className="w-20 text-right">Competing with</span>
-          <span className="w-16"></span>
-        </div>
-        <div className="max-h-48 overflow-hidden">
-          {rows.map((r, i) => (
-            <div key={i} className="px-4 py-2.5 flex gap-3 items-center border-b border-[#f5f3f0] last:border-0">
-              <span className="flex-1 text-xs text-[#333] truncate">{r.kw}</span>
-              <div className="w-28 flex items-center gap-1.5">
-                <div className="flex-1 h-1.5 bg-[#f0ece6] rounded-full">
-                  <div className="h-full bg-[#c8372d] rounded-full" style={{ width: r.pct === 0 ? "0%" : `${r.pct}%` }} />
-                </div>
-                <span className="text-[10px] text-[#888] w-6 shrink-0">{r.pct}%</span>
-              </div>
-              <span className="w-12 text-center text-[11px] font-semibold text-[#c8372d]">Gap</span>
-              <span className="w-20 text-right text-[11px] text-[#888]">{r.competing}</span>
-              <button className="w-16 text-[10px] font-medium border border-[#ddd] rounded-lg py-1 text-[#444] text-center">+ Article</button>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -471,8 +446,8 @@ export function InteractiveDemoMockup() {
               {["Overview", "Engines", "Prompts", "Citations", "Competitors"].map((t) => navItem(t))}
               <p className="text-[9px] font-semibold text-[#aaa] tracking-widest uppercase px-2 mt-3 mb-1">Create</p>
               {navItem("Research", 20)}
-              {navItem("Keywords")}
               {navItem("Articles")}
+              {navItem("Tasks")}
               <p className="text-[9px] font-semibold text-[#aaa] tracking-widest uppercase px-2 mt-3 mb-1">Distribute</p>
               {navItem("Publishing")}
             </div>
@@ -518,8 +493,8 @@ export function InteractiveDemoMockup() {
               {activeTab === "Citations" && <CitationsContent />}
               {activeTab === "Competitors" && <CompetitorsContent />}
               {activeTab === "Research" && <ResearchContent />}
-              {activeTab === "Keywords" && <KeywordsContent />}
               {activeTab === "Articles" && <ArticlesContent />}
+              {activeTab === "Tasks" && <TasksContent />}
               {(activeTab === "Publishing" || activeTab === "Agent") && (
                 <div className="p-5 flex items-center justify-center h-full">
                   <p className="text-sm text-[#aaa]">Available in the full dashboard</p>
