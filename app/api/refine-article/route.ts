@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const getClient = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: NextRequest) {
   const { content, title, instruction } = await req.json();
@@ -19,16 +19,23 @@ ${content}
 
 Return only the modified article markdown, no commentary or preamble.`;
 
-  const msg = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
+  try {
+    const response = await getClient().chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-  const refined = (msg.content[0] as { type: string; text: string }).text.trim();
-  const titleMatch = refined.match(/^#\s+(.+)/m);
-  const refinedTitle = titleMatch ? titleMatch[1].trim() : title;
-  const wordCount = refined.split(/\s+/).filter(Boolean).length;
+    const raw = response.choices[0]?.message?.content ?? "";
+    const refined = raw.replace(/^```(?:markdown)?\n?/i, "").replace(/\n?```$/i, "").trim();
+    if (!refined) throw new Error("Model returned an empty response");
 
-  return NextResponse.json({ article: refined, title: refinedTitle, wordCount });
+    const titleMatch = refined.match(/^#\s+(.+)/m);
+    const refinedTitle = titleMatch ? titleMatch[1].trim() : title;
+    const wordCount = refined.split(/\s+/).filter(Boolean).length;
+
+    return NextResponse.json({ article: refined, title: refinedTitle, wordCount });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to refine article" }, { status: 500 });
+  }
 }
