@@ -199,6 +199,32 @@ select option {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
+/* ============================================================
+   Signal — scoped light theme for /dashboard only.
+   Palette lives on the dashboard's own root element via inline
+   style vars (--cream, --rust, etc.), never in :root, so the
+   rest of the site (landing/audit/article/auth/setup) is
+   unaffected. These two helpers + keyframe are the only shared
+   pieces since font-family/animation can't be arbitrary-value'd.
+   ============================================================ */
+.font-signal-serif {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+}
+.font-signal-mono {
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+/* Override the dark .panel treatment wherever it's still used inside the
+   dashboard's Signal-themed tree, without touching .panel for other routes. */
+.dashboard-signal .panel {
+  background: var(--surface);
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 
