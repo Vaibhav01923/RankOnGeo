@@ -7,7 +7,7 @@ import { SiteNav } from "./_components/SiteNav";
 import { ScrollReveal } from "./_components/ScrollReveal";
 import { InteractiveDemoMockup } from "./_components/InteractiveDemoMockup";
 import { NightSky } from "./_components/NightSky";
-import { Meadow, FloraLeft, FloraRight, GlobeViz } from "./_components/Scenery";
+import { GlobeViz } from "./_components/Scenery";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -445,10 +445,6 @@ export default function LandingPage() {
           <div className="rise relative z-[6] mx-auto mt-16 max-w-5xl overflow-x-auto px-6 pb-28" style={{ "--d": ".7s" } as React.CSSProperties}>
             <InteractiveDemoMockup />
           </div>
-
-          <Meadow />
-          <FloraLeft />
-          <FloraRight />
         </section>
 
         <EngineMarquee />
