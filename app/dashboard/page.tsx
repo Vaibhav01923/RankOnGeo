@@ -433,6 +433,7 @@ function DashboardPage() {
   // Default true (fail-safe: blur first) so free-tier data never flashes unblurred
   // before the /api/credits fetch resolves.
   const [isFreeTier, setIsFreeTier] = useState(true);
+  const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
   const [taskFilter, setTaskFilter] = useState<"pending" | "completed">("pending");
@@ -531,9 +532,30 @@ function DashboardPage() {
       setRedditUsername(d.username);
     });
 
-    fetch("/api/credits").then((r) => r.json()).then((d) => {
-      if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance });
-      setIsFreeTier(!!d.isFree);
+    const fetchCredits = () =>
+      fetch("/api/credits").then((r) => r.json()).then((d) => {
+        if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance });
+        setIsFreeTier(!!d.isFree);
+        return d;
+      });
+
+    fetchCredits().then((d) => {
+      // Dodo's webhook that activates the plan runs async and can land a beat
+      // after this redirect — poll briefly instead of leaving a real customer
+      // stuck looking at "upgrade" until they think to refresh manually.
+      if (searchParams.get("subscription") === "success" && d.isFree) {
+        setConfirmingSubscription(true);
+        let attempts = 0;
+        const poll = setInterval(() => {
+          attempts++;
+          fetchCredits().then((d2) => {
+            if (!d2.isFree || attempts >= 8) {
+              clearInterval(poll);
+              setConfirmingSubscription(false);
+            }
+          });
+        }, 2000);
+      }
     });
 
 
@@ -4209,6 +4231,12 @@ function DashboardPage() {
         </div>
       )}
       {showPaywallModal && <PaywallModal onClose={() => setShowPaywallModal(false)} />}
+      {confirmingSubscription && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 bg-[var(--surface)] border border-[var(--rust)]/25 rounded-full pl-3 pr-4 py-2 shadow-lg">
+          <span className="w-4 h-4 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin shrink-0" />
+          <span className="text-sm font-medium text-[var(--ink)]">Confirming your subscription…</span>
+        </div>
+      )}
       {/* ENGAGE PANEL */}
       {engageItem && (() => {
         const engagePlatform = getEngagePlatform(engageItem.url);
