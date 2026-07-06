@@ -1031,7 +1031,7 @@ function DashboardPage() {
 
   if (loadingBrand) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--cream)] flex items-center justify-center">
         <span className="w-7 h-7 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
       </div>
     );

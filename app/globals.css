@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
 /* ============================================================
-   RANKONGEO — night-meadow design system
-   Deep green-black night, bioluminescent mint, firefly amber.
+   RANKONGEO — Signal design system
+   Every page now uses the cream/rust Signal theme (each page scopes
+   its own --cream/--surface/--ink/--rust vars via an inline style on
+   its root wrapper). --background/--foreground below are just the
+   ambient default so there's no flash of the old dark night theme
+   before a page's own wrapper paints (e.g. on hard refresh, or during
+   an early loading-state return before a page's data has loaded).
    ============================================================ */
 
 :root {
   /* surfaces */
-  --background: #040d0a;
+  --background: #f6f2e9;
   --surface: #0c1e15;
   --surface-2: #12281c;
   --overlay: #16301f;
 
   /* text */
-  --foreground: #eaf6ee;
+  --foreground: #302821;
   --ink: #eaf6ee;
   --muted: #9db5a8;
   --faint: #6f8a7b;
