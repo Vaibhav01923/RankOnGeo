@@ -73,13 +73,18 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   const userId = user?.id;
 
-  const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 20, pro: 50, business: 150, scale: 400 };
-  let userPlan = "starter";
+  const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 50, growth: 150, enterprise: 400 };
+  const FREE_AUTO_COUNT = 20;
+  let activePlan: string | null = null;
   if (userId) {
-    const { data: planRow } = await db.from("user_plans").select("plan").eq("user_id", userId).single();
-    if (planRow?.plan) userPlan = planRow.plan;
+    const { data: planRow } = await db
+      .from("user_plans")
+      .select("plan, stripe_subscription_id")
+      .eq("user_id", userId)
+      .single();
+    if (planRow?.stripe_subscription_id) activePlan = planRow.plan;
   }
-  const promptCount = PLAN_AUTO_COUNTS[userPlan] ?? 20;
+  const promptCount = activePlan ? PLAN_AUTO_COUNTS[activePlan] ?? FREE_AUTO_COUNT : FREE_AUTO_COUNT;
 
   const branded = Math.round(promptCount * 0.20);
   const competitorAlt = Math.round(promptCount * 0.25);

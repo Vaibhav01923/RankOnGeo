@@ -67,8 +67,11 @@ export async function POST(req: NextRequest) {
     const sub = event.data as WebhookPayload.Subscription;
     const userId = sub.metadata?.userId;
     if (userId) {
+      // Only clear stripe_subscription_id — that's the "active paid plan?" signal
+      // everywhere else in the app (see app/api/setup/route.ts, app/setup/page.tsx).
+      // Leaving `plan` untouched keeps a record of what they were last on without
+      // making a cancelled user look like an active "starter" ($49) subscriber.
       await db.from("user_plans").update({
-        plan: "starter",
         stripe_subscription_id: null,
       }).eq("user_id", userId);
     }

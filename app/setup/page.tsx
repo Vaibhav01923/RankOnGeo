@@ -25,8 +25,9 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
-const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 20, pro: 50, business: 150, scale: 400 };
-const PLAN_CUSTOM_LIMITS: Record<string, number> = { starter: 5, pro: 10, business: 25, scale: 50 };
+const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 50, growth: 150, enterprise: 400 };
+const PLAN_CUSTOM_LIMITS: Record<string, number> = { starter: 10, growth: 25, enterprise: 50 };
+const FREE_CUSTOM_LIMIT = 5;
 
 type Step = "url" | "brand" | "prompts";
 
@@ -43,9 +44,9 @@ function SetupContent() {
   useEffect(() => {
     createSupabaseBrowserClient()
       .from("user_plans")
-      .select("plan")
+      .select("plan, stripe_subscription_id")
       .single()
-      .then(({ data }) => { if (data?.plan) setUserPlan(data.plan); });
+      .then(({ data }) => { if (data?.stripe_subscription_id) setUserPlan(data.plan); });
   }, []);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ function SetupContent() {
   const [prompts, setPrompts] = useState<TrackedPrompt[]>([]);
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
   const [newPrompt, setNewPrompt] = useState("");
-  const [userPlan, setUserPlan] = useState("starter");
+  const [userPlan, setUserPlan] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function triggerAnalyze(d: string, comps: string[]) {
@@ -138,7 +139,7 @@ function SetupContent() {
   function addPrompt() {
     const trimmed = newPrompt.trim();
     const customCount = prompts.filter((p) => p.category === "custom").length;
-    const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
+    const customLimit = userPlan ? PLAN_CUSTOM_LIMITS[userPlan] ?? FREE_CUSTOM_LIMIT : FREE_CUSTOM_LIMIT;
     if (!trimmed || customCount >= customLimit) return;
     setPrompts([...prompts, { id: `custom-${Date.now()}`, text: trimmed, category: "custom" }]);
     setNewPrompt("");
@@ -406,7 +407,7 @@ function SetupContent() {
 
             {(() => {
               const customCount = prompts.filter((p) => p.category === "custom").length;
-              const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
+              const customLimit = userPlan ? PLAN_CUSTOM_LIMITS[userPlan] ?? FREE_CUSTOM_LIMIT : FREE_CUSTOM_LIMIT;
               return customCount >= customLimit ? (
                 <p className="text-xs text-[var(--rust-deep)] font-medium mb-4">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
               ) : null;

@@ -6,6 +6,7 @@ import { AdminTask, AIEngine, BrandData, EngageTask, GapItem, RedditThread, Scan
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { PricingCards } from "@/app/_components/PricingCards";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
   chatgpt: "ChatGPT",
@@ -102,7 +103,7 @@ type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
   | "gaps" | "articles" | "tasks"
   | "publishing"
-  | "brands" | "alerts"
+  | "alerts"
   | "agent" | "admin";
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -117,7 +118,6 @@ const TAB_LABELS: Record<Tab, string> = {
   tasks: "Tasks",
   publishing: "Publishing",
 
-  brands: "Brands",
   alerts: "Alerts",
   agent: "Agent",
   admin: "Admin",
@@ -295,6 +295,48 @@ function NavItem({ label, active, onClick, badge }: { label: string; active: boo
   );
 }
 
+/* Free-tier gating: wrap any value/section that should be blurred-and-locked
+   behind an upgrade prompt. `onUnlock` is always the same openPaywall()
+   handler passed down from the dashboard root — clicking anywhere on a
+   blurred area opens the pricing modal instead of whatever it would
+   normally do (pointer-events-none on the blurred content itself is what
+   suppresses the real nested buttons/links). */
+function BlurInline({ children, onUnlock }: { children: React.ReactNode; onUnlock: () => void }) {
+  return (
+    <div className="relative inline-block cursor-pointer align-middle" onClick={onUnlock}>
+      <div className="pointer-events-none select-none inline-block blur-[5px]">{children}</div>
+    </div>
+  );
+}
+
+function BlurBlock({ children, onUnlock, label = "Upgrade to unlock" }: { children: React.ReactNode; onUnlock: () => void; label?: string }) {
+  return (
+    <div className="relative cursor-pointer" onClick={onUnlock}>
+      <div className="pointer-events-none select-none blur-[5px]">{children}</div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xs font-semibold text-[var(--rust-deep)] bg-[var(--surface)] border border-[var(--rust)]/30 rounded-full px-3.5 py-1.5 shadow-sm whitespace-nowrap">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function PaywallModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-sm p-6" onClick={onClose}>
+      <div className="relative w-full max-w-5xl bg-[var(--cream)] rounded-3xl p-8 my-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <div className="text-center mb-6">
+          <h2 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Upgrade to unlock this</h2>
+          <p className="text-sm text-[var(--ink-soft)]">Pick a plan to see full visibility scores and start engaging on citations.</p>
+        </div>
+        <PricingCards compact />
+      </div>
+    </div>
+  );
+}
+
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-[var(--line-soft)] text-[var(--ink-soft)]",
   review: "bg-[var(--rust-wash)] text-[var(--rust-deep)]",
@@ -388,6 +430,11 @@ function DashboardPage() {
   const [taskError, setTaskError] = useState("");
   const [engageTasks, setEngageTasks] = useState<EngageTask[]>([]);
   const [credits, setCredits] = useState<{ plan: string | null; balance: number } | null>(null);
+  // Default true (fail-safe: blur first) so free-tier data never flashes unblurred
+  // before the /api/credits fetch resolves.
+  const [isFreeTier, setIsFreeTier] = useState(true);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const openPaywall = () => setShowPaywallModal(true);
   const [taskFilter, setTaskFilter] = useState<"pending" | "completed">("pending");
   const [hoveredScanIdx, setHoveredScanIdx] = useState<number | null>(null);
   // Citations page state
@@ -486,6 +533,7 @@ function DashboardPage() {
 
     fetch("/api/credits").then((r) => r.json()).then((d) => {
       if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance });
+      setIsFreeTier(!!d.isFree);
     });
 
 
@@ -1177,7 +1225,6 @@ function DashboardPage() {
           <div>
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">On Page</p>
             <div className="space-y-0.5">
-              <NavItem label="Brands" active={activeTab === "brands"} onClick={() => navTo("brands")} />
               <NavItem label="Alerts" active={activeTab === "alerts"} onClick={() => navTo("alerts")} />
             </div>
           </div>
@@ -1241,14 +1288,14 @@ function DashboardPage() {
               </div>
             )}
             {/* "Next check in" countdown — shown once scanned, hidden during scan or non-scan tabs */}
-            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
               <div className="flex items-center gap-1.5 text-xs text-[var(--ink-faint)] border border-[var(--line)] rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] animate-pulse" />
                 Next check in: <span className="font-medium text-[var(--ink-soft)]">{nextCheckIn}</span>
               </div>
             )}
             {/* Scan button — hidden on tabs where it doesn't apply */}
-            {!scanning && !loadingResults && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "brands" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {!scanning && !loadingResults && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
@@ -1333,26 +1380,31 @@ function DashboardPage() {
                       <h1 className="font-signal-serif text-[40px] leading-none text-[var(--ink)]">AI Visibility</h1>
                       {overallScore !== null && (
                         <p className="text-[15px] text-[var(--ink-soft)]">
-                          Visibility up to {overallScore}% composite, across {scores.map((s) => ENGINE_LABELS[s.engine]).join(", ")}.
+                          Visibility up to {isFreeTier ? <BlurInline onUnlock={openPaywall}>{overallScore}%</BlurInline> : `${overallScore}%`} composite, across {scores.map((s) => ENGINE_LABELS[s.engine]).join(", ")}.
                         </p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex flex-col items-center gap-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] p-7">
-                    <div className="relative w-[164px] h-[164px]">
-                      <svg width="164" height="164" viewBox="0 0 180 180" style={{ transform: "rotate(-90deg)" }}>
-                        <circle cx="90" cy="90" r="78" fill="none" stroke="var(--line)" strokeWidth="14" />
-                        <circle
-                          cx="90" cy="90" r="78" fill="none" stroke="var(--rust)" strokeWidth="14" strokeLinecap="round"
-                          strokeDasharray={`${((overallScore ?? 0) / 100) * (2 * Math.PI * 78)} ${2 * Math.PI * 78}`}
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                        <span className="font-signal-serif text-[44px] leading-none text-[var(--ink)]">{overallScore ?? 0}%</span>
-                        <span className="text-[10px] font-semibold tracking-wider uppercase text-[var(--ink-faint)]">Composite</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const ring = (
+                        <div className="relative w-[164px] h-[164px]">
+                          <svg width="164" height="164" viewBox="0 0 180 180" style={{ transform: "rotate(-90deg)" }}>
+                            <circle cx="90" cy="90" r="78" fill="none" stroke="var(--line)" strokeWidth="14" />
+                            <circle
+                              cx="90" cy="90" r="78" fill="none" stroke="var(--rust)" strokeWidth="14" strokeLinecap="round"
+                              strokeDasharray={`${((overallScore ?? 0) / 100) * (2 * Math.PI * 78)} ${2 * Math.PI * 78}`}
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                            <span className="font-signal-serif text-[44px] leading-none text-[var(--ink)]">{overallScore ?? 0}%</span>
+                            <span className="text-[10px] font-semibold tracking-wider uppercase text-[var(--ink-faint)]">Composite</span>
+                          </div>
+                        </div>
+                      );
+                      return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{ring}</BlurBlock> : ring;
+                    })()}
                     <span className="text-[13px] text-[var(--ink-soft)]">Composite visibility across {scores.length} AI engine{scores.length === 1 ? "" : "s"}</span>
                     <MiniTrendChart runs={scanHistory} />
                   </div>
@@ -1361,8 +1413,20 @@ function DashboardPage() {
                     {scores.map((s) => (
                       <div key={s.engine} className="flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] px-6 py-5.5">
                         <span className="text-[13px] font-semibold text-[var(--ink)]">{ENGINE_LABELS[s.engine]}</span>
-                        <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{s.score}%</span>
-                        <span className="text-[12.5px] text-[var(--ink-faint)]">{s.mentionCount}/{s.totalPrompts} prompts{s.avgRank ? ` · avg #${s.avgRank.toFixed(1)}` : ""}</span>
+                        {isFreeTier ? (
+                          <BlurInline onUnlock={openPaywall}>
+                            <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{s.score}%</span>
+                          </BlurInline>
+                        ) : (
+                          <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{s.score}%</span>
+                        )}
+                        {isFreeTier ? (
+                          <BlurInline onUnlock={openPaywall}>
+                            <span className="text-[12.5px] text-[var(--ink-faint)]">{s.mentionCount}/{s.totalPrompts} prompts{s.avgRank ? ` · avg #${s.avgRank.toFixed(1)}` : ""}</span>
+                          </BlurInline>
+                        ) : (
+                          <span className="text-[12.5px] text-[var(--ink-faint)]">{s.mentionCount}/{s.totalPrompts} prompts{s.avgRank ? ` · avg #${s.avgRank.toFixed(1)}` : ""}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1388,14 +1452,21 @@ function DashboardPage() {
                               const r = promptResults.find((res) => res.engine === s.engine);
                               const display = r?.brandMentioned ? (r.brandRank ? `#${r.brandRank}` : "✓") : "—";
                               const color = r?.brandMentioned ? "var(--rust)" : "var(--ink-faint)";
+                              const mark = <span className="font-signal-mono text-[11.5px] font-bold" style={{ color }}>{display}</span>;
                               return (
                                 <div key={s.engine} className="flex items-center gap-1.5 w-16 shrink-0">
                                   <EngineIcon engine={s.engine} size={14} />
-                                  <span className="font-signal-mono text-[11.5px] font-bold" style={{ color }}>{display}</span>
+                                  {isFreeTier ? <BlurInline onUnlock={openPaywall}>{mark}</BlurInline> : mark}
                                 </div>
                               );
                             })}
-                            <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0">{visibilityPct}%</span>
+                            {isFreeTier ? (
+                              <BlurInline onUnlock={openPaywall}>
+                                <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0 inline-block">{visibilityPct}%</span>
+                              </BlurInline>
+                            ) : (
+                              <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0">{visibilityPct}%</span>
+                            )}
                           </div>
                         );
                       });
@@ -1416,6 +1487,9 @@ function DashboardPage() {
                   <h2 className="text-xl font-bold text-[var(--ink)] mb-1">Engines</h2>
                   <p className="text-sm text-[var(--ink-faint)] mb-5">Overall AI visibility over time — hover for details</p>
 
+                  {(() => {
+                    const engineBody = (
+                  <>
                   {/* Chart */}
                   {(() => {
                     const runs = [...scanHistory].reverse();
@@ -1553,6 +1627,10 @@ function DashboardPage() {
                       </div>
                     )})}
                   </div>
+                  </>
+                    );
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{engineBody}</BlurBlock> : engineBody;
+                  })()}
                 </>
               )}
             </>
@@ -1993,8 +2071,16 @@ function DashboardPage() {
                       {/* Stat cards */}
                       <div className="grid grid-cols-4 gap-3 mb-5">
                         <StatCard label="Prompts" value={allPrompts.length} sub="tracked" />
-                        <StatCard label="With gaps" value={gaps.length} sub="need articles" />
-                        <StatCard label="Avg visibility" value={overallScore !== null ? `${overallScore}%` : "—"} sub="across engines" />
+                        {isFreeTier ? (
+                          <BlurInline onUnlock={openPaywall}><StatCard label="With gaps" value={gaps.length} sub="need articles" /></BlurInline>
+                        ) : (
+                          <StatCard label="With gaps" value={gaps.length} sub="need articles" />
+                        )}
+                        {isFreeTier ? (
+                          <BlurInline onUnlock={openPaywall}><StatCard label="Avg visibility" value={overallScore !== null ? `${overallScore}%` : "—"} sub="across engines" /></BlurInline>
+                        ) : (
+                          <StatCard label="Avg visibility" value={overallScore !== null ? `${overallScore}%` : "—"} sub="across engines" />
+                        )}
                         <StatCard label="Engines" value={selectedEngines.length} sub="being tracked" />
                       </div>
 
@@ -2050,48 +2136,67 @@ function DashboardPage() {
                               className="group grid grid-cols-[1fr_130px_120px_40px_32px] gap-x-4 px-5 py-4 border-b border-[var(--line)] last:border-0 hover:bg-[var(--line-soft)]/70 transition-colors items-center"
                             >
                               {/* Prompt with visibility ring — clickable */}
-                              <button onClick={() => { setSelectedPromptId(p.id); setSelectedCitationDomain(null); history.pushState(null, ""); }} className="flex items-center gap-3 min-w-0 text-left">
-                                <div className="relative w-11 h-11 shrink-0">
-                                  <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
-                                    <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(48,40,33,0.1)" strokeWidth="3"/>
-                                    <circle cx="22" cy="22" r="18" fill="none" stroke={vis >= 80 ? "#22c55e" : vis >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="3" strokeDasharray={`${vis * 1.131} 113.1`} strokeLinecap="round"/>
-                                  </svg>
-                                  <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[var(--ink)]/80">{vis}%</span>
-                                </div>
+                              <button onClick={() => { if (isFreeTier) { openPaywall(); return; } setSelectedPromptId(p.id); setSelectedCitationDomain(null); history.pushState(null, ""); }} className="flex items-center gap-3 min-w-0 text-left">
+                                {(() => {
+                                  const ring = (
+                                    <div className="relative w-11 h-11 shrink-0">
+                                      <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
+                                        <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(48,40,33,0.1)" strokeWidth="3"/>
+                                        <circle cx="22" cy="22" r="18" fill="none" stroke={vis >= 80 ? "#22c55e" : vis >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="3" strokeDasharray={`${vis * 1.131} 113.1`} strokeLinecap="round"/>
+                                      </svg>
+                                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[var(--ink)]/80">{vis}%</span>
+                                    </div>
+                                  );
+                                  return isFreeTier ? <BlurInline onUnlock={openPaywall}>{ring}</BlurInline> : ring;
+                                })()}
                                 <span className="text-sm text-[var(--ink)]/90 font-medium leading-snug line-clamp-2">{p.text}</span>
                               </button>
                               {/* Engine mention dots */}
-                              <div className="flex items-center gap-2">
-                                {selectedEngines.map((eng) => {
-                                  const r = pr.find((x) => x.engine === eng);
-                                  const mentioned = r?.brandMentioned ?? false;
-                                  const hasData = !!r;
-                                  return (
-                                    <div key={eng} className={`flex items-center gap-1 ${!hasData || !mentioned ? "opacity-35 grayscale" : ""}`} title={`${eng}: ${!hasData ? "no data" : mentioned ? "mentioned" : "not mentioned"}`}>
-                                      <EngineIcon engine={eng} size={14} />
-                                    </div>
-                                  );
-                                })}
-                                {hasGap && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const gapItem = gaps.find((g) => g.promptText === p.text);
-                                      const params = new URLSearchParams({ gapPrompt: p.text, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gapItem?.engines ?? [])), ...(gapItem?.topCompetitor ? { competitor: gapItem.topCompetitor } : {}) });
-                                      window.open(`/article?${params}`, "_blank");
-                                    }}
-                                    className="text-[10px] font-medium text-[var(--ink-faint)] hover:text-[var(--ink)]/80 border border-[var(--line)] hover:border-[var(--line)] px-1.5 py-0.5 rounded transition-colors"
-                                  >
-                                    + Article
-                                  </button>
-                                )}
-                              </div>
+                              {(() => {
+                                const dots = (
+                                  <div className="flex items-center gap-2">
+                                    {selectedEngines.map((eng) => {
+                                      const r = pr.find((x) => x.engine === eng);
+                                      const mentioned = r?.brandMentioned ?? false;
+                                      const hasData = !!r;
+                                      return (
+                                        <div key={eng} className={`flex items-center gap-1 ${!hasData || !mentioned ? "opacity-35 grayscale" : ""}`} title={`${eng}: ${!hasData ? "no data" : mentioned ? "mentioned" : "not mentioned"}`}>
+                                          <EngineIcon engine={eng} size={14} />
+                                        </div>
+                                      );
+                                    })}
+                                    {hasGap && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isFreeTier) { openPaywall(); return; }
+                                          const gapItem = gaps.find((g) => g.promptText === p.text);
+                                          const params = new URLSearchParams({ gapPrompt: p.text, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gapItem?.engines ?? [])), ...(gapItem?.topCompetitor ? { competitor: gapItem.topCompetitor } : {}) });
+                                          window.open(`/article?${params}`, "_blank");
+                                        }}
+                                        className="text-[10px] font-medium text-[var(--ink-faint)] hover:text-[var(--ink)]/80 border border-[var(--line)] hover:border-[var(--line)] px-1.5 py-0.5 rounded transition-colors"
+                                      >
+                                        + Article
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                                return isFreeTier ? <BlurInline onUnlock={openPaywall}>{dots}</BlurInline> : dots;
+                              })()}
                               {/* Competing with */}
-                              <div className="text-xs text-[var(--ink-soft)] truncate">{topCompetitor ?? "—"}</div>
+                              {isFreeTier ? (
+                                <BlurInline onUnlock={openPaywall}><div className="text-xs text-[var(--ink-soft)] truncate">{topCompetitor ?? "—"}</div></BlurInline>
+                              ) : (
+                                <div className="text-xs text-[var(--ink-soft)] truncate">{topCompetitor ?? "—"}</div>
+                              )}
                               {/* Type dot */}
-                              <div className="flex justify-center">
-                                <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
-                              </div>
+                              {isFreeTier ? (
+                                <BlurInline onUnlock={openPaywall}><div className="flex justify-center"><div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} /></div></BlurInline>
+                              ) : (
+                                <div className="flex justify-center">
+                                  <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
+                                </div>
+                              )}
                               {/* Delete */}
                               <div className="flex justify-center">
                                 <button
@@ -2410,36 +2515,39 @@ function DashboardPage() {
                       </div>
 
                       {/* LinkedIn — appears only when a LinkedIn citation is detected */}
-                      {citationDomains.some(([d]) => d.includes("linkedin.com")) && (
-                        <div className="bg-[var(--surface)] border-2 border-blue-400/25 rounded-xl p-4 flex flex-col">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="w-9 h-9 rounded-xl bg-[#0A66C2] flex items-center justify-center shrink-0 shadow-sm">
-                              <span className="text-white font-bold text-sm leading-none">in</span>
+                      {citationDomains.some(([d]) => d.includes("linkedin.com")) && (() => {
+                        const linkedinCard = (
+                          <div className="bg-[var(--surface)] border-2 border-blue-400/25 rounded-xl p-4 flex flex-col">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-9 h-9 rounded-xl bg-[#0A66C2] flex items-center justify-center shrink-0 shadow-sm">
+                                <span className="text-white font-bold text-sm leading-none">in</span>
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-sm font-semibold text-[var(--ink)]">LinkedIn</span>
+                              </div>
+                              <span className="ml-auto text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100 whitespace-nowrap">High impact</span>
                             </div>
-                            <div className="min-w-0">
-                              <span className="text-sm font-semibold text-[var(--ink)]">LinkedIn</span>
-                            </div>
-                            <span className="ml-auto text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100 whitespace-nowrap">High impact</span>
-                          </div>
-                          <p className="text-[11px] text-[var(--ink-soft)] mb-3">Engage on LinkedIn posts to get cited in AI responses and boost your visibility.</p>
-                          <button
-                            onClick={() => {
-                              const linkedinEntry = citationDomains.find(([d]) => d.includes("linkedin.com"));
-                              if (linkedinEntry) {
-                                const instances = citationInstances[linkedinEntry[0]];
-                                if (instances?.[0]) {
-                                  setEngageItem({ url: instances[0].url, promptText: instances[0].promptText, engine: instances[0].engine });
-                                  setEngageDraft("");
+                            <p className="text-[11px] text-[var(--ink-soft)] mb-3">Engage on LinkedIn posts to get cited in AI responses and boost your visibility.</p>
+                            <button
+                              onClick={() => {
+                                const linkedinEntry = citationDomains.find(([d]) => d.includes("linkedin.com"));
+                                if (linkedinEntry) {
+                                  const instances = citationInstances[linkedinEntry[0]];
+                                  if (instances?.[0]) {
+                                    setEngageItem({ url: instances[0].url, promptText: instances[0].promptText, engine: instances[0].engine });
+                                    setEngageDraft("");
+                                  }
                                 }
-                              }
-                            }}
-                            className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#0A66C2] text-white rounded-xl py-2.5 hover:bg-[#004182] transition-colors shadow-sm"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                            Engage
-                          </button>
-                        </div>
-                      )}
+                              }}
+                              className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#0A66C2] text-white rounded-xl py-2.5 hover:bg-[#004182] transition-colors shadow-sm"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                              Engage
+                            </button>
+                          </div>
+                        );
+                        return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{linkedinCard}</BlurBlock> : linkedinCard;
+                      })()}
                     </div>
                   </div>
 
@@ -2471,7 +2579,7 @@ function DashboardPage() {
                       ? citationHistory.map((s) => ({ domain: s.domain, count: s.data[citationChartHover!.idx]?.count ?? 0 })).sort((a,b) => b.count - a.count)
                       : null;
 
-                    return (
+                    const chartBody = (
                       <div className="grid grid-cols-[1fr_300px] gap-4 mb-5">
                         {/* Line / Bar chart */}
                         <div className="panel rounded-xl p-5">
@@ -2613,6 +2721,7 @@ function DashboardPage() {
                         </div>
                       </div>
                     );
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{chartBody}</BlurBlock> : chartBody;
                   })()}
 
                   {/* Search + filter bar */}
@@ -2678,19 +2787,23 @@ function DashboardPage() {
                             const isExpanded = expandedCitationDomains.has(domain);
                             const instances = citationInstances[domain] ?? [];
                             const originalRank = citationDomains.findIndex(([d]) => d === domain) + 1;
+                            const rowLocked = isFreeTier && !isReddit;
 
-                            return (
+                            const row = (
                               <div
                                 key={domain}
                                 className={`border-b border-[var(--line)] last:border-0 ${isReddit ? "border-l-[3px] border-l-blue-400" : ""}`}
                               >
                                 {/* Domain row */}
                                 <button
-                                  onClick={() => setExpandedCitationDomains((prev) => {
-                                    const next = new Set(prev);
-                                    next.has(domain) ? next.delete(domain) : next.add(domain);
-                                    return next;
-                                  })}
+                                  onClick={() => {
+                                    if (rowLocked) { openPaywall(); return; }
+                                    setExpandedCitationDomains((prev) => {
+                                      const next = new Set(prev);
+                                      next.has(domain) ? next.delete(domain) : next.add(domain);
+                                      return next;
+                                    });
+                                  }}
                                   className={`w-full grid grid-cols-[64px_1fr_80px_120px] gap-x-4 px-5 py-4 hover:bg-[var(--line-soft)]/70 transition-colors text-left items-center ${isReddit ? "bg-[#FF4500]/10" : ""}`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0">
@@ -2713,7 +2826,7 @@ function DashboardPage() {
                                 </button>
 
                                 {/* Expanded URL rows */}
-                                {isExpanded && (
+                                {isExpanded && !rowLocked && (
                                   <div className="bg-[var(--line-soft)] border-t border-[var(--line)]">
                                     {instances.length === 0 ? (
                                       <p className="px-6 py-3 text-xs text-[var(--ink-faint)]">No individual URLs available</p>
@@ -2722,7 +2835,9 @@ function DashboardPage() {
                                         const itemIsReddit = item.url.includes("reddit.com");
                                         const urlDisplay = item.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\?.*$/, "");
                                         const promptSnippet = item.promptText.length > 45 ? item.promptText.slice(0, 45) + "…" : item.promptText;
-                                        return (
+                                        // Only the first Reddit instance stays unlocked for free tier — everything past it is blurred.
+                                        const instanceLocked = isFreeTier && isReddit && i > 0;
+                                        const instanceRow = (
                                           <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-6 py-2.5 border-b border-[var(--line)]/60 last:border-0 items-center">
                                             <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-blue-700 hover:underline truncate" title={item.url}>{urlDisplay}</a>
                                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${SOURCE_TYPE_COLORS[getSourceType(domain)] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{getSourceType(domain)}</span>
@@ -2738,12 +2853,14 @@ function DashboardPage() {
                                             )}
                                           </div>
                                         );
+                                        return instanceLocked ? <BlurInline key={i} onUnlock={openPaywall}>{instanceRow}</BlurInline> : instanceRow;
                                       })
                                     )}
                                   </div>
                                 )}
                               </div>
                             );
+                            return rowLocked ? <BlurInline key={domain} onUnlock={openPaywall}>{row}</BlurInline> : row;
                           })}
                         </div>
                       </>
@@ -2894,7 +3011,7 @@ function DashboardPage() {
                     const prevScore = prevRun?.overall_score ?? null;
                     const diff = prevScore !== null ? brandPct - prevScore : null;
 
-                    return (
+                    const sovBody = (
                       <div className="panel rounded-xl p-6">
                         {/* Header */}
                         <div className="flex items-center gap-2 mb-0.5">
@@ -2951,6 +3068,7 @@ function DashboardPage() {
                         )}
                       </div>
                     );
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{sovBody}</BlurBlock> : sovBody;
                   })()}
                 </div>
               )}
@@ -2972,22 +3090,35 @@ function DashboardPage() {
                 <>
                   <div className="mb-5">
                     <h2 className="text-xl font-bold text-[var(--ink)]">Research</h2>
-                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">{gaps.length} queries where {brand.name} isn&apos;t mentioned</p>
+                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">
+                      {isFreeTier ? <BlurInline onUnlock={openPaywall}>{gaps.length} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
+                    </p>
                   </div>
                   <div className="space-y-3">
                     {gaps.map((gap, i) => (
                       <div key={i} className="panel rounded-xl p-4">
                         <p className="text-sm font-medium text-[var(--ink)]/90 mb-2">{gap.promptText}</p>
-                        <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          {gap.engines.map((e) => (
-                            <span key={e} className="text-xs bg-red-500/10 text-red-700 px-2 py-0.5 rounded-full">Not in {ENGINE_LABELS[e as AIEngine]}</span>
-                          ))}
-                          {gap.topCompetitor && (
-                            <span className="text-xs text-[var(--ink-faint)]">· <span className="font-medium text-[var(--ink-soft)]">{gap.topCompetitor}</span> appears instead</span>
-                          )}
-                        </div>
+                        {(() => {
+                          const badges = (
+                            <div className="flex items-center gap-2 mb-3 flex-wrap">
+                              {gap.engines.map((e) => (
+                                <span key={e} className="text-xs bg-red-500/10 text-red-700 px-2 py-0.5 rounded-full">Not in {ENGINE_LABELS[e as AIEngine]}</span>
+                              ))}
+                              {gap.topCompetitor && (
+                                <span className="text-xs text-[var(--ink-faint)]">· <span className="font-medium text-[var(--ink-soft)]">{gap.topCompetitor}</span> appears instead</span>
+                              )}
+                            </div>
+                          );
+                          return isFreeTier ? <BlurInline onUnlock={openPaywall}>{badges}</BlurInline> : badges;
+                        })()}
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs text-[var(--ink-faint)] flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
+                          {isFreeTier ? (
+                            <BlurInline onUnlock={openPaywall}>
+                              <p className="text-xs text-[var(--ink-faint)] flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
+                            </BlurInline>
+                          ) : (
+                            <p className="text-xs text-[var(--ink-faint)] flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
+                          )}
                           {(() => {
                             const existing = savedArticles.find((a) => a.keyword?.toLowerCase() === gap.promptText.toLowerCase());
                             const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
@@ -2998,6 +3129,7 @@ function DashboardPage() {
                                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[existing.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{existing.status}</span>
                                   <button
                                     onClick={() => {
+                                      if (isFreeTier) { openPaywall(); return; }
                                       if (existing.content) sessionStorage.setItem(cacheKey, JSON.stringify({ article: existing.content, title: existing.title, wordCount: existing.wordCount }));
                                       window.open(`/article?${params}`, "_blank");
                                     }}
@@ -3010,7 +3142,7 @@ function DashboardPage() {
                             }
                             return (
                               <button
-                                onClick={() => window.open(`/article?${params}`, "_blank")}
+                                onClick={() => { if (isFreeTier) { openPaywall(); return; } window.open(`/article?${params}`, "_blank"); }}
                                 className="shrink-0 text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
                               >
                                 Write article →
@@ -3421,78 +3553,6 @@ function DashboardPage() {
               </>
             );
           })()}
-
-          {activeTab === "brands" && (
-            <>
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-[var(--ink)]">Brands</h2>
-                  <p className="text-sm text-[var(--ink-faint)] mt-0.5">Your brand profile plus every competitor we track for AI visibility</p>
-                </div>
-                <button className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">+ New brand</button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <StatCard label="Brands Tracked" value={1 + brand.competitors.length} sub="incl. your brand" />
-                <StatCard label="Competitors" value={brand.competitors.length} sub="tracked rivals" />
-                <StatCard label="Aliases" value="—" sub="naming variants" />
-              </div>
-
-              <div className="panel rounded-xl p-5 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-semibold text-[var(--ink)]">Own brand</p>
-                  <button onClick={() => router.push("/setup")} className="text-xs text-[var(--ink-faint)] hover:text-[var(--ink-soft)] border border-[var(--line)] px-2.5 py-1 rounded-lg transition-colors">Edit</button>
-                </div>
-                <div className="flex items-center gap-4 p-4 border border-[var(--line)] rounded-xl">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--rust)] text-[var(--surface)] flex items-center justify-center text-xl font-bold shrink-0">{brandInitial}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[var(--ink)]">{brand.name}</p>
-                    <p className="text-sm text-[var(--rust)]">{brand.domain}</p>
-                  </div>
-                  <div className="text-xs text-[var(--ink-faint)] text-right">
-                    <p>{brand.niche}</p>
-                  </div>
-                </div>
-              </div>
-
-              {brand.competitors.length > 0 && (
-                <div className="panel rounded-xl overflow-hidden">
-                  <div className="px-5 py-4 border-b border-[var(--line)]">
-                    <p className="text-sm font-semibold text-[var(--ink)]">Tracked brands · {brand.competitors.length} competitors</p>
-                  </div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[var(--line)]">
-                        <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Brand</th>
-                        <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Type</th>
-                        <th className="px-5 py-3 text-right text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Share of Voice</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {brand.competitors.map((name) => {
-                        const mentions = results.filter((r) => r.competitorMentions.some((c) => c.name === name)).length;
-                        const pct = results.length > 0 ? Math.round((mentions / results.length) * 100) : null;
-                        return (
-                          <tr key={name} className="hover:bg-[var(--line-soft)]">
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-[var(--line)] flex items-center justify-center text-sm font-bold text-[var(--ink-soft)]">{name[0]?.toUpperCase()}</div>
-                                <span className="text-sm font-medium text-[var(--ink)]/90">{name}</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3">
-                              <span className="text-[10px] font-medium bg-[var(--line)] text-[var(--ink-soft)] px-2 py-0.5 rounded">Competitor</span>
-                            </td>
-                            <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/80 text-right">{pct !== null ? `${pct}%` : "—"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
 
           {/* ALERTS */}
           {activeTab === "alerts" && (
@@ -4148,6 +4208,7 @@ function DashboardPage() {
           </div>
         </div>
       )}
+      {showPaywallModal && <PaywallModal onClose={() => setShowPaywallModal(false)} />}
       {/* ENGAGE PANEL */}
       {engageItem && (() => {
         const engagePlatform = getEngagePlatform(engageItem.url);
@@ -4334,6 +4395,7 @@ function DashboardPage() {
                     <button
                       onClick={async () => {
                         if (!engageDraft.trim()) return;
+                        if (isFreeTier) { openPaywall(); return; }
                         setTaskError("");
                         setTaskSubmitting(true);
                         try {
@@ -4398,6 +4460,7 @@ function DashboardPage() {
                 {!upvoteEnabled && (
                   <button
                     onClick={async () => {
+                      if (isFreeTier) { openPaywall(); return; }
                       setTaskSubmitting(true);
                       try {
                         const res = await fetch("/api/tasks", {
