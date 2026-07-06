@@ -2,6 +2,26 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+});
+
+const workSans = Work_Sans({
+  variable: "--font-work-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 type Keyword = {
   keyword: string;
@@ -32,22 +52,22 @@ type Analysis = {
 };
 
 const DIFFICULTY_COLORS: Record<string, string> = {
-  low: "text-mint",
-  medium: "text-amber",
-  high: "text-rose",
+  low: "text-[var(--olive)]",
+  medium: "text-[var(--rust-deep)]",
+  high: "text-red-700",
 };
 const DIFFICULTY_BG: Record<string, string> = {
-  low: "bg-mint/10 border-mint/25",
-  medium: "bg-amber/10 border-amber/25",
-  high: "bg-rose/10 border-rose/25",
+  low: "bg-[var(--olive-wash)] border-[var(--olive)]/25",
+  medium: "bg-[var(--rust-wash)] border-[var(--rust)]/25",
+  high: "bg-red-500/10 border-red-500/25",
 };
 
 function LogoIcon({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-      <circle cx="16" cy="16" r="6" stroke="#8cf5c3" strokeWidth="2.5" />
-      <circle cx="16" cy="16" r="12.5" stroke="#8cf5c3" strokeWidth="1.8" strokeDasharray="4 5" transform="rotate(-20 16 16)" />
-      <circle cx="26.5" cy="9" r="2.5" fill="#ffb469" />
+      <circle cx="16" cy="16" r="6" stroke="var(--rust)" strokeWidth="2.5" />
+      <circle cx="16" cy="16" r="12.5" stroke="var(--rust)" strokeWidth="1.8" strokeDasharray="4 5" transform="rotate(-20 16 16)" />
+      <circle cx="26.5" cy="9" r="2.5" fill="var(--olive)" />
     </svg>
   );
 }
@@ -144,16 +164,16 @@ function AuditContent() {
   const cleanDomain = domain.replace(/^https?:\/\//, "");
 
   return (
-    <div className="min-h-screen bg-background text-ink" style={{ fontFamily: "var(--font-instrument-sans, system-ui, sans-serif)" }}>
+    <div className="min-h-screen bg-[var(--cream)] text-[var(--ink)]" style={{ fontFamily: "var(--font-work-sans), sans-serif" }}>
       {/* Nav */}
-      <nav className="flex items-center justify-between px-8 py-4 bg-surface border-b border-line">
+      <nav className="flex items-center justify-between px-8 py-4 bg-[var(--surface)] border-b border-[var(--line)]">
         <a href="/" className="flex items-center gap-2">
           <LogoIcon />
-          <span className="text-lg font-bold tracking-tight">RankOn<span className="text-mint">Geo</span></span>
+          <span className="text-lg font-bold tracking-tight">RankOn<span className="text-[var(--rust)]">Geo</span></span>
         </a>
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-white/[0.04] border border-line rounded-lg px-3 py-2 focus-within:border-mint/40 transition-colors">
-            <svg className="w-3.5 h-3.5 text-[#bbb]" fill="none" viewBox="0 0 16 16">
+          <div className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--line)] rounded-lg px-3 py-2 focus-within:border-[var(--rust)]/40 transition-colors">
+            <svg className="w-3.5 h-3.5 text-[var(--ink-faint)]" fill="none" viewBox="0 0 16 16">
               <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" />
               <path d="M8 5v3l1.5 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -162,13 +182,13 @@ function AuditContent() {
               value={inputDomain}
               onChange={(e) => setInputDomain(e.target.value)}
               placeholder="anothersite.com"
-              className="text-sm text-ink bg-transparent outline-none w-48 placeholder-[#bbb]"
+              className="text-sm text-[var(--ink)] bg-transparent outline-none w-48 placeholder:text-[var(--ink-faint)]"
             />
           </div>
           <button
             type="submit"
             disabled={loading || !inputDomain.trim()}
-            className="bg-mint hover:bg-[#a5f8d1] disabled:opacity-50 text-[#062015] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             {loading ? "Scanning…" : "Analyze"}
           </button>
@@ -180,19 +200,19 @@ function AuditContent() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-32 gap-5">
             <div className="relative w-14 h-14">
-              <div className="absolute inset-0 border-2 border-[#37c98d]/20 rounded-full" />
-              <div className="absolute inset-0 border-2 border-[#37c98d] border-t-transparent rounded-full animate-spin" />
+              <div className="absolute inset-0 border-2 border-[var(--rust)]/20 rounded-full" />
+              <div className="absolute inset-0 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-ink/80">Scanning {inputDomain.replace(/^https?:\/\//, "")}…</p>
-              <p className="text-xs text-faint mt-1">Crawling pages · Extracting brand signals · Finding keywords</p>
+              <p className="text-sm font-medium text-[var(--ink)]/80">Scanning {inputDomain.replace(/^https?:\/\//, "")}…</p>
+              <p className="text-xs text-[var(--ink-faint)] mt-1">Crawling pages · Extracting brand signals · Finding keywords</p>
             </div>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="max-w-lg mx-auto mt-16 bg-rose/10 border border-rose/25 rounded-xl px-5 py-4 text-sm text-rose">
+          <div className="max-w-lg mx-auto mt-16 bg-red-500/10 border border-red-500/25 rounded-xl px-5 py-4 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -200,7 +220,7 @@ function AuditContent() {
         {/* Empty state */}
         {!loading && !error && !result && (
           <div className="text-center py-32">
-            <p className="text-faint text-sm">Enter a domain above to run a free audit.</p>
+            <p className="text-[var(--ink-faint)] text-sm">Enter a domain above to run a free audit.</p>
           </div>
         )}
 
@@ -219,55 +239,55 @@ function AuditContent() {
             <div>
               {/* Header */}
               <div className="mb-10">
-                <div className="flex items-center gap-2 text-xs text-faint mb-4">
+                <div className="flex items-center gap-2 text-xs text-[var(--ink-faint)] mb-4">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16"><path d="M2 8a6 6 0 1012 0A6 6 0 002 8z" stroke="currentColor" strokeWidth="1.5" /><path d="M8 5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
                   {result.pageCount} pages scanned · {result.brand.niche}
                 </div>
-                <h1 className="text-4xl font-black tracking-tight leading-tight mb-3 text-ink" style={{ letterSpacing: "-0.02em" }}>
-                  AI visibility report for <span className="text-mint">{cleanDomain}</span>
+                <h1 className="font-signal-serif text-4xl leading-tight mb-3 text-[var(--ink)]" style={{ letterSpacing: "-0.02em" }}>
+                  AI visibility report for <span className="text-[var(--rust)] italic">{cleanDomain}</span>
                 </h1>
-                <p className="text-muted text-sm">Keyword opportunities, competitor intelligence, and a draft article — based on {result.pageCount} scanned pages.</p>
+                <p className="text-[var(--ink-soft)] text-sm">Keyword opportunities, competitor intelligence, and a draft article — based on {result.pageCount} scanned pages.</p>
               </div>
 
               {/* ── STAT CARDS ── */}
               <div className="grid grid-cols-4 gap-3 mb-10">
-                <div className="panel rounded-2xl p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">Opportunity Score</p>
-                  <p className="text-4xl font-black text-ink leading-none mb-1">{opportunityScore}<span className="text-2xl text-faint">%</span></p>
-                  <p className="text-[11px] text-faint">keyword growth potential</p>
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-5">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Opportunity Score</p>
+                  <p className="font-signal-mono text-4xl font-semibold text-[var(--ink)] leading-none mb-1">{opportunityScore}<span className="text-2xl text-[var(--ink-faint)]">%</span></p>
+                  <p className="text-[11px] text-[var(--ink-faint)]">keyword growth potential</p>
                 </div>
-                <div className="panel rounded-2xl p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">AI Engines</p>
-                  <p className="text-4xl font-black text-ink leading-none mb-1">7</p>
-                  <p className="text-[11px] text-faint">ChatGPT · Claude · Gemini + 4</p>
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-5">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">AI Engines</p>
+                  <p className="font-signal-mono text-4xl font-semibold text-[var(--ink)] leading-none mb-1">7</p>
+                  <p className="text-[11px] text-[var(--ink-faint)]">ChatGPT · Claude · Gemini + 4</p>
                 </div>
-                <div className="panel rounded-2xl p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">Keywords Found</p>
-                  <p className="text-4xl font-black text-ink leading-none mb-1">{result.keywords.length}</p>
-                  <p className="text-[11px] text-faint">AI search opportunities</p>
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-5">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Keywords Found</p>
+                  <p className="font-signal-mono text-4xl font-semibold text-[var(--ink)] leading-none mb-1">{result.keywords.length}</p>
+                  <p className="text-[11px] text-[var(--ink-faint)]">AI search opportunities</p>
                 </div>
-                <div className="panel rounded-2xl p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">Competitors</p>
-                  <p className="text-4xl font-black text-ink leading-none mb-1">{competitors.length}</p>
-                  <p className="text-[11px] text-faint">identified from your site</p>
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-5">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Competitors</p>
+                  <p className="font-signal-mono text-4xl font-semibold text-[var(--ink)] leading-none mb-1">{competitors.length}</p>
+                  <p className="text-[11px] text-[var(--ink-faint)]">identified from your site</p>
                 </div>
               </div>
 
               {/* ── COMPETITOR LEADERBOARD ── */}
               {leaderboard.length > 0 && (
-                <div className="panel rounded-2xl p-7 mb-10">
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-7 mb-10">
                   <div className="flex items-center justify-between mb-5">
                     <div>
-                      <h2 className="text-base font-bold text-ink">How you compare</h2>
-                      <p className="text-xs text-faint mt-0.5">Estimated AI share of voice across your competitor set</p>
+                      <h2 className="text-base font-bold text-[var(--ink)]">How you compare</h2>
+                      <p className="text-xs text-[var(--ink-faint)] mt-0.5">Estimated AI share of voice across your competitor set</p>
                     </div>
-                    <span className="text-[10px] bg-amber/10 border border-amber/25 text-amber px-2.5 py-1 rounded-full font-medium uppercase tracking-wide">Estimated</span>
+                    <span className="text-[10px] bg-[var(--rust-wash)] border border-[var(--rust)]/25 text-[var(--rust-deep)] px-2.5 py-1 rounded-full font-medium uppercase tracking-wide">Estimated</span>
                   </div>
                   <div className="space-y-3">
                     {leaderboard.map((comp, i) => (
                       <div key={comp.name} className="flex items-center gap-4">
-                        <span className="text-xs text-faint w-5 text-right shrink-0">#{i + 1}</span>
-                        <div className="w-7 h-7 rounded-md bg-white/[0.06] flex items-center justify-center shrink-0">
+                        <span className="text-xs text-[var(--ink-faint)] w-5 text-right shrink-0">#{i + 1}</span>
+                        <div className="w-7 h-7 rounded-md bg-[var(--line-soft)] flex items-center justify-center shrink-0">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={`https://www.google.com/s2/favicons?domain=${comp.name.includes(".") ? comp.name : comp.name + ".com"}&sz=16`}
@@ -280,17 +300,17 @@ function AuditContent() {
                             }}
                           />
                         </div>
-                        <span className="text-sm text-ink/80 w-40 shrink-0 truncate">{comp.name}</span>
-                        <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#d0cac3] rounded-full" style={{ width: `${comp.score}%` }} />
+                        <span className="text-sm text-[var(--ink)]/80 w-40 shrink-0 truncate">{comp.name}</span>
+                        <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                          <div className="h-full bg-[#60a5fa] rounded-full" style={{ width: `${comp.score}%` }} />
                         </div>
-                        <span className="text-sm font-semibold text-muted w-10 text-right shrink-0">{comp.score}%</span>
+                        <span className="text-sm font-semibold text-[var(--ink-soft)] w-10 text-right shrink-0">{comp.score}%</span>
                       </div>
                     ))}
                     {/* User's domain - locked */}
-                    <div className="flex items-center gap-4 mt-1 pt-3 border-t border-[#f0ece6]">
-                      <span className="text-xs text-mint font-bold w-5 text-right shrink-0">#{leaderboard.length + 1}</span>
-                      <div className="w-7 h-7 rounded-md border border-[#37c98d]/30 bg-mint-deep/5 flex items-center justify-center shrink-0">
+                    <div className="flex items-center gap-4 mt-1 pt-3 border-t border-[var(--line)]">
+                      <span className="text-xs text-[var(--rust)] font-bold w-5 text-right shrink-0">#{leaderboard.length + 1}</span>
+                      <div className="w-7 h-7 rounded-md border border-[var(--rust)]/30 bg-[var(--rust-wash)] flex items-center justify-center shrink-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=16`}
@@ -303,12 +323,12 @@ function AuditContent() {
                           }}
                         />
                       </div>
-                      <span className="text-sm font-bold text-mint w-40 shrink-0 truncate">{cleanDomain}</span>
-                      <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                        <div className="h-full bg-mint-deep/30 rounded-full" style={{ width: "20%" }} />
+                      <span className="text-sm font-bold text-[var(--rust)] w-40 shrink-0 truncate">{cleanDomain}</span>
+                      <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                        <div className="h-full bg-[var(--rust)]/30 rounded-full" style={{ width: "20%" }} />
                       </div>
                       <div className="flex items-center gap-1.5 w-10 text-right shrink-0">
-                        <span className="text-[11px] text-faint"><LockIcon /> Sign up</span>
+                        <span className="text-[11px] text-[var(--ink-faint)]"><LockIcon /> Sign up</span>
                       </div>
                     </div>
                   </div>
@@ -317,7 +337,7 @@ function AuditContent() {
                       const p = new URLSearchParams({ domain });
                       router.push(`/setup?${p}`);
                     }}
-                    className="mt-5 w-full text-xs font-medium text-mint hover:text-[#b02f26] py-2 border border-[#37c98d]/20 hover:border-[#37c98d]/40 rounded-lg transition-colors"
+                    className="mt-5 w-full text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)] py-2 border border-[var(--rust)]/20 hover:border-[var(--rust)]/40 rounded-lg transition-colors"
                   >
                     Sign up to see your real AI visibility score →
                   </button>
@@ -327,33 +347,33 @@ function AuditContent() {
               {/* ── BRAND + KEYWORDS (side by side) ── */}
               <div className="grid grid-cols-2 gap-6 mb-6 items-start">
                 {/* Brand snapshot */}
-                <div className="panel rounded-2xl p-7">
+                <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-7">
                   <div className="flex items-center gap-2 mb-5">
-                    <svg className="w-3.5 h-3.5 text-mint" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" /><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                    <span className="text-xs font-semibold text-ink/80 uppercase tracking-widest">Brand Snapshot</span>
+                    <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" /><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                    <span className="text-xs font-semibold text-[var(--ink)]/80 uppercase tracking-widest">Brand Snapshot</span>
                   </div>
                   <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-2xl font-black text-ink tracking-tight">{result.brand.name}</h2>
-                    <span className="text-[10px] border border-line text-faint px-2 py-0.5 rounded uppercase tracking-widest font-medium">
+                    <h2 className="font-signal-serif text-2xl text-[var(--ink)] tracking-tight">{result.brand.name}</h2>
+                    <span className="text-[10px] border border-[var(--line)] text-[var(--ink-faint)] px-2 py-0.5 rounded uppercase tracking-widest font-medium">
                       {result.brand.adjective}
                     </span>
                   </div>
-                  <div className="text-xs text-faint mb-1 uppercase tracking-wide font-medium">Niche</div>
-                  <p className="text-sm font-medium text-ink/80 mb-4">{result.brand.niche}</p>
-                  <p className="text-sm text-muted leading-relaxed mb-5 border-b border-[#f0ece8] pb-5">{result.brand.description}</p>
+                  <div className="text-xs text-[var(--ink-faint)] mb-1 uppercase tracking-wide font-medium">Niche</div>
+                  <p className="text-sm font-medium text-[var(--ink)]/80 mb-4">{result.brand.niche}</p>
+                  <p className="text-sm text-[var(--ink-soft)] leading-relaxed mb-5 border-b border-[var(--line)] pb-5">{result.brand.description}</p>
                   <div className="mb-4">
-                    <div className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">Target Audience</div>
+                    <div className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Target Audience</div>
                     <div className="flex flex-wrap gap-1.5">
                       {result.brand.targetAudience.map((a) => (
-                        <span key={a} className="text-xs bg-white/[0.06] text-muted px-2.5 py-1 rounded-full">{a}</span>
+                        <span key={a} className="text-xs bg-[var(--line-soft)] text-[var(--ink-soft)] px-2.5 py-1 rounded-full">{a}</span>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-widest text-faint font-medium mb-2">Competitors</div>
+                    <div className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Competitors</div>
                     <div className="flex flex-wrap gap-1.5">
                       {result.brand.competitors.map((c) => (
-                        <span key={c} className="text-xs bg-mint/10 border border-mint/25 text-mint px-2.5 py-1 rounded-full">{c}</span>
+                        <span key={c} className="text-xs bg-[var(--rust-wash)] border border-[var(--rust)]/25 text-[var(--rust-deep)] px-2.5 py-1 rounded-full">{c}</span>
                       ))}
                     </div>
                   </div>
@@ -362,22 +382,22 @@ function AuditContent() {
                 {/* Keywords */}
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    <svg className="w-3.5 h-3.5 text-mint" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" /><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                    <span className="text-xs font-semibold text-ink/80 uppercase tracking-widest">Keyword Opportunities</span>
+                    <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" /><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                    <span className="text-xs font-semibold text-[var(--ink)]/80 uppercase tracking-widest">Keyword Opportunities</span>
                   </div>
                   <div className="space-y-2">
                     {result.keywords.map((kw, i) => (
-                      <div key={i} className="panel rounded-xl px-4 py-3.5 hover:border-[#c8c0b8] transition-colors">
+                      <div key={i} className="bg-[var(--surface)] border border-[var(--line)] rounded-xl px-4 py-3.5 hover:border-[var(--rust)]/30 transition-colors">
                         <div className="flex items-start justify-between gap-3 mb-1">
-                          <p className="text-sm font-semibold text-ink leading-snug">{kw.keyword}</p>
+                          <p className="text-sm font-semibold text-[var(--ink)] leading-snug">{kw.keyword}</p>
                           <div className={`flex items-center gap-1 shrink-0 text-[10px] border px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_BG[kw.difficulty]} ${DIFFICULTY_COLORS[kw.difficulty]}`}>
                             {kw.difficulty}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-[10px] uppercase tracking-widest text-faint font-medium">{kw.intent}</span>
+                          <span className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium">{kw.intent}</span>
                         </div>
-                        <p className="text-xs text-faint leading-relaxed">{kw.rationale}</p>
+                        <p className="text-xs text-[var(--ink-faint)] leading-relaxed">{kw.rationale}</p>
                       </div>
                     ))}
                   </div>
@@ -385,22 +405,22 @@ function AuditContent() {
               </div>
 
               {/* ── AI ANSWERS PREVIEW (blurred/locked) ── */}
-              <div className="panel rounded-2xl overflow-hidden mb-6">
-                <div className="px-7 pt-7 pb-5 border-b border-[#f0ece8]">
+              <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl overflow-hidden mb-6">
+                <div className="px-7 pt-7 pb-5 border-b border-[var(--line)]">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <svg className="w-3.5 h-3.5 text-mint" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                        <span className="text-xs font-semibold text-ink/80 uppercase tracking-widest">What AI says about your category</span>
+                        <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                        <span className="text-xs font-semibold text-[var(--ink)]/80 uppercase tracking-widest">What AI says about your category</span>
                       </div>
-                      <p className="text-xs text-faint">How ChatGPT and Claude respond to your top queries</p>
+                      <p className="text-xs text-[var(--ink-faint)]">How ChatGPT and Claude respond to your top queries</p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="flex items-center gap-1 text-[10px] bg-white/[0.04] border border-line px-2 py-1 rounded-full text-muted font-medium">
+                      <span className="flex items-center gap-1 text-[10px] bg-[var(--line-soft)] border border-[var(--line)] px-2 py-1 rounded-full text-[var(--ink-soft)] font-medium">
                         <img src="/openai.svg" alt="ChatGPT" className="h-2.5 w-auto" style={{ filter: "brightness(0) opacity(0.5)" }} />
                         ChatGPT
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] bg-white/[0.04] border border-line px-2 py-1 rounded-full text-muted font-medium">
+                      <span className="flex items-center gap-1 text-[10px] bg-[var(--line-soft)] border border-[var(--line)] px-2 py-1 rounded-full text-[var(--ink-soft)] font-medium">
                         <img src="/claude.svg" alt="Claude" className="h-2.5 w-auto" style={{ filter: "brightness(0) opacity(0.5)" }} />
                         Claude
                       </span>
@@ -412,10 +432,10 @@ function AuditContent() {
                   <div className="px-7 py-5 select-none" style={{ filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
                     <div className="mb-5">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-semibold bg-mint/10 text-mint border border-mint/20 px-2 py-0.5 rounded-full uppercase tracking-wide">ChatGPT</span>
-                        <span className="text-xs text-faint truncate">{result.keywords[0]?.keyword ?? "What is " + result.brand.name + "?"}</span>
+                        <span className="text-[10px] font-semibold bg-[var(--rust-wash)] text-[var(--rust-deep)] border border-[var(--rust)]/20 px-2 py-0.5 rounded-full uppercase tracking-wide">ChatGPT</span>
+                        <span className="text-xs text-[var(--ink-faint)] truncate">{result.keywords[0]?.keyword ?? "What is " + result.brand.name + "?"}</span>
                       </div>
-                      <div className="text-sm text-muted leading-relaxed">
+                      <div className="text-sm text-[var(--ink-soft)] leading-relaxed">
                         <strong>{result.brand.name}</strong> is widely regarded as one of the leading solutions in {result.brand.niche}.
                         It offers a comprehensive approach that {result.brand.description.slice(0, 80)}…
                         When comparing options in this category, it stands out for its developer-friendly API, cross-platform support,
@@ -425,10 +445,10 @@ function AuditContent() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-semibold bg-orange-400/10 text-orange-300 border border-orange-400/25 px-2 py-0.5 rounded-full uppercase tracking-wide">Claude</span>
-                        <span className="text-xs text-faint truncate">{result.keywords[1]?.keyword ?? "best tools for " + result.brand.niche}</span>
+                        <span className="text-[10px] font-semibold bg-orange-500/10 text-orange-700 border border-orange-500/25 px-2 py-0.5 rounded-full uppercase tracking-wide">Claude</span>
+                        <span className="text-xs text-[var(--ink-faint)] truncate">{result.keywords[1]?.keyword ?? "best tools for " + result.brand.niche}</span>
                       </div>
-                      <div className="text-sm text-muted leading-relaxed">
+                      <div className="text-sm text-[var(--ink-soft)] leading-relaxed">
                         For {result.brand.niche}, several tools stand out: {result.brand.name} is increasingly popular due to its
                         modern architecture and strong documentation. {result.brand.competitors[0] ?? "Alternatives"} remains the most widely used,
                         though teams migrating to newer stacks often cite {result.brand.name} as the preferred choice for
@@ -437,19 +457,19 @@ function AuditContent() {
                     </div>
                   </div>
                   {/* Lock overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[1px]">
-                    <div className="panel rounded-2xl px-8 py-6 text-center shadow-lg max-w-sm">
-                      <div className="w-10 h-10 bg-white/[0.06] rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke="#888" strokeWidth="1.5" /><path d="M5 7V5a3 3 0 016 0v2" stroke="#888" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--cream)]/70 backdrop-blur-[2px]">
+                    <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl px-8 py-6 text-center shadow-lg max-w-sm">
+                      <div className="w-10 h-10 bg-[var(--line-soft)] rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke="currentColor" className="text-[var(--ink-faint)]" strokeWidth="1.5" /><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" className="text-[var(--ink-faint)]" strokeWidth="1.5" strokeLinecap="round" /></svg>
                       </div>
-                      <p className="text-sm font-semibold text-ink mb-1">See how AI answers your queries</p>
-                      <p className="text-xs text-faint mb-4">Track real ChatGPT, Claude, Gemini + 4 more responses — and see if your brand is mentioned.</p>
+                      <p className="text-sm font-semibold text-[var(--ink)] mb-1">See how AI answers your queries</p>
+                      <p className="text-xs text-[var(--ink-faint)] mb-4">Track real ChatGPT, Claude, Gemini + 4 more responses — and see if your brand is mentioned.</p>
                       <button
                         onClick={() => {
                           const p = new URLSearchParams({ domain });
                           router.push(`/setup?${p}`);
                         }}
-                        className="w-full bg-mint hover:bg-[#a5f8d1] text-[#062015] text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                        className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] text-sm font-semibold py-2.5 rounded-xl transition-colors"
                       >
                         Start free tracking →
                       </button>
@@ -459,31 +479,31 @@ function AuditContent() {
               </div>
 
               {/* ── ARTICLE DRAFT ── */}
-              <div className="panel rounded-2xl p-7">
+              <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-7">
                 <div className="flex items-center gap-2 mb-5">
-                  <svg className="w-3.5 h-3.5 text-mint" fill="none" viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" /><path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                  <span className="text-xs font-semibold text-ink/80 uppercase tracking-widest">Article We&apos;d Write For You</span>
+                  <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" /><path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                  <span className="text-xs font-semibold text-[var(--ink)]/80 uppercase tracking-widest">Article We&apos;d Write For You</span>
                 </div>
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-[10px] uppercase tracking-widest text-faint font-medium">Targeting:</span>
-                  <span className="text-[10px] text-muted font-medium">{result.article.targetKeyword}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium">Targeting:</span>
+                  <span className="text-[10px] text-[var(--ink-soft)] font-medium">{result.article.targetKeyword}</span>
                 </div>
-                <h3 className="text-xl font-black text-ink tracking-tight mb-4">{result.article.title}</h3>
+                <h3 className="font-signal-serif text-xl text-[var(--ink)] tracking-tight mb-4">{result.article.title}</h3>
                 {result.article.intro && (
-                  <p className="italic text-muted text-sm leading-relaxed mb-6 border-l-2 border-line pl-4">
+                  <p className="italic text-[var(--ink-soft)] text-sm leading-relaxed mb-6 border-l-2 border-[var(--line)] pl-4">
                     {result.article.intro}
                   </p>
                 )}
                 <div className="grid grid-cols-3 gap-2.5 mb-6">
                   {result.article.sections.map((s, i) => (
-                    <div key={i} className="bg-background border border-line rounded-xl px-4 py-3 flex items-center gap-3">
-                      <div className="w-5 h-5 bg-mint text-[#062015] rounded flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</div>
-                      <span className="text-xs text-ink/80 font-medium leading-snug">{s}</span>
+                    <div key={i} className="bg-[var(--cream)] border border-[var(--line)] rounded-xl px-4 py-3 flex items-center gap-3">
+                      <div className="w-5 h-5 bg-[var(--rust)] text-[var(--surface)] rounded flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</div>
+                      <span className="text-xs text-[var(--ink)]/80 font-medium leading-snug">{s}</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between pt-5 border-t border-[#f0ece8]">
-                  <div className="flex items-center gap-4 text-faint text-xs">
+                <div className="flex items-center justify-between pt-5 border-t border-[var(--line)]">
+                  <div className="flex items-center gap-4 text-[var(--ink-faint)] text-xs">
                     <span className="flex items-center gap-1">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
                       ~{result.article.wordCount.toLocaleString()} words
@@ -506,7 +526,7 @@ function AuditContent() {
                       });
                       router.push(`/article?${params}`);
                     }}
-                    className="text-xs font-semibold text-mint hover:text-[#a5f8d1] flex items-center gap-1 transition-colors"
+                    className="text-xs font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] flex items-center gap-1 transition-colors"
                   >
                     Preview article →
                   </button>
@@ -518,17 +538,17 @@ function AuditContent() {
 
         {/* Pricing section */}
         {showPricing && result && (
-          <div ref={pricingRef} className="mt-20 pt-16 border-t border-line">
+          <div ref={pricingRef} className="mt-20 pt-16 border-t border-[var(--line)]">
             <div className="mb-10">
-              <h2 className="text-3xl font-black text-ink tracking-tight mb-2">Start tracking in 60 seconds.</h2>
-              <p className="text-muted text-sm">
-                <span className="font-semibold text-ink">{result.keywords.length} keyword opportunities</span> found for {cleanDomain}. Every plan ships measurement, research, generation, and publishing.
+              <h2 className="font-signal-serif text-3xl text-[var(--ink)] tracking-tight mb-2">Start tracking in 60 seconds.</h2>
+              <p className="text-[var(--ink-soft)] text-sm">
+                <span className="font-semibold text-[var(--ink)]">{result.keywords.length} keyword opportunities</span> found for {cleanDomain}. Every plan ships measurement, research, generation, and publishing.
               </p>
             </div>
             <div className="flex items-center gap-2 mb-10">
-              <button onClick={() => setBilling("monthly")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${billing === "monthly" ? "bg-mint text-[#062015]" : "text-muted hover:text-ink"}`}>Monthly</button>
-              <button onClick={() => setBilling("annual")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${billing === "annual" ? "bg-mint text-[#062015]" : "text-muted hover:text-ink"}`}>
-                Annual <span className="text-xs bg-mint/15 text-mint px-1.5 py-0.5 rounded font-semibold">−17%</span>
+              <button onClick={() => setBilling("monthly")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${billing === "monthly" ? "bg-[var(--rust)] text-[var(--surface)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>Monthly</button>
+              <button onClick={() => setBilling("annual")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${billing === "annual" ? "bg-[var(--rust)] text-[var(--surface)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>
+                Annual <span className="text-xs bg-[var(--rust-wash)] text-[var(--rust-deep)] px-1.5 py-0.5 rounded font-semibold">−17%</span>
               </button>
             </div>
             <div className="grid grid-cols-4 gap-4 items-start">
@@ -538,42 +558,42 @@ function AuditContent() {
                 { name: "Business", desc: "For growing brands.", price: billing === "annual" ? "82" : "99", cta: "Get started →", action: () => startCheckout("growth"), highlight: true, features: ["100 credits for Reddit upvotes", "3 websites", "150 tracked prompts", "6,000 AI responses/mo", "6 AI engines", "Daily updates", "Gap detection", "7 competitors", "Auto-publish"] },
                 { name: "Scale", desc: "For teams — full autopilot.", price: billing === "annual" ? "124" : "149", cta: "Get started →", action: () => startCheckout("enterprise"), highlight: false, features: ["150 credits for Reddit upvotes", "10 websites", "400 tracked prompts", "15,000 AI responses/mo", "All 7 AI engines", "Unlimited seats", "Full autopilot"] },
               ].map((plan) => (
-                <div key={plan.name} className={`rounded-2xl p-6 ${plan.highlight ? "bg-gradient-to-b from-mint/10 to-mint/[0.02] shadow-[inset_0_0_0_1px_rgba(140,245,195,0.3)]" : "panel"}`}>
-                  {plan.highlight && <span className="inline-block text-xs bg-mint text-[#062015] font-semibold px-3 py-1 rounded-full mb-3">Most picked</span>}
-                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? "text-mint" : "text-ink"}`}>{plan.name}</p>
-                  <p className="text-xs mb-5 text-faint">{plan.desc}</p>
+                <div key={plan.name} className={`rounded-2xl p-6 bg-[var(--surface)] ${plan.highlight ? "border-2 border-[var(--rust)]/30" : "border border-[var(--line)]"}`}>
+                  {plan.highlight && <span className="inline-block text-xs bg-[var(--rust)] text-[var(--surface)] font-semibold px-3 py-1 rounded-full mb-3">Most picked</span>}
+                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? "text-[var(--rust)]" : "text-[var(--ink)]"}`}>{plan.name}</p>
+                  <p className="text-xs mb-5 text-[var(--ink-faint)]">{plan.desc}</p>
                   <div className="flex items-end gap-1 mb-6">
-                    <span className="text-4xl font-black text-ink">${plan.price}</span>
-                    <span className="text-faint text-sm mb-1">/ month</span>
+                    <span className="font-signal-mono text-4xl font-semibold text-[var(--ink)]">${plan.price}</span>
+                    <span className="text-[var(--ink-faint)] text-sm mb-1">/ month</span>
                   </div>
                   <button
                     onClick={plan.action}
                     disabled={checkingOut}
-                    className={`w-full text-sm font-medium py-2.5 rounded-lg transition-colors mb-6 disabled:opacity-50 ${plan.highlight ? "bg-mint hover:bg-[#a5f8d1] text-[#062015]" : "border border-line hover:border-line-2 text-ink"}`}
+                    className={`w-full text-sm font-medium py-2.5 rounded-lg transition-colors mb-6 disabled:opacity-50 ${plan.highlight ? "bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)]" : "border border-[var(--line)] hover:border-[var(--rust)]/30 text-[var(--ink)]"}`}
                   >
                     {plan.cta}
                   </button>
                   <ul className="space-y-2">
                     {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-xs text-muted">
-                        <span className="text-faint/70">—</span>{f}
+                      <li key={f} className="flex items-center gap-2 text-xs text-[var(--ink-soft)]">
+                        <span className="text-[var(--ink-faint)]/70">—</span>{f}
                       </li>
                     ))}
                   </ul>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-faint mt-6 text-center">Cancel anytime. Your data for <span className="font-medium">{cleanDomain}</span> transfers to your account automatically.</p>
+            <p className="text-xs text-[var(--ink-faint)] mt-6 text-center">Cancel anytime. Your data for <span className="font-medium">{cleanDomain}</span> transfers to your account automatically.</p>
           </div>
         )}
       </main>
 
       {/* Sticky footer bar */}
       {result && !loading && (
-        <div className="fixed bottom-0 inset-x-0 bg-surface border-t border-line px-8 py-3.5 flex items-center justify-between z-50" style={{ boxShadow: "0 -4px 24px rgba(0,0,0,0.06)" }}>
+        <div className="fixed bottom-0 inset-x-0 bg-[var(--surface)] border-t border-[var(--line)] px-8 py-3.5 flex items-center justify-between z-50" style={{ boxShadow: "0 -4px 24px rgba(48,40,33,0.08)" }}>
           <div>
-            <p className="text-sm text-muted">
-              <span className="font-semibold text-ink">{cleanDomain}</span>
+            <p className="text-sm text-[var(--ink-soft)]">
+              <span className="font-semibold text-[var(--ink)]">{cleanDomain}</span>
               {" · "}
               <span>{result.keywords.length} keyword opportunities</span>
               {" · "}
@@ -581,7 +601,7 @@ function AuditContent() {
             </p>
           </div>
           {showPricing ? (
-            <button onClick={() => { setShowPricing(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-sm font-medium text-muted hover:text-ink transition-colors">
+            <button onClick={() => { setShowPricing(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-sm font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors">
               ← Back to results
             </button>
           ) : (
@@ -590,7 +610,7 @@ function AuditContent() {
                 setShowPricing(true);
                 setTimeout(() => pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
               }}
-              className="bg-mint hover:bg-[#a5f8d1] text-[#062015] text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+              className="bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
             >
               Start free tracking →
             </button>
@@ -602,9 +622,26 @@ function AuditContent() {
 }
 
 export default function AuditPage() {
+  const signalVars = {
+    "--cream": "oklch(0.965 0.013 80)",
+    "--surface": "oklch(0.99 0.006 80)",
+    "--ink": "oklch(0.19 0.014 55)",
+    "--ink-soft": "oklch(0.46 0.02 55)",
+    "--ink-faint": "oklch(0.62 0.02 60)",
+    "--rust": "oklch(0.56 0.15 38)",
+    "--rust-deep": "oklch(0.46 0.14 36)",
+    "--rust-wash": "oklch(0.56 0.15 38 / 12%)",
+    "--olive": "oklch(0.52 0.1 130)",
+    "--olive-wash": "oklch(0.52 0.1 130 / 12%)",
+    "--line": "oklch(0.19 0.014 55 / 10%)",
+    "--line-soft": "oklch(0.19 0.014 55 / 6%)",
+  } as React.CSSProperties;
+
   return (
-    <Suspense>
-      <AuditContent />
-    </Suspense>
+    <div className={`${instrumentSerif.variable} ${workSans.variable} ${ibmPlexMono.variable}`} style={signalVars}>
+      <Suspense>
+        <AuditContent />
+      </Suspense>
+    </div>
   );
 }
