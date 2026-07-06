@@ -386,7 +386,9 @@ function DashboardPage() {
   const [upvoteSpeed, setUpvoteSpeed] = useState<"slow" | "normal" | "fast">("normal");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [taskSubmitted, setTaskSubmitted] = useState(false);
+  const [taskError, setTaskError] = useState("");
   const [engageTasks, setEngageTasks] = useState<EngageTask[]>([]);
+  const [credits, setCredits] = useState<{ plan: string | null; balance: number } | null>(null);
   const [taskFilter, setTaskFilter] = useState<"pending" | "completed">("pending");
   const [hoveredScanIdx, setHoveredScanIdx] = useState<number | null>(null);
   // Citations page state
@@ -479,6 +481,10 @@ function DashboardPage() {
     fetch("/api/reddit/connection").then((r) => r.json()).then((d) => {
       setRedditConnected(d.connected);
       setRedditUsername(d.username);
+    });
+
+    fetch("/api/credits").then((r) => r.json()).then((d) => {
+      if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance });
     });
 
 
@@ -1186,6 +1192,12 @@ function DashboardPage() {
         </nav>
 
         <div className="mx-1 mb-3 mt-3 shrink-0 pt-3 border-t border-[var(--line)]">
+          {credits && (
+            <div className="mb-2 flex items-center justify-between rounded-[10px] bg-[var(--rust-wash)] px-3 py-2">
+              <span className="text-xs font-medium text-[var(--rust-deep)]">Credits</span>
+              <span className="font-signal-mono text-xs font-bold text-[var(--rust-deep)]">{credits.balance}</span>
+            </div>
+          )}
           <div className="rounded-[10px] px-2 py-2 flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">
               {userEmail[0]?.toUpperCase() ?? "U"}
@@ -3649,7 +3661,7 @@ function DashboardPage() {
                                   {task.upvotesOrdered} upvotes ordered
                                 </span>
                                 <span className="capitalize">{task.deliverySpeed} delivery</span>
-                                <span className="font-medium text-[var(--ink-soft)]">${(task.upvotesOrdered * 0.10).toFixed(2)}</span>
+                                <span className="font-medium text-[var(--ink-soft)]">{task.upvotesOrdered * 0.5} credits</span>
                               </>
                             ) : (
                               <span>No upvotes ordered</span>
@@ -3745,7 +3757,7 @@ function DashboardPage() {
                                     {task.upvotesOrdered > 0 ? (
                                       <span className="flex items-center gap-1">
                                         <svg className="w-3 h-3 text-[#FF4500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 8H4z"/></svg>
-                                        {task.upvotesOrdered} upvotes · <span className="capitalize">{task.deliverySpeed}</span> · ${(task.upvotesOrdered * 0.10).toFixed(2)}
+                                        {task.upvotesOrdered} upvotes · <span className="capitalize">{task.deliverySpeed}</span> · {task.upvotesOrdered * 0.5} credits
                                       </span>
                                     ) : <span>No upvotes</span>}
                                   </div>
@@ -4141,7 +4153,7 @@ function DashboardPage() {
         const platformMeta = ENGAGE_PLATFORMS[engagePlatform];
         return (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); }} />
+          <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); setTaskError(""); }} />
           <div className="w-[420px] h-full bg-[var(--surface)] shadow-2xl flex flex-col overflow-hidden border-l border-[var(--line)]">
             {/* Header */}
             <div className="px-5 py-4 border-b border-[var(--line)] flex items-center gap-3">
@@ -4159,7 +4171,7 @@ function DashboardPage() {
                 <p className="text-sm font-semibold text-[var(--ink)]">Engage on {platformMeta.label}</p>
                 <p className="text-xs text-[var(--ink-faint)]">Draft a reply to influence this citation</p>
               </div>
-              <button onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); }} className="ml-auto text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+              <button onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); setTaskError(""); }} className="ml-auto text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -4293,9 +4305,14 @@ function DashboardPage() {
                             </div>
                           </div>
                           <div className="flex items-center justify-between text-[10px] text-[var(--ink-faint)] bg-[var(--line-soft)] rounded-lg px-3 py-2">
-                            <span>{upvoteQty} upvotes × $0.10</span>
-                            <span className="font-semibold text-[var(--ink)]/80">${(upvoteQty * 0.10).toFixed(2)}</span>
+                            <span>{upvoteQty} upvotes × 0.5 credits</span>
+                            <span className="font-semibold text-[var(--ink)]/80">{upvoteQty * 0.5} credits</span>
                           </div>
+                          {credits && upvoteQty * 0.5 > credits.balance && (
+                            <p className="text-[10px] text-red-700 bg-red-500/10 rounded-lg px-3 py-2 leading-relaxed">
+                              Not enough credits — need {upvoteQty * 0.5}, have {credits.balance}.
+                            </p>
+                          )}
                           <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)]/10 rounded-lg px-3 py-2 leading-relaxed">Comments under 200 chars have ~35% removal rate. Keep replies natural and helpful.</p>
                         </div>
                       )}
@@ -4309,37 +4326,49 @@ function DashboardPage() {
             {!taskSubmitted && (
               <div className="px-5 py-4 border-t border-[var(--line)] space-y-2">
                 {upvoteEnabled ? (
-                  <button
-                    onClick={async () => {
-                      if (!engageDraft.trim()) return;
-                      setTaskSubmitting(true);
-                      try {
-                        const res = await fetch("/api/tasks", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            brandId: brand.id,
-                            url: engageItem.url,
-                            promptText: engageItem.promptText,
-                            engine: engageItem.engine,
-                            replyText: engageDraft,
-                            upvotesOrdered: upvoteQty,
-                            deliverySpeed: upvoteSpeed,
-                          }),
-                        });
-                        if (res.ok) {
-                          const d = await res.json();
-                          setEngageTasks((prev) => [d.task ? { id: d.task.id, brandId: d.task.brand_id, url: d.task.url, promptText: d.task.prompt_text, engine: d.task.engine, replyText: d.task.reply_text, upvotesOrdered: d.task.upvotes_ordered, deliverySpeed: d.task.delivery_speed, status: d.task.status, createdAt: d.task.created_at } as EngageTask : prev[0], ...prev].filter(Boolean));
-                          setTaskSubmitted(true);
+                  <>
+                    {taskError && (
+                      <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-2">{taskError}</p>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (!engageDraft.trim()) return;
+                        setTaskError("");
+                        setTaskSubmitting(true);
+                        try {
+                          const res = await fetch("/api/tasks", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              brandId: brand.id,
+                              url: engageItem.url,
+                              promptText: engageItem.promptText,
+                              engine: engageItem.engine,
+                              replyText: engageDraft,
+                              upvotesOrdered: upvoteQty,
+                              deliverySpeed: upvoteSpeed,
+                            }),
+                          });
+                          if (res.ok) {
+                            const d = await res.json();
+                            setEngageTasks((prev) => [d.task ? { id: d.task.id, brandId: d.task.brand_id, url: d.task.url, promptText: d.task.prompt_text, engine: d.task.engine, replyText: d.task.reply_text, upvotesOrdered: d.task.upvotes_ordered, deliverySpeed: d.task.delivery_speed, status: d.task.status, createdAt: d.task.created_at } as EngageTask : prev[0], ...prev].filter(Boolean));
+                            setCredits((prev) => (prev ? { ...prev, balance: prev.balance - upvoteQty * 0.5 } : prev));
+                            setTaskSubmitted(true);
+                          } else {
+                            const d = await res.json().catch(() => ({}));
+                            setTaskError(d.error ?? "Failed to submit task. Try again.");
+                          }
+                        } catch {
+                          setTaskError("Failed to submit task. Try again.");
                         }
-                      } catch {}
-                      setTaskSubmitting(false);
-                    }}
-                    disabled={taskSubmitting || !engageDraft.trim()}
-                    className="w-full text-sm font-semibold bg-[#FF4500] text-white py-2.5 rounded-lg hover:bg-[#e03d00] disabled:opacity-50 transition-colors"
-                  >
-                    {taskSubmitting ? "Submitting…" : `Submit Task · $${(upvoteQty * 0.10).toFixed(2)}`}
-                  </button>
+                        setTaskSubmitting(false);
+                      }}
+                      disabled={taskSubmitting || !engageDraft.trim() || (credits != null && upvoteQty * 0.5 > credits.balance)}
+                      className="w-full text-sm font-semibold bg-[#FF4500] text-white py-2.5 rounded-lg hover:bg-[#e03d00] disabled:opacity-50 transition-colors"
+                    >
+                      {taskSubmitting ? "Submitting…" : `Submit Task · ${upvoteQty * 0.5} credits`}
+                    </button>
+                  </>
                 ) : (
                   <div className="flex gap-2">
                     <button

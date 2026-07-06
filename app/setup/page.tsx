@@ -2,8 +2,28 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+});
+
+const workSans = Work_Sans({
+  variable: "--font-work-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 20, pro: 50, business: 150, scale: 400 };
 const PLAN_CUSTOM_LIMITS: Record<string, number> = { starter: 5, pro: 10, business: 25, scale: 50 };
@@ -144,10 +164,10 @@ function SetupContent() {
   }
 
   return (
-    <div className="min-h-screen bg-white/[0.03]">
-      <header className="bg-surface border-b border-line px-6 py-4">
+    <div className="min-h-screen bg-[var(--cream)] text-[var(--ink)]">
+      <header className="bg-[var(--surface)] border-b border-[var(--line)] px-6 py-4">
         <a href="/" className="font-bold text-xl tracking-tight">
-          RankOn<span className="text-emerald-500">Geo</span>
+          RankOn<span className="text-[var(--rust)]">Geo</span>
         </a>
       </header>
 
@@ -156,18 +176,18 @@ function SetupContent() {
         <div className="flex items-center gap-2 mb-10">
           {(["url", "brand", "prompts"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-                step === s ? "bg-mint text-[#062015]" :
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-signal-mono font-medium transition-colors ${
+                step === s ? "bg-[var(--rust)] text-[var(--surface)]" :
                 (step === "brand" && s === "url") || (step === "prompts" && s !== "prompts")
-                  ? "bg-emerald-100 text-emerald-600"
-                  : "bg-white/[0.06] text-faint"
+                  ? "bg-[var(--olive-wash)] text-[var(--olive)]"
+                  : "bg-[var(--line-soft)] text-[var(--ink-faint)]"
               }`}>
                 {i + 1}
               </div>
-              <span className={`text-sm ${step === s ? "text-ink font-medium" : "text-faint"}`}>
+              <span className={`text-sm ${step === s ? "text-[var(--ink)] font-medium" : "text-[var(--ink-faint)]"}`}>
                 {s === "url" ? "Your website" : s === "brand" ? "Brand info" : "Tracked prompts"}
               </span>
-              {i < 2 && <span className="text-gray-200 ml-1">—</span>}
+              {i < 2 && <span className="text-[var(--line)] ml-1">—</span>}
             </div>
           ))}
         </div>
@@ -175,32 +195,32 @@ function SetupContent() {
         {/* Step 1: URL */}
         {step === "url" && (
           <div>
-            <h1 className="text-2xl font-bold text-ink mb-2">Enter your website</h1>
-            <p className="text-muted text-sm mb-8">
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Enter your website</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-8">
               We&apos;ll crawl it to understand your brand and generate the right tracking prompts.
             </p>
             {loading && (
               <div className="flex flex-col items-center py-16 gap-4">
-                <span className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-muted">Analyzing your site…</p>
+                <span className="w-8 h-8 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-[var(--ink-soft)]">Analyzing your site…</p>
               </div>
             )}
             {!loading && <form onSubmit={handleAnalyze} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Website URL</label>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Website URL</label>
                 <input
                   type="text"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   placeholder="yoursite.com"
-                  className="w-full border border-line rounded-lg px-4 py-3 text-sm outline-none text-ink focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className="w-full border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-3 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
                 />
               </div>
-              {error && <p className="text-sm text-rose bg-rose/10 border border-rose/25 rounded-lg px-4 py-3">{error}</p>}
+              {error && <p className="text-sm text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3">{error}</p>}
               <button
                 type="submit"
                 disabled={loading || !domain.trim()}
-                className="w-full bg-mint hover:bg-[#a5f8d1] disabled:opacity-50 text-[#062015] py-3 rounded-lg text-sm font-medium transition-colors"
+                className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
               >
                 Analyze site
               </button>
@@ -211,36 +231,36 @@ function SetupContent() {
         {/* Step 2: Brand info */}
         {step === "brand" && brand && (
           <div>
-            <h1 className="text-2xl font-bold text-ink mb-2">Review your brand info</h1>
-            <p className="text-muted text-sm mb-8">We extracted this from your site. Edit anything that looks off.</p>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Review your brand info</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-8">We extracted this from your site. Edit anything that looks off.</p>
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Brand name</label>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Brand name</label>
                 <input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  className="w-full border border-line rounded-lg px-4 py-3 text-sm outline-none text-ink focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className="w-full border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-3 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Niche</label>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Niche</label>
                 <input
                   value={editedNiche}
                   onChange={(e) => setEditedNiche(e.target.value)}
-                  className="w-full border border-line rounded-lg px-4 py-3 text-sm outline-none text-ink focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className="w-full border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-3 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Description</label>
-                <p className="text-sm text-muted bg-white/[0.03] rounded-lg px-4 py-3 border border-line">{brand.description}</p>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Description</label>
+                <p className="text-sm text-[var(--ink-soft)] bg-[var(--line-soft)] rounded-lg px-4 py-3 border border-[var(--line)]">{brand.description}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Target audience</label>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Target audience</label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {editedAudience.map((a) => (
-                    <span key={a} className="flex items-center gap-1 text-xs bg-mint/10 text-mint px-2.5 py-1 rounded-full">
+                    <span key={a} className="flex items-center gap-1 text-xs bg-[var(--rust-wash)] text-[var(--rust-deep)] px-2.5 py-1 rounded-full">
                       {a}
-                      <button onClick={() => setEditedAudience(editedAudience.filter((x) => x !== a))} className="text-mint/60 hover:text-mint">×</button>
+                      <button onClick={() => setEditedAudience(editedAudience.filter((x) => x !== a))} className="text-[var(--rust-deep)]/60 hover:text-[var(--rust-deep)]">×</button>
                     </span>
                   ))}
                 </div>
@@ -250,29 +270,29 @@ function SetupContent() {
                     onChange={(e) => setNewAudienceInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAudience(); } }}
                     placeholder="Add audience segment"
-                    className="flex-1 border border-line rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                    className="flex-1 border border-[var(--line)] bg-[var(--surface)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
                   />
-                  <button type="button" onClick={addAudience} className="px-3 py-2 text-sm font-semibold bg-mint text-[#062015] rounded-lg hover:bg-[#a5f8d1] transition-colors">Add</button>
+                  <button type="button" onClick={addAudience} className="px-3 py-2 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add</button>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1.5">Competitors</label>
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Competitors</label>
                 <div className="flex gap-2 mb-3">
                   <input
                     value={newCompetitorInput}
                     onChange={(e) => setNewCompetitorInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEditedCompetitor(); } }}
                     placeholder="Add competitor domain"
-                    className="flex-1 border border-line rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                    className="flex-1 border border-[var(--line)] bg-[var(--surface)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
                   />
-                  <button type="button" onClick={addEditedCompetitor} className="px-3 py-2 text-sm font-semibold bg-mint text-[#062015] rounded-lg hover:bg-[#a5f8d1] transition-colors">Add</button>
+                  <button type="button" onClick={addEditedCompetitor} className="px-3 py-2 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add</button>
                 </div>
                 {(() => {
                   const allCompetitorOptions = Array.from(new Set([...suggestedCompetitors, ...editedCompetitors]));
                   if (allCompetitorOptions.length === 0) return null;
                   return (
                     <div>
-                      <p className="text-xs font-medium text-muted mb-2">Detected automatically — click to remove any you don&apos;t want tracked</p>
+                      <p className="text-xs font-medium text-[var(--ink-soft)] mb-2">Detected automatically — click to remove any you don&apos;t want tracked</p>
                       <div className="flex flex-wrap gap-2">
                         {allCompetitorOptions.map((c) => {
                           const added = editedCompetitors.includes(c);
@@ -288,8 +308,8 @@ function SetupContent() {
                               }
                               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                                 added
-                                  ? "bg-mint/10 border-mint/30 text-mint"
-                                  : "bg-surface border-line text-muted hover:border-line-2 hover:bg-white/[0.04]"
+                                  ? "bg-[var(--rust-wash)] border-[var(--rust)]/30 text-[var(--rust-deep)]"
+                                  : "bg-[var(--surface)] border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--line-soft)]"
                               }`}
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -300,7 +320,7 @@ function SetupContent() {
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                               />
                               {c}
-                              <span className={`ml-0.5 ${added ? "text-emerald-500" : "text-faint"}`}>{added ? "✓" : "+"}</span>
+                              <span className={`ml-0.5 ${added ? "text-[var(--olive)]" : "text-[var(--ink-faint)]"}`}>{added ? "✓" : "+"}</span>
                             </button>
                           );
                         })}
@@ -311,7 +331,7 @@ function SetupContent() {
               </div>
               <button
                 onClick={handleBrandNext}
-                className="w-full bg-mint hover:bg-[#a5f8d1] text-[#062015] py-3 rounded-lg text-sm font-medium transition-colors"
+                className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
               >
                 Continue to prompts
               </button>
@@ -322,14 +342,14 @@ function SetupContent() {
         {/* Step 3: Tracked prompts */}
         {step === "prompts" && (
           <div>
-            <h1 className="text-2xl font-bold text-ink mb-2">Review search queries</h1>
-            <p className="text-muted text-sm mb-2">
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Review search queries</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-2">
               These are questions people ask AI about businesses like yours. We&apos;ll track your brand&apos;s visibility for each.
             </p>
             {(() => {
               const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
               return (
-                <p className="text-sm font-semibold text-emerald-600 mb-7">
+                <p className="text-sm font-semibold text-[var(--olive)] mb-7">
                   {selectedCount}/{prompts.length} prompts selected
                 </p>
               );
@@ -343,12 +363,12 @@ function SetupContent() {
                     key={p.id}
                     type="button"
                     onClick={() => togglePrompt(p.id)}
-                    className={`w-full flex items-center gap-3 bg-surface border rounded-lg px-4 py-3 text-left transition-colors group ${
-                      selected ? "border-line hover:border-line-2" : "border-line opacity-50 hover:opacity-70"
+                    className={`w-full flex items-center gap-3 bg-[var(--surface)] border rounded-lg px-4 py-3 text-left transition-colors group ${
+                      selected ? "border-[var(--line)] hover:border-[var(--rust)]/30" : "border-[var(--line)] opacity-50 hover:opacity-70"
                     }`}
                   >
                     <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                      selected ? "bg-mint-deep border-mint-deep" : "border-line-2 bg-surface"
+                      selected ? "bg-[var(--rust)] border-[var(--rust)]" : "border-[var(--line)] bg-[var(--surface)]"
                     }`}>
                       {selected && (
                         <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
@@ -356,7 +376,7 @@ function SetupContent() {
                         </svg>
                       )}
                     </span>
-                    <span className={`flex-1 text-sm ${selected ? "text-ink/80" : "text-faint"}`}>{p.text}</span>
+                    <span className={`flex-1 text-sm ${selected ? "text-[var(--ink)]/80" : "text-[var(--ink-faint)]"}`}>{p.text}</span>
                   </button>
                 );
               })}
@@ -368,16 +388,16 @@ function SetupContent() {
                 onChange={(e) => setNewPrompt(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPrompt(); } }}
                 placeholder="Add custom prompt…"
-                className="flex-1 border border-line rounded-lg px-4 py-2.5 text-sm outline-none text-ink focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                className="flex-1 border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-2.5 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
               />
-              <button onClick={addPrompt} className="px-4 py-2.5 text-sm font-semibold bg-mint text-[#062015] rounded-lg hover:bg-[#a5f8d1] transition-colors">
+              <button onClick={addPrompt} className="px-4 py-2.5 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors">
                 Add
               </button>
             </div>
 
-            <div className="bg-white/[0.03] border border-line rounded-lg px-4 py-3 mb-6">
-              <p className="text-xs font-semibold text-muted mb-1.5">Prompt Tips</p>
-              <ul className="space-y-1 text-xs text-faint">
+            <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
+              <p className="text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Prompt Tips</p>
+              <ul className="space-y-1 text-xs text-[var(--ink-faint)]">
                 <li>· Focus on questions your customers actually ask</li>
                 <li>· Include your product category or service type</li>
                 <li>· Avoid overly specific or branded terms</li>
@@ -388,14 +408,14 @@ function SetupContent() {
               const customCount = prompts.filter((p) => p.category === "custom").length;
               const customLimit = PLAN_CUSTOM_LIMITS[userPlan] ?? 5;
               return customCount >= customLimit ? (
-                <p className="text-xs text-amber font-medium mb-4">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
+                <p className="text-xs text-[var(--rust-deep)] font-medium mb-4">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
               ) : null;
             })()}
 
             <button
               onClick={handleStart}
               disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
-              className="w-full bg-mint hover:bg-[#a5f8d1] disabled:opacity-50 text-[#062015] py-3 rounded-lg text-sm font-medium transition-colors"
+              className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
             >
               {saving ? "Saving…" : "Generate report"}
             </button>
@@ -407,5 +427,27 @@ function SetupContent() {
 }
 
 export default function SetupPage() {
-  return <Suspense><SetupContent /></Suspense>;
+  const signalVars = {
+    "--cream": "oklch(0.965 0.013 80)",
+    "--surface": "oklch(0.99 0.006 80)",
+    "--ink": "oklch(0.19 0.014 55)",
+    "--ink-soft": "oklch(0.46 0.02 55)",
+    "--ink-faint": "oklch(0.62 0.02 60)",
+    "--rust": "oklch(0.56 0.15 38)",
+    "--rust-deep": "oklch(0.46 0.14 36)",
+    "--rust-wash": "oklch(0.56 0.15 38 / 12%)",
+    "--olive": "oklch(0.52 0.1 130)",
+    "--olive-wash": "oklch(0.52 0.1 130 / 12%)",
+    "--line": "oklch(0.19 0.014 55 / 10%)",
+    "--line-soft": "oklch(0.19 0.014 55 / 6%)",
+  } as React.CSSProperties;
+
+  return (
+    <div
+      className={`${instrumentSerif.variable} ${workSans.variable} ${ibmPlexMono.variable}`}
+      style={{ ...signalVars, fontFamily: "var(--font-work-sans), sans-serif" }}
+    >
+      <Suspense><SetupContent /></Suspense>
+    </div>
+  );
 }

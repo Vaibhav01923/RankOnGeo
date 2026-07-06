@@ -497,8 +497,8 @@ function CitationsContent() {
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-md bg-[var(--line-soft)] px-2.5 py-1.5 text-[10px] text-[var(--ink-faint)]">
-                            <span>{upvoteQty} upvotes × $0.10</span>
-                            <span className="font-semibold text-[var(--ink)]/90">${(upvoteQty * 0.1).toFixed(2)}</span>
+                            <span>{upvoteQty} upvotes × 0.5 credits</span>
+                            <span className="font-semibold text-[var(--ink)]/90">{upvoteQty * 0.5} credits</span>
                           </div>
                           <p className="rounded-md bg-[var(--rust-wash)] px-2.5 py-1.5 text-[10px] leading-relaxed text-[var(--rust-deep)]">
                             Comments under 200 chars have ~35% removal rate. Keep replies natural and helpful.
@@ -519,7 +519,7 @@ function CitationsContent() {
                   className="w-full rounded-lg py-2 text-xs font-semibold text-white transition-opacity disabled:opacity-40"
                   style={{ background: engageItem.color }}
                 >
-                  {upvoteEnabled ? `Submit Task · $${(upvoteQty * 0.1).toFixed(2)}` : "Submit reply"}
+                  {upvoteEnabled ? `Submit Task · ${upvoteQty * 0.5} credits` : "Submit reply"}
                 </button>
               </div>
             )}

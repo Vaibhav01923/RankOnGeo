@@ -1,13 +1,16 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const PRICING = [
   {
     name: "Pro",
+    planKey: "starter",
     desc: "For solo founders proving the channel.",
-    price: 89,
+    price: 49,
     highlight: false,
     features: [
+      "50 credits for Reddit upvotes",
       "10 SEO articles per month",
       "50 tracked prompts",
       "4,000 AI search responses / mo",
@@ -21,10 +24,12 @@ const PRICING = [
   },
   {
     name: "Business",
+    planKey: "growth",
     desc: "For teams that want the loop on autopilot.",
-    price: 239,
+    price: 99,
     highlight: true,
     features: [
+      "100 credits for Reddit upvotes",
       "Everything in Pro, plus:",
       "50 SEO articles per month",
       "150 tracked prompts",
@@ -39,10 +44,12 @@ const PRICING = [
   },
   {
     name: "Scale",
+    planKey: "enterprise",
     desc: "For agencies & multi-brand portfolios.",
-    price: 739,
+    price: 149,
     highlight: false,
     features: [
+      "150 credits for Reddit upvotes",
       "Everything in Business, plus:",
       "150 SEO articles per month",
       "400 tracked prompts",
@@ -58,7 +65,30 @@ const PRICING = [
 ];
 
 export function PricingSection() {
+  const router = useRouter();
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
+  const [checkingOut, setCheckingOut] = useState<string | null>(null);
+
+  async function startCheckout(plan: string) {
+    setCheckingOut(plan);
+    try {
+      const res = await fetch("/api/dodo/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (res.status === 401) {
+        router.push("/auth?redirect=/dashboard");
+      } else {
+        alert(data.error ?? "Checkout failed. Try again.");
+      }
+    } finally {
+      setCheckingOut(null);
+    }
+  }
 
   return (
     <section id="pricing" className="px-6 py-28">
@@ -138,16 +168,17 @@ export function PricingSection() {
                     </li>
                   ))}
                 </ul>
-                <a
-                  href="/auth"
-                  className={`w-full rounded-full py-3 text-center text-sm font-semibold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)] ${
+                <button
+                  onClick={() => startCheckout(plan.planKey)}
+                  disabled={checkingOut === plan.planKey}
+                  className={`w-full rounded-full py-3 text-center text-sm font-semibold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)] disabled:opacity-60 ${
                     plan.highlight
                       ? "bg-[var(--rust)] text-[var(--surface)] hover:bg-[var(--rust-deep)]"
                       : "bg-[var(--line-soft)] text-[var(--ink)] hover:bg-[var(--line)]"
                   }`}
                 >
-                  Get started
-                </a>
+                  {checkingOut === plan.planKey ? "Redirecting…" : "Get started"}
+                </button>
               </div>
             );
           })}

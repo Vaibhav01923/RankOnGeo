@@ -41,7 +41,7 @@ export function MobileNav() {
             </a>
           ))}
           <a
-            href="/auth"
+            href="/auth?mode=signin"
             onClick={() => setOpen(false)}
             className="rounded py-3 text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--rust)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]"
           >

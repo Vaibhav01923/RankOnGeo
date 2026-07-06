@@ -46,7 +46,7 @@ export function SiteNav() {
         </div>
         <div className="ml-auto flex items-center gap-4">
           <a
-            href="/auth"
+            href="/auth?mode=signin"
             className="hidden rounded text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] md:block"
           >
             Login

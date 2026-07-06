@@ -10,11 +10,10 @@ const getDodo = () =>
     environment: (process.env.DODO_ENVIRONMENT ?? "test_mode") as "test_mode" | "live_mode",
   });
 
-const PLAN_CREDITS: Record<string, number> = {
-  starter: 50,
-  growth: 200,
-  enterprise: 300,
-};
+// Credits are granted/reissued by Dodo's own credit-entitlement ledger
+// (attached per-product in the Dodo dashboard/API) — this webhook only
+// tracks which plan a user is on and their Dodo customer/subscription ids,
+// which app/api/credits and app/api/tasks need to query/debit that ledger.
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -38,15 +37,12 @@ export async function POST(req: NextRequest) {
     const sub = event.data as WebhookPayload.Subscription;
     const userId = sub.metadata?.userId;
     const plan = sub.metadata?.plan ?? "starter";
-    const credits = PLAN_CREDITS[plan] ?? 50;
 
     if (userId) {
       await db.from("user_plans").upsert(
         {
           user_id: userId,
           plan,
-          credits_balance: credits,
-          credits_monthly: credits,
           stripe_customer_id: sub.customer?.customer_id ?? null,
           stripe_subscription_id: sub.subscription_id,
           current_period_end: sub.next_billing_date ?? null,
@@ -60,17 +56,10 @@ export async function POST(req: NextRequest) {
     const sub = event.data as WebhookPayload.Subscription;
     const userId = sub.metadata?.userId;
     if (userId) {
-      const { data: plan } = await db
+      await db
         .from("user_plans")
-        .select("credits_monthly")
-        .eq("user_id", userId)
-        .single();
-      if (plan) {
-        await db
-          .from("user_plans")
-          .update({ credits_balance: plan.credits_monthly, current_period_end: sub.next_billing_date ?? null })
-          .eq("user_id", userId);
-      }
+        .update({ current_period_end: sub.next_billing_date ?? null })
+        .eq("user_id", userId);
     }
   }
 
@@ -80,8 +69,6 @@ export async function POST(req: NextRequest) {
     if (userId) {
       await db.from("user_plans").update({
         plan: "starter",
-        credits_balance: 50,
-        credits_monthly: 50,
         stripe_subscription_id: null,
       }).eq("user_id", userId);
     }
