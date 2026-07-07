@@ -8,7 +8,7 @@ import type { RedditServiceType } from "@/lib/types";
 const CREDIT_COST: Record<RedditServiceType, number> = {
   post_upvote: 0.5,
   post_downvote: 0.5,
-  custom_comments: 10,
+  custom_comments: 5,
 };
 
 const QUANTITY_LIMITS: Record<"post_upvote" | "post_downvote", { min: number; max: number }> = {

@@ -20,7 +20,7 @@ const ENGINE_LABELS: Record<AIEngine, string> = {
 const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; creditsPerUnit: number; min: number; max: number }> = {
   post_upvote: { label: "Upvotes", creditsPerUnit: 0.5, min: 5, max: 1000 },
   post_downvote: { label: "Downvotes", creditsPerUnit: 0.5, min: 5, max: 1000 },
-  custom_comments: { label: "Comment", creditsPerUnit: 10, min: 1, max: 1 },
+  custom_comments: { label: "Comment", creditsPerUnit: 5, min: 1, max: 1 },
 };
 
 const TASK_STATUS_BADGE: Record<string, { label: string; className: string; dotClassName: string }> = {
@@ -3824,7 +3824,7 @@ function DashboardPage() {
                 )}
 
                 {redditOrderService === "post_downvote" && (
-                  <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)] rounded-lg px-3 py-2 mb-3">Downvotes only work on posts less than 24 hours old.</p>
+                  <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)] rounded-lg px-3 py-2 mb-3">Downvotes only work on posts less than 24 hours old — on older posts the vote count may not visibly change, but it still limits the post's reach.</p>
                 )}
 
                 <div className="flex items-center justify-between text-[10px] text-[var(--ink-faint)] bg-[var(--line-soft)] rounded-lg px-3 py-2 mb-3">
