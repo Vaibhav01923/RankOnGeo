@@ -110,7 +110,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<Eng
   }
 
   if (engine === "gemini") {
-    const model = getGemini().getGenerativeModel({ model: "gemini-3.5-flash" });
+    const model = getGemini().getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     const result = await model.generateContent(`${systemMsg}\n\nUser: ${prompt}`);
     return { text: result.response.text(), citations: [] };
   }
@@ -293,7 +293,7 @@ export async function runScanForBrand(
     }
   };
 
-  // All engines in parallel — gemini-2.5-flash has 1000 RPM on paid tier.
+  // All engines in parallel.
   await Promise.allSettled(engines.map(runEngine));
 
   const { scores, overallScore } = computeScores(allResults, engines);
