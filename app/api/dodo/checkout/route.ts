@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
       ? cancelPath
       : "/dashboard";
 
+  // Attributes this purchase back to the visit/channel that brought them in,
+  // via DataFast's revenue-attribution integration (see Dodo webhook setup).
+  const datafastVisitorId = req.cookies.get("datafast_visitor_id")?.value;
+
   const session = await getDodo().checkoutSessions.create({
     product_cart: [{ product_id: productId, quantity: 1 }],
     return_url: `${origin}/dashboard?subscription=success`,
     cancel_url: `${origin}${safeCancelPath}`,
-    metadata: { userId: user.id, plan },
+    metadata: { userId: user.id, plan, ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}) },
     customer: { email: user.email! },
   });
 
