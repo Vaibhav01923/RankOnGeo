@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Instrument_Sans } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -32,6 +33,13 @@ export default function RootLayout({
       className={`${instrumentSans.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
+      <Script
+        id="datafast-analytics"
+        src="https://datafa.st/js/script.js"
+        data-website-id="dfid_Z3fMzaUeXnTRGu9mAy2tT"
+        data-domain="rankongeo.com"
+        strategy="afterInteractive"
+      />
     </html>
   );
 }
