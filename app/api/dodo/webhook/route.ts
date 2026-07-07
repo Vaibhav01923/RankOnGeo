@@ -35,8 +35,23 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "subscription.active") {
     const sub = event.data as WebhookPayload.Subscription;
-    const userId = sub.metadata?.userId;
     const plan = sub.metadata?.plan ?? "starter";
+    let userId: string | undefined = sub.metadata?.userId;
+
+    // metadata.userId has been observed missing/empty on real webhook
+    // deliveries even though the checkout session was created with it —
+    // this silently no-op'd the upsert while still returning 200, which is
+    // indistinguishable from success in Dodo's dashboard. Fall back to
+    // matching the subscription's customer email against our own users.
+    if (!userId && sub.customer?.email) {
+      const { data: usersData } = await db.auth.admin.listUsers({ perPage: 1000 });
+      userId = usersData?.users.find((u) => u.email === sub.customer.email)?.id;
+      console.error("[dodo webhook] subscription.active missing metadata.userId, fell back to email match", {
+        subscriptionId: sub.subscription_id,
+        customerEmail: sub.customer.email,
+        resolvedUserId: userId ?? null,
+      });
+    }
 
     if (userId) {
       await db.from("user_plans").upsert(
@@ -49,6 +64,11 @@ export async function POST(req: NextRequest) {
         },
         { onConflict: "user_id" }
       );
+    } else {
+      console.error("[dodo webhook] subscription.active could not resolve a user — no metadata.userId and no email match", {
+        subscriptionId: sub.subscription_id,
+        customerEmail: sub.customer?.email,
+      });
     }
   }
 
