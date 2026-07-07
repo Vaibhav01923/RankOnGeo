@@ -409,12 +409,6 @@ export default function LandingPage() {
           <NightSky />
 
           <div className="relative z-[5] mx-auto max-w-4xl px-6 pt-40 text-center max-md:pt-32">
-            <div className="rise" style={{ "--d": ".05s" } as React.CSSProperties}>
-              <span className="inline-flex items-center gap-2.5 rounded-full bg-[var(--rust-wash)] px-[18px] py-2 text-[13px] uppercase tracking-[0.12em] text-[var(--rust-deep)]">
-                <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--rust)]" aria-hidden="true" />
-                Generative Engine Optimization
-              </span>
-            </div>
             <h1
               className="rise mx-auto mb-6 mt-8 font-signal-serif font-[340] leading-[1.08] tracking-[-0.015em] text-[var(--ink)]"
               style={{ fontSize: "clamp(2.6rem, 6vw, 4.6rem)", textWrap: "balance", "--d": ".18s" } as React.CSSProperties}

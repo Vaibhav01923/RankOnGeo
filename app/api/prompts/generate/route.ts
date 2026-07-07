@@ -79,7 +79,7 @@ IMPORTANT: Return exactly ${promptCount} total prompts. Use JSON { "prompts": [.
 
   const response = await getClient().chat.completions.create({
     model: "gpt-5.5",
-    max_tokens: Math.max(2000, promptCount * 60),
+    max_completion_tokens: Math.max(2000, promptCount * 60),
     messages: [{ role: "user", content: systemPrompt }],
     response_format: { type: "json_object" },
   });
