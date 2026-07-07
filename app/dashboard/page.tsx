@@ -23,6 +23,9 @@ const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; creditsPer
   custom_comments: { label: "Comment", creditsPerUnit: 5, min: 1, max: 1 },
 };
 
+const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
+const FREE_BRAND_LIMIT = 1;
+
 const TASK_STATUS_BADGE: Record<string, { label: string; className: string; dotClassName: string }> = {
   queued: { label: "Queued — high demand", className: "bg-[var(--rust-wash)]/10 text-[var(--rust-deep)] border-[var(--rust)]/25", dotClassName: "bg-[var(--rust-wash)]/100 animate-pulse" },
   pending: { label: "Pending", className: "bg-[var(--rust-wash)]/10 text-[var(--rust-deep)] border-[var(--rust)]/25", dotClassName: "bg-[var(--rust-wash)]/100 animate-pulse" },
@@ -417,6 +420,7 @@ function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [brand, setBrand] = useState<BrandData | null>(null);
+  const [allBrands, setAllBrands] = useState<{ id: string; name: string; domain: string }[]>([]);
   const [loadingBrand, setLoadingBrand] = useState(true);
   const [loadingResults, setLoadingResults] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -610,6 +614,8 @@ function DashboardPage() {
 
 
     const brandId = searchParams.get("brandId");
+
+    fetch("/api/brands").then((r) => r.json()).then((d) => setAllBrands(d.brands ?? []));
 
     const loadBrand = (id: string) => {
       fetch(`/api/brand?id=${id}`)
@@ -1279,32 +1285,52 @@ function DashboardPage() {
             </svg>
           </button>
 
-          {showBrandDropdown && (
+          {showBrandDropdown && (() => {
+            const brandLimit = credits?.plan ? BRAND_LIMITS[credits.plan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
+            const atLimit = allBrands.length >= brandLimit;
+            return (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowBrandDropdown(false)} />
-              <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[var(--surface)] rounded-xl shadow-lg border border-[var(--line)] overflow-hidden">
-                <div className="px-3 py-2.5 flex items-center gap-3 bg-[var(--line-soft)] border-b border-[var(--line)]">
-                  <div className="w-7 h-7 rounded-lg bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">{brandInitial}</div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-[var(--ink)] truncate">{brand.name}</p>
-                    <p className="text-[9px] text-[var(--ink-faint)] uppercase tracking-wider">Current brand</p>
-                  </div>
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[var(--olive)] shrink-0" />
-                </div>
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[var(--surface)] rounded-xl shadow-lg border border-[var(--line)] overflow-hidden max-h-80 overflow-y-auto">
+                {allBrands.map((b) => {
+                  const isCurrent = b.id === brand.id;
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => {
+                        setShowBrandDropdown(false);
+                        if (!isCurrent) window.location.href = `/dashboard?brandId=${b.id}`;
+                      }}
+                      className={`w-full px-3 py-2.5 flex items-center gap-3 transition-colors text-left ${isCurrent ? "bg-[var(--line-soft)]" : "hover:bg-[var(--line-soft)]"}`}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">{b.name[0]?.toUpperCase() ?? "B"}</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-[var(--ink)] truncate">{b.name}</p>
+                        <p className="text-[9px] text-[var(--ink-faint)] truncate">{isCurrent ? "Current brand" : b.domain}</p>
+                      </div>
+                      {isCurrent && <div className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] shrink-0" />}
+                    </button>
+                  );
+                })}
                 <button
-                  onClick={() => { setShowBrandDropdown(false); router.push("/setup"); }}
-                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-[var(--line-soft)] transition-colors group"
+                  onClick={() => {
+                    setShowBrandDropdown(false);
+                    if (atLimit) { openPaywall(); return; }
+                    router.push("/setup");
+                  }}
+                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-[var(--line-soft)] transition-colors group border-t border-[var(--line)]"
                 >
                   <div className="w-7 h-7 rounded-lg border-2 border-dashed border-[var(--line)] flex items-center justify-center shrink-0 transition-colors">
                     <svg className="w-3.5 h-3.5 text-[var(--ink-faint)] group-hover:text-[var(--ink-soft)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
                   </div>
-                  <span className="text-xs font-medium text-[var(--ink-soft)] group-hover:text-[var(--ink)] transition-colors">Add another brand</span>
+                  <span className="text-xs font-medium text-[var(--ink-soft)] group-hover:text-[var(--ink)] transition-colors">{atLimit ? "Upgrade to add another brand" : "Add another brand"}</span>
                 </button>
               </div>
             </>
-          )}
+            );
+          })()}
         </div>
 
         <nav className="flex-1 px-1 overflow-y-auto space-y-5">

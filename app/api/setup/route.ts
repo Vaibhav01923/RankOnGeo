@@ -58,23 +58,14 @@ export async function POST(req: NextRequest) {
   const { domain, competitors: userCompetitors } = body;
   if (!domain) return NextResponse.json({ error: "domain is required" }, { status: 400 });
 
-  let content: string;
-  try {
-    content = await crawlSite(domain);
-  } catch {
-    return NextResponse.json({ error: "Failed to crawl site. Check the URL and try again." }, { status: 400 });
-  }
-
-  const competitorHint = userCompetitors?.length
-    ? `The user identified these competitors: ${userCompetitors.join(", ")}.`
-    : "";
-
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   const userId = user?.id;
 
   const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 50, growth: 150, enterprise: 400 };
+  const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
   const FREE_AUTO_COUNT = 20;
+  const FREE_BRAND_LIMIT = 1;
   let activePlan: string | null = null;
   if (userId) {
     const { data: planRow } = await db
@@ -85,6 +76,29 @@ export async function POST(req: NextRequest) {
     if (planRow?.dodo_subscription_id) activePlan = planRow.plan;
   }
   const promptCount = activePlan ? PLAN_AUTO_COUNTS[activePlan] ?? FREE_AUTO_COUNT : FREE_AUTO_COUNT;
+  const brandLimit = activePlan ? BRAND_LIMITS[activePlan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
+
+  // Check the plan-based website limit before crawling/analyzing (expensive) —
+  // re-running setup on an already-tracked domain is always allowed, it's only
+  // a *new* domain past the limit that's blocked.
+  if (userId) {
+    const { data: existingBrands } = await db.from("brands").select("domain").eq("user_id", userId);
+    const alreadyTracked = (existingBrands ?? []).some((b) => b.domain === domain);
+    if (!alreadyTracked && (existingBrands?.length ?? 0) >= brandLimit) {
+      return NextResponse.json({ error: "Upgrade your plan to track another brand", upgradeRequired: true }, { status: 402 });
+    }
+  }
+
+  let content: string;
+  try {
+    content = await crawlSite(domain);
+  } catch {
+    return NextResponse.json({ error: "Failed to crawl site. Check the URL and try again." }, { status: 400 });
+  }
+
+  const competitorHint = userCompetitors?.length
+    ? `The user identified these competitors: ${userCompetitors.join(", ")}.`
+    : "";
 
   const branded = Math.round(promptCount * 0.20);
   const competitorAlt = Math.round(promptCount * 0.25);
