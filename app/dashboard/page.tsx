@@ -131,7 +131,7 @@ type Tab =
   | "gaps" | "articles" | "tasks"
   | "publishing"
   | "alerts"
-  | "agent" | "admin";
+  | "agent" | "admin" | "feedback";
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
@@ -148,7 +148,15 @@ const TAB_LABELS: Record<Tab, string> = {
   alerts: "Alerts",
   agent: "Agent",
   admin: "Admin",
+  feedback: "Feedback",
 };
+
+const FEEDBACK_CATEGORIES: { value: string; label: string; description: string }[] = [
+  { value: "feature_request", label: "Feature Request", description: "Suggest a new feature" },
+  { value: "bug_report", label: "Bug Report", description: "Report a bug or issue" },
+  { value: "improvement", label: "Improvement", description: "Suggest an improvement" },
+  { value: "other", label: "Other", description: "General feedback" },
+];
 
 type ScanRun = {
   id: string;
@@ -592,6 +600,15 @@ function DashboardPage() {
   const [newAlert, setNewAlert] = useState({ name: "", kind: "slack", url: "", email: "" });
   const [addingAlert, setAddingAlert] = useState(false);
 
+  // Feedback state
+  const [feedbackSubmissions, setFeedbackSubmissions] = useState<{ id: string; category: string; title: string; description: string; created_at: string }[]>([]);
+  const [feedbackLoaded, setFeedbackLoaded] = useState(false);
+  const [feedbackCategory, setFeedbackCategory] = useState("");
+  const [feedbackTitle, setFeedbackTitle] = useState("");
+  const [feedbackDescription, setFeedbackDescription] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+
   useEffect(() => {
     const savedTab = sessionStorage.getItem("dashTab");
     if (savedTab) setActiveTab(savedTab as Tab);
@@ -776,6 +793,15 @@ function DashboardPage() {
       .then((d) => { if (d.tasks) setAdminTasks(d.tasks); })
       .finally(() => setAdminLoading(false));
   }, [activeTab, isAdmin]);
+
+  // Load this user's past feedback submissions when the tab opens
+  useEffect(() => {
+    if (activeTab !== "feedback" || feedbackLoaded) return;
+    fetch("/api/feedback")
+      .then((r) => r.json())
+      .then((d) => setFeedbackSubmissions(d.submissions ?? []))
+      .finally(() => setFeedbackLoaded(true));
+  }, [activeTab, feedbackLoaded]);
 
   // Show citations onboarding dialog + fetch citation history when tab opens
   useEffect(() => {
@@ -1177,6 +1203,36 @@ function DashboardPage() {
     }
   }
 
+  async function submitFeedback() {
+    if (feedbackSubmitting) return;
+    setFeedbackError("");
+    if (!feedbackCategory) { setFeedbackError("Select a category"); return; }
+    if (!feedbackTitle.trim()) { setFeedbackError("Title is required"); return; }
+    if (!feedbackDescription.trim()) { setFeedbackError("Description is required"); return; }
+
+    setFeedbackSubmitting(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: feedbackCategory, title: feedbackTitle.trim(), description: feedbackDescription.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok && d.submission) {
+        setFeedbackSubmissions((prev) => [d.submission, ...prev]);
+        setFeedbackCategory("");
+        setFeedbackTitle("");
+        setFeedbackDescription("");
+      } else {
+        setFeedbackError(d.error ?? "Failed to submit feedback. Try again.");
+      }
+    } catch {
+      setFeedbackError("Failed to submit feedback. Try again.");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
+
   async function fetchPromptSuggestions() {
     if (!brand || suggestingPrompts) return;
     setSuggestingPrompts(true);
@@ -1493,6 +1549,7 @@ function DashboardPage() {
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">On Page</p>
             <div className="space-y-0.5">
               <NavItem label="Alerts" active={activeTab === "alerts"} onClick={() => navTo("alerts")} />
+              <NavItem label="Feedback" active={activeTab === "feedback"} onClick={() => navTo("feedback")} />
             </div>
           </div>
 
@@ -4009,6 +4066,116 @@ function DashboardPage() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* FEEDBACK TAB */}
+          {activeTab === "feedback" && (
+            <div className="max-w-3xl mx-auto w-full">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-[var(--ink)]">Feedback &amp; Suggestions</h2>
+                <p className="text-sm text-[var(--ink-soft)] mt-0.5">Share your ideas, report bugs, or suggest improvements. We read every submission.</p>
+              </div>
+
+              <div className="grid md:grid-cols-[1fr_260px] gap-5">
+                <div className="panel rounded-xl p-5">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-4">Submit your feedback</p>
+
+                  <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Category</p>
+                  <select
+                    value={feedbackCategory}
+                    onChange={(e) => setFeedbackCategory(e.target.value)}
+                    className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 mb-3 outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                  >
+                    <option value="">Select a category</option>
+                    {FEEDBACK_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+
+                  <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Title</p>
+                  <input
+                    value={feedbackTitle}
+                    onChange={(e) => setFeedbackTitle(e.target.value.slice(0, 200))}
+                    placeholder="Brief summary of your feedback"
+                    maxLength={200}
+                    className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                  />
+                  <p className="text-[10px] text-[var(--ink-faint)] text-right mb-3">{feedbackTitle.length}/200</p>
+
+                  <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Description</p>
+                  <textarea
+                    value={feedbackDescription}
+                    onChange={(e) => setFeedbackDescription(e.target.value.slice(0, 2000))}
+                    placeholder="Please provide detailed information about your feedback…"
+                    maxLength={2000}
+                    rows={5}
+                    className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 resize-y"
+                  />
+                  <p className="text-[10px] text-[var(--ink-faint)] text-right mb-3">{feedbackDescription.length}/2000</p>
+
+                  {feedbackError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{feedbackError}</p>}
+
+                  <button
+                    onClick={submitFeedback}
+                    disabled={feedbackSubmitting}
+                    className="w-full text-sm font-semibold bg-[var(--olive)] text-[var(--surface)] py-2.5 rounded-lg hover:bg-[var(--olive)]/80 disabled:opacity-50 transition-colors"
+                  >
+                    {feedbackSubmitting ? "Submitting…" : "Submit Feedback"}
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="panel rounded-xl p-4">
+                    <p className="text-xs font-semibold text-[var(--ink)] mb-3">What Happens Next?</p>
+                    <div className="space-y-2.5">
+                      {[
+                        "Your feedback is sent to our team",
+                        "We review and evaluate your suggestion",
+                        "If approved, we add it to our roadmap",
+                        "You might see your idea implemented soon!",
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <span className="w-4 h-4 rounded-full bg-[var(--olive)]/15 text-[var(--olive)] text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                          <p className="text-[11px] text-[var(--ink-soft)] leading-relaxed">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="panel rounded-xl p-4">
+                    <p className="text-xs font-semibold text-[var(--ink)] mb-3">Category Guide</p>
+                    <div className="space-y-2.5">
+                      {FEEDBACK_CATEGORIES.map((c) => (
+                        <div key={c.value}>
+                          <p className="text-[11px] font-semibold text-[var(--ink)]/90">{c.label}</p>
+                          <p className="text-[10px] text-[var(--ink-faint)]">{c.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {feedbackSubmissions.length > 0 && (
+                <div className="panel rounded-xl p-5 mt-5">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-4">Your submissions</p>
+                  <div className="space-y-3">
+                    {feedbackSubmissions.map((f) => (
+                      <div key={f.id} className="border border-[var(--line)] rounded-lg px-3 py-2.5">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--line-soft)] text-[var(--ink-soft)]">
+                            {FEEDBACK_CATEGORIES.find((c) => c.value === f.category)?.label ?? f.category}
+                          </span>
+                          <span className="text-[10px] text-[var(--ink-faint)] ml-auto">{timeAgo(f.created_at)}</span>
+                        </div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90">{f.title}</p>
+                        <p className="text-xs text-[var(--ink-soft)] mt-0.5 line-clamp-2">{f.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* TASKS TAB */}
