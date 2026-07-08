@@ -467,12 +467,8 @@ function DashboardPage() {
   const [engageDraft, setEngageDraft] = useState("");
   const [engageGenerating, setEngageGenerating] = useState(false);
   const [engageCopied, setEngageCopied] = useState(false);
-  const [upvoteEnabled, setUpvoteEnabled] = useState(false);
-  const [upvoteQty, setUpvoteQty] = useState(10);
-  const [upvoteSpeed, setUpvoteSpeed] = useState<"slow" | "normal" | "fast">("normal");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [taskSubmitted, setTaskSubmitted] = useState(false);
-  const [taskError, setTaskError] = useState("");
   const [engageTasks, setEngageTasks] = useState<EngageTask[]>([]);
   const [credits, setCredits] = useState<{ plan: string | null; balance: number } | null>(null);
   // Default true (fail-safe: blur first) so free-tier data never flashes unblurred
@@ -1271,6 +1267,7 @@ function DashboardPage() {
   const brandInitial = brand.name[0]?.toUpperCase() ?? "B";
 
   // Citations derived data
+  const engagedUrls = new Set(engageTasks.map((t) => t.url));
   const CITATION_BLOCKED = [
     "google.com", "googleapis.com", "googleusercontent.com",
     "gstatic.com", "googlesyndication.com", "doubleclick.net",
@@ -2307,7 +2304,14 @@ function DashboardPage() {
                                         <span className="text-[10px] text-[var(--ink-faint)]">Cited by</span>
                                         <EngineIcon engine={item.engine} size={16} />
                                         {isReddit && (
-                                          <button onClick={() => { setEngageItem({ url: item.url, promptText: prompt.text, engine: item.engine }); setEngageDraft(""); navTo("citations"); }} className="ml-auto text-[10px] font-semibold bg-[#FF4500] text-white px-2 py-0.5 rounded-full hover:bg-[#e03d00] transition-colors">Engage</button>
+                                          engagedUrls.has(item.url) ? (
+                                            <button onClick={() => { setEngageItem({ url: item.url, promptText: prompt.text, engine: item.engine }); setEngageDraft(""); navTo("citations"); }} className="ml-auto flex items-center gap-1 text-[10px] font-semibold border border-[var(--olive)]/40 text-[var(--olive)] px-2 py-0.5 rounded-full hover:bg-[var(--olive)]/10 transition-colors">
+                                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                              Engaged
+                                            </button>
+                                          ) : (
+                                            <button onClick={() => { setEngageItem({ url: item.url, promptText: prompt.text, engine: item.engine }); setEngageDraft(""); navTo("citations"); }} className="ml-auto text-[10px] font-semibold bg-[#FF4500] text-white px-2 py-0.5 rounded-full hover:bg-[#e03d00] transition-colors">Engage</button>
+                                          )
                                         )}
                                       </div>
                                     </div>
@@ -3196,7 +3200,18 @@ function DashboardPage() {
                                             </div>
                                             <span className="text-xs text-[var(--ink-faint)] shrink-0 max-w-[140px] truncate hidden lg:block" title={item.promptText}>{promptSnippet}</span>
                                             {itemIsReddit ? (
-                                              <button onClick={() => { setEngageItem({ url: item.url, promptText: item.promptText, engine: item.engine }); setEngageDraft(""); }} className="shrink-0 text-xs font-medium px-3 py-1 rounded-lg bg-[#FF4500] text-white hover:bg-[#e03d00] transition-colors">Engage</button>
+                                              engagedUrls.has(item.url) ? (
+                                                <button
+                                                  onClick={() => { setEngageItem({ url: item.url, promptText: item.promptText, engine: item.engine }); setEngageDraft(""); }}
+                                                  title="Already engaged — click to view or engage again"
+                                                  className="shrink-0 flex items-center gap-1 text-xs font-medium px-3 py-1 rounded-lg border border-[var(--olive)]/40 text-[var(--olive)] hover:bg-[var(--olive)]/10 transition-colors"
+                                                >
+                                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                  Engaged
+                                                </button>
+                                              ) : (
+                                                <button onClick={() => { setEngageItem({ url: item.url, promptText: item.promptText, engine: item.engine }); setEngageDraft(""); }} className="shrink-0 text-xs font-medium px-3 py-1 rounded-lg bg-[#FF4500] text-white hover:bg-[#e03d00] transition-colors">Engage</button>
+                                              )
                                             ) : (
                                               <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-xs font-medium px-3 py-1 rounded-lg border border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--line)] transition-colors">View →</a>
                                             )}
@@ -4672,7 +4687,7 @@ function DashboardPage() {
         const platformMeta = ENGAGE_PLATFORMS[engagePlatform];
         return (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); setTaskError(""); }} />
+          <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setTaskSubmitted(false); setEngageDraft(""); }} />
           <div className="w-full max-w-[420px] h-full bg-[var(--surface)] shadow-2xl flex flex-col overflow-hidden border-l border-[var(--line)]">
             {/* Header */}
             <div className="px-5 py-4 border-b border-[var(--line)] flex items-center gap-3">
@@ -4690,7 +4705,7 @@ function DashboardPage() {
                 <p className="text-sm font-semibold text-[var(--ink)]">Engage on {platformMeta.label}</p>
                 <p className="text-xs text-[var(--ink-faint)]">Draft a reply to influence this citation</p>
               </div>
-              <button onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); setTaskError(""); }} className="ml-auto text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+              <button onClick={() => { setEngageItem(null); setTaskSubmitted(false); setEngageDraft(""); }} className="ml-auto text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -4728,8 +4743,8 @@ function DashboardPage() {
                     <svg className="w-7 h-7 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Task submitted!</p>
-                    <p className="text-xs text-[var(--ink-soft)]">{upvoteEnabled ? "Your reply + upvote order is being processed." : "Your reply is being processed."}</p>
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Marked as engaged!</p>
+                    <p className="text-xs text-[var(--ink-soft)]">Want to boost it? Order upvotes from the Tasks tab.</p>
                   </div>
                   <button onClick={() => { navTo("tasks"); setEngageItem(null); setTaskSubmitted(false); }} className={`text-xs font-medium ${platformMeta.text} hover:underline`}>
                     View in Tasks →
@@ -4782,60 +4797,26 @@ function DashboardPage() {
                     <p className="text-xs text-[var(--ink-faint)]">{engageDraft.trim().split(/\s+/).length} words · edit freely before posting</p>
                   )}
 
-                  {/* Upvote ordering — Reddit only, no equivalent concept on other platforms */}
+                  {/* Ordering upvotes/comments lives in one place — the Tasks tab. This just hands off the link. */}
                   {engagePlatform === "reddit" && (
-                    <div className="border border-[var(--line)] rounded-xl overflow-hidden">
-                      <button
-                        onClick={() => setUpvoteEnabled((v) => !v)}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--line-soft)] transition-colors"
-                      >
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${upvoteEnabled ? "bg-[#FF4500] border-[#FF4500]" : "border-[var(--line)]"}`}>
-                          {upvoteEnabled && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                        </div>
-                        <div className="text-left">
-                          <p className="text-xs font-semibold text-[var(--ink)]/90">Order upvotes to rank this reply</p>
-                          <p className="text-[10px] text-[var(--ink-faint)]">Boost visibility so AI engines surface your comment</p>
-                        </div>
-                        <svg className={`w-4 h-4 text-[var(--ink-faint)] ml-auto shrink-0 transition-transform ${upvoteEnabled ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-
-                      {upvoteEnabled && (
-                        <div className="px-4 pb-4 pt-1 border-t border-[var(--line)] space-y-3">
-                          <div className="flex gap-3">
-                            <div className="flex-1">
-                              <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Quantity</p>
-                              <div className="flex items-center gap-2">
-                                <button onClick={() => setUpvoteQty((q) => Math.max(1, q - 5))} className="w-7 h-7 rounded-lg border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line-soft)] font-medium text-sm">−</button>
-                                <span className="text-sm font-semibold text-[var(--ink)] w-8 text-center">{upvoteQty}</span>
-                                <button onClick={() => setUpvoteQty((q) => q + 5)} className="w-7 h-7 rounded-lg border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line-soft)] font-medium text-sm">+</button>
-                              </div>
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Speed</p>
-                              <select
-                                value={upvoteSpeed}
-                                onChange={(e) => setUpvoteSpeed(e.target.value as "slow" | "normal" | "fast")}
-                                className="w-full text-xs border border-[var(--line)] rounded-lg px-2 py-1.5 bg-[var(--line-soft)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
-                              >
-                                <option value="slow">Slow (safer)</option>
-                                <option value="normal">Normal</option>
-                                <option value="fast">Fast</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-[10px] text-[var(--ink-faint)] bg-[var(--line-soft)] rounded-lg px-3 py-2">
-                            <span>{upvoteQty} upvotes × 0.5 credits</span>
-                            <span className="font-semibold text-[var(--ink)]/80">{upvoteQty * 0.5} credits</span>
-                          </div>
-                          {credits && upvoteQty * 0.5 > credits.balance && (
-                            <p className="text-[10px] text-red-700 bg-red-500/10 rounded-lg px-3 py-2 leading-relaxed">
-                              Not enough credits — need {upvoteQty * 0.5}, have {credits.balance}.
-                            </p>
-                          )}
-                          <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)]/10 rounded-lg px-3 py-2 leading-relaxed">Comments under 200 chars have ~35% removal rate. Keep replies natural and helpful.</p>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => {
+                        setRedditOrderUrl(engageItem.url);
+                        setRedditOrderService("post_upvote");
+                        setEngageItem(null);
+                        navTo("tasks");
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 border border-[var(--line)] rounded-xl hover:bg-[var(--line-soft)] transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-[#FF4500]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90">Order upvotes to rank this reply</p>
+                        <p className="text-[10px] text-[var(--ink-faint)]">Opens Tasks with this link pre-filled</p>
+                      </div>
+                      <svg className="w-4 h-4 text-[var(--ink-faint)] ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
                   )}
                 </>
               )}
@@ -4844,109 +4825,60 @@ function DashboardPage() {
             {/* Footer actions */}
             {!taskSubmitted && (
               <div className="px-5 py-4 border-t border-[var(--line)] space-y-2">
-                {upvoteEnabled ? (
-                  <>
-                    {taskError && (
-                      <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-2">{taskError}</p>
-                    )}
-                    <button
-                      onClick={async () => {
-                        if (!engageDraft.trim()) return;
-                        if (isFreeTier) { openPaywall(); return; }
-                        setTaskError("");
-                        setTaskSubmitting(true);
-                        try {
-                          const res = await fetch("/api/tasks", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              brandId: brand.id,
-                              url: engageItem.url,
-                              promptText: engageItem.promptText,
-                              engine: engageItem.engine,
-                              replyText: engageDraft,
-                              upvotesOrdered: upvoteQty,
-                              deliverySpeed: upvoteSpeed,
-                            }),
-                          });
-                          if (res.ok) {
-                            const d = await res.json();
-                            setEngageTasks((prev) => [d.task ? mapEngageTask(d.task) : prev[0], ...prev].filter(Boolean));
-                            setCredits((prev) => (prev ? { ...prev, balance: prev.balance - upvoteQty * 0.5 } : prev));
-                            setTaskSubmitted(true);
-                          } else {
-                            const d = await res.json().catch(() => ({}));
-                            setTaskError(d.error ?? "Failed to submit task. Try again.");
-                          }
-                        } catch {
-                          setTaskError("Failed to submit task. Try again.");
-                        }
-                        setTaskSubmitting(false);
-                      }}
-                      disabled={taskSubmitting || !engageDraft.trim() || (credits != null && upvoteQty * 0.5 > credits.balance)}
-                      className="w-full text-sm font-semibold bg-[#FF4500] text-white py-2.5 rounded-lg hover:bg-[#e03d00] disabled:opacity-50 transition-colors"
-                    >
-                      {taskSubmitting ? "Submitting…" : `Submit Task · ${upvoteQty * 0.5} credits`}
-                    </button>
-                  </>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        if (engageDraft) {
-                          navigator.clipboard.writeText(engageDraft);
-                          setEngageCopied(true);
-                          setTimeout(() => setEngageCopied(false), 2000);
-                        }
-                      }}
-                      disabled={!engageDraft}
-                      className="flex-1 text-sm font-medium border border-[var(--line)] text-[var(--ink)]/80 py-2.5 rounded-lg hover:bg-[var(--line-soft)] disabled:opacity-40 transition-colors"
-                    >
-                      {engageCopied ? "Copied!" : "Copy text"}
-                    </button>
-                    <a
-                      href={engageItem.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} transition-colors`}
-                    >
-                      Open {platformMeta.label} →
-                    </a>
-                  </div>
-                )}
-                {!upvoteEnabled && (
+                <div className="flex gap-2">
                   <button
-                    onClick={async () => {
-                      if (isFreeTier) { openPaywall(); return; }
-                      setTaskSubmitting(true);
-                      try {
-                        const res = await fetch("/api/tasks", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            brandId: brand.id,
-                            url: engageItem.url,
-                            promptText: engageItem.promptText,
-                            engine: engageItem.engine,
-                            replyText: engageDraft || null,
-                            upvotesOrdered: 0,
-                            deliverySpeed: "normal",
-                          }),
-                        });
-                        if (res.ok) {
-                          const d = await res.json();
-                          setEngageTasks((prev) => [d.task ? { id: d.task.id, brandId: d.task.brand_id, url: d.task.url, promptText: d.task.prompt_text, engine: d.task.engine, replyText: d.task.reply_text, upvotesOrdered: d.task.upvotes_ordered, deliverySpeed: d.task.delivery_speed, status: d.task.status, createdAt: d.task.created_at } as EngageTask : prev[0], ...prev].filter(Boolean));
-                          setTaskSubmitted(true);
-                        }
-                      } catch {}
-                      setTaskSubmitting(false);
+                    onClick={() => {
+                      if (engageDraft) {
+                        navigator.clipboard.writeText(engageDraft);
+                        setEngageCopied(true);
+                        setTimeout(() => setEngageCopied(false), 2000);
+                      }
                     }}
-                    disabled={taskSubmitting}
-                    className="w-full text-xs text-[var(--ink-faint)] hover:text-[var(--ink-soft)] py-1 transition-colors"
+                    disabled={!engageDraft}
+                    className="flex-1 text-sm font-medium border border-[var(--line)] text-[var(--ink)]/80 py-2.5 rounded-lg hover:bg-[var(--line-soft)] disabled:opacity-40 transition-colors"
                   >
-                    {taskSubmitting ? "Saving…" : engagePlatform === "reddit" ? "Track without upvotes" : "Track engagement"}
+                    {engageCopied ? "Copied!" : "Copy text"}
                   </button>
-                )}
+                  <a
+                    href={engageItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} transition-colors`}
+                  >
+                    Open {platformMeta.label} →
+                  </a>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (isFreeTier) { openPaywall(); return; }
+                    setTaskSubmitting(true);
+                    try {
+                      const res = await fetch("/api/tasks", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          brandId: brand.id,
+                          url: engageItem.url,
+                          promptText: engageItem.promptText,
+                          engine: engageItem.engine,
+                          replyText: engageDraft || null,
+                          upvotesOrdered: 0,
+                          deliverySpeed: "normal",
+                        }),
+                      });
+                      if (res.ok) {
+                        const d = await res.json();
+                        setEngageTasks((prev) => [d.task ? mapEngageTask(d.task) : prev[0], ...prev].filter(Boolean));
+                        setTaskSubmitted(true);
+                      }
+                    } catch {}
+                    setTaskSubmitting(false);
+                  }}
+                  disabled={taskSubmitting}
+                  className="w-full text-xs text-[var(--ink-faint)] hover:text-[var(--ink-soft)] py-1 transition-colors"
+                >
+                  {taskSubmitting ? "Saving…" : "Mark as engaged"}
+                </button>
               </div>
             )}
           </div>
