@@ -512,6 +512,8 @@ function DashboardPage() {
   const [citationHistory, setCitationHistory] = useState<{ domain: string; data: { date: string; count: number }[] }[]>([]);
   const [citationChartMode, setCitationChartMode] = useState<"line" | "bar">("line");
   const [citationChartHover, setCitationChartHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+  const [citationsStale, setCitationsStale] = useState(false);
+  const [refreshingCitations, setRefreshingCitations] = useState(false);
   // Prompts tab state
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [selectedCitationDomain, setSelectedCitationDomain] = useState<string | null>(null);
@@ -693,6 +695,11 @@ function DashboardPage() {
           setScanHistory((prev) =>
             prev.map((r) => (r.id === updated.id ? { ...r, overall_score: updated.overall_score } : r))
           );
+          // A scan just finished somewhere (scheduled run, another tab/device).
+          // If it's the one this session is already watching, runScan's own
+          // poll resolves it live and clears this flag right after; otherwise
+          // surface a manual refresh prompt on the Citations tab.
+          setCitationsStale(true);
         }
       )
       .subscribe();
@@ -998,6 +1005,7 @@ function DashboardPage() {
               if (finalScore !== undefined) setOverallScore(finalScore);
               setGaps(computeGaps(accumulated, brand));
               if (brand.id) fetch(`/api/history?brandId=${brand.id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
+              setCitationsStale(false);
               resolve();
             }
           } catch (e) {
@@ -1144,6 +1152,23 @@ function DashboardPage() {
       }
     } finally {
       setTogglingPromptId(null);
+    }
+  }
+
+  async function refreshCitations() {
+    if (!brand || refreshingCitations) return;
+    setRefreshingCitations(true);
+    try {
+      const d = await fetch(`/api/scan/results?brandId=${brand.id}`).then((r) => r.json());
+      if (d.results?.length) {
+        setResults(d.results);
+        setScanned(true);
+        if (d.scores?.length) setScores(d.scores);
+        if (d.overallScore !== undefined) setOverallScore(d.overallScore);
+      }
+      setCitationsStale(false);
+    } finally {
+      setRefreshingCitations(false);
     }
   }
 
@@ -2771,6 +2796,19 @@ function DashboardPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {citationsStale && (
+                <div className="flex items-center gap-2 mb-4 text-xs text-[var(--ink-soft)]">
+                  <span>A scan just completed — this page may be out of date.</span>
+                  <button
+                    onClick={refreshCitations}
+                    disabled={refreshingCitations}
+                    className="font-semibold text-[var(--rust)] hover:underline disabled:opacity-50"
+                  >
+                    {refreshingCitations ? "Refreshing…" : "Refresh"}
+                  </button>
                 </div>
               )}
 
