@@ -2,6 +2,7 @@ import { inngest } from "@/inngest/client";
 import { serverClient } from "@/lib/supabase";
 import { runScanForBrand, extractMentions, queryWithRetry, computeScores } from "@/lib/scan-engine";
 import { fireAlerts } from "@/lib/alerts";
+import { isDueForScheduledScan, updatePromptCadence } from "@/lib/prompt-cadence";
 import { AIEngine, BrandData, ScanResult } from "@/lib/types";
 
 const SCAN_ENGINES: AIEngine[] = ["chatgpt", "gemini", "google"];
@@ -53,10 +54,12 @@ export const scanBrand = inngest.createFunction(
 
       const { data: promptRows } = await db
         .from("tracked_prompts")
-        .select("id, text, category")
-        .eq("brand_id", brandId);
+        .select("id, text, category, status, cadence, won_streak, last_scanned_at")
+        .eq("brand_id", brandId)
+        .neq("status", "paused");
 
-      if (!promptRows?.length) throw new Error("No prompts for brand");
+      const duePrompts = (promptRows ?? []).filter(isDueForScheduledScan);
+      if (!duePrompts.length) throw new Error("No prompts due for brand");
 
       return {
         id: row.id,
@@ -66,7 +69,7 @@ export const scanBrand = inngest.createFunction(
         description: row.description,
         targetAudience: row.target_audience,
         competitors: row.competitors ?? [],
-        trackedPrompts: promptRows.map((p) => ({ id: p.id, text: p.text, category: p.category })),
+        trackedPrompts: duePrompts.map((p) => ({ id: p.id, text: p.text, category: p.category })),
       } as BrandData;
     });
 
@@ -146,10 +149,12 @@ export const manualScanBrand = inngest.createFunction(
         .single();
       if (!row) throw new Error("Brand not found");
 
+      // Manual scan: skip paused prompts but ignore cadence — the user asked for a scan.
       const { data: promptRows } = await db
         .from("tracked_prompts")
         .select("id, text, category")
-        .eq("brand_id", brandId);
+        .eq("brand_id", brandId)
+        .neq("status", "paused");
 
       const b: BrandData = {
         id: row.id,
@@ -229,6 +234,9 @@ export const manualScanBrand = inngest.createFunction(
       );
       await fireAlerts(brandId, brand.name, overallScore, scores).catch((e) =>
         console.error("[alerts] fireAlerts failed:", e)
+      );
+      await updatePromptCadence(db, brandId, scanRunId).catch((e) =>
+        console.error("[scan] updatePromptCadence failed:", e)
       );
       return { overallScore };
     });

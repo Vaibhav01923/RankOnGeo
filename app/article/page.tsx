@@ -212,7 +212,7 @@ function ArticleContent() {
 
   return (
     <div className="min-h-screen bg-[var(--cream)]">
-      <nav className="px-8 py-4 border-b border-[var(--line)] flex items-center justify-between bg-[var(--surface)] sticky top-0 z-20">
+      <nav className="px-4 sm:px-8 py-4 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-3 bg-[var(--surface)] sticky top-0 z-20">
         <a href="/" className="flex items-center gap-2">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
             <circle cx="16" cy="16" r="6" stroke="var(--rust)" strokeWidth="2.5" />
@@ -223,7 +223,7 @@ function ArticleContent() {
             RankOn<span className="text-[var(--rust)]">Geo</span>
           </span>
         </a>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {savedFlash && (
             <span className="text-xs text-[var(--rust-deep)] font-medium bg-[var(--rust-wash)] px-3 py-1.5 rounded-lg border border-[var(--rust)]/25">Saved</span>
           )}
@@ -261,7 +261,7 @@ function ArticleContent() {
         </div>
       </nav>
 
-      <main className="max-w-3xl mx-auto px-8 py-14">
+      <main className="max-w-3xl mx-auto px-5 sm:px-8 py-14">
         {gapPrompt && (
           <div className="mb-8 bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-xl px-5 py-4">
             <p className="text-xs font-semibold text-[var(--rust-deep)] uppercase tracking-widest mb-1">Targeting this AI gap</p>

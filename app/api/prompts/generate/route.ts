@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { clientFromRequest } from "@/lib/supabase";
+import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -26,12 +27,6 @@ export async function POST(req: NextRequest) {
   const { data: planRow } = await db.from("user_plans").select("plan").eq("user_id", user.id).single();
   const promptCount = PLAN_PROMPT_COUNTS[planRow?.plan ?? "starter"] ?? 20;
 
-  const branded = Math.round(promptCount * 0.20);
-  const competitorAlt = Math.round(promptCount * 0.25);
-  const categoryLeader = Math.round(promptCount * 0.20);
-  const comparison = Math.round(promptCount * 0.15);
-  const community = promptCount - branded - competitorAlt - categoryLeader - comparison;
-
   const competitors = (brand.competitors ?? []).join(", ");
 
   const systemPrompt = `You are an AI visibility strategist. Generate EXACTLY ${promptCount} search prompts for "${brand.name}" (${brand.domain}) in the "${brand.niche}" space. You MUST return exactly ${promptCount} items — not one more, not one less.
@@ -42,38 +37,7 @@ Competitors: ${competitors || "unknown — infer from niche"}
 Return a JSON object with a "prompts" array:
 { "prompts": [ { "text": "...", "category": "Branded" }, ... ] }
 
-Strategy — EXACTLY this distribution:
-
-**${branded} BRANDED** (category: "Branded") — brand is always the answer:
-- "${brand.name} review"
-- "${brand.name} pricing"
-- "is ${brand.name} free"
-- "${brand.name} getting started"
-- "${brand.name} vs alternatives"
-
-**${competitorAlt} COMPETITOR-ALTERNATIVE** (category: "Competitor") — user wants alternative to a named competitor:
-- "alternative to [Competitor]"
-- "best [Competitor] alternatives"
-- "[Competitor] alternative that [specific benefit]"
-Use real competitor names: ${competitors || "infer from niche"}
-
-**${categoryLeader} CATEGORY LEADER** (category: "Commercial") — user wants the best tool in this niche:
-- "best [specific tool type] for [specific audience]"
-- "top [category] tools in 2026"
-- "recommend a [category] solution for [use case]"
-Be hyper-specific to: ${brand.niche}
-
-**${comparison} COMPARISON** (category: "Competitor") — direct head-to-head that always mentions both brands:
-- "${brand.name} vs [Competitor] which is better"
-- "${brand.name} vs [Competitor] for [use case]"
-
-**${community} COMMUNITY/DISCUSSION** (category: "Commercial") — short casual questions that match Reddit thread titles and YouTube tutorial searches, which AI cites from real community discussions:
-- "how good is [brand name]"
-- "[category] tools discussion"
-- "which [category] tool should I use"
-- "is [brand name] worth it"
-- "switching from [Competitor] to [brand name]"
-Keep these SHORT (3-7 words), casual, like how someone would title a Reddit post.
+${promptStrategy({ total: promptCount, brandName: brand.name, niche: brand.niche, competitors: competitors || "infer from niche" })}
 
 IMPORTANT: Return exactly ${promptCount} total prompts. Use JSON { "prompts": [...] }`;
 
@@ -92,6 +56,10 @@ IMPORTANT: Return exactly ${promptCount} total prompts. Use JSON { "prompts": [.
   } catch {
     return NextResponse.json({ error: "Failed to generate prompts" }, { status: 500 });
   }
+
+  // The model sometimes leaks the brand name into discovery prompts — cap
+  // name-containing prompts at the branded quota (~20%).
+  prompts = enforceBrandCap(prompts, brand.name, promptCount);
 
   // Replace existing prompts
   await db.from("tracked_prompts").delete().eq("brand_id", brandId);

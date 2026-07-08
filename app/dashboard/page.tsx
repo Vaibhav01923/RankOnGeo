@@ -425,6 +425,7 @@ function DashboardPage() {
   const [loadingResults, setLoadingResults] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [results, setResults] = useState<ScanResult[]>([]);
   const [scores, setScores] = useState<VisibilityScore[]>([]);
   const [gaps, setGaps] = useState<GapItem[]>([]);
@@ -480,6 +481,15 @@ function DashboardPage() {
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
   const [taskFilter, setTaskFilter] = useState<"pending" | "completed" | "failed">("pending");
 
   // Standalone Reddit-order form (Tasks tab) — independent of the Citations Engage Panel
@@ -517,6 +527,10 @@ function DashboardPage() {
   const [selectedResponseResult, setSelectedResponseResult] = useState<ScanResult | null>(null);
   const [promptSearch, setPromptSearch] = useState("");
   const [newPromptText, setNewPromptText] = useState("");
+  const [togglingPromptId, setTogglingPromptId] = useState<string | null>(null);
+  const [suggestingPrompts, setSuggestingPrompts] = useState(false);
+  const [promptSuggestions, setPromptSuggestions] = useState<{ text: string; category: string }[]>([]);
+  const [addingSuggestionText, setAddingSuggestionText] = useState<string | null>(null);
   const [editingCompetitors, setEditingCompetitors] = useState(false);
   const [competitorDraft, setCompetitorDraft] = useState<string[]>([]);
   const [newCompetitorInput, setNewCompetitorInput] = useState("");
@@ -1105,7 +1119,67 @@ function DashboardPage() {
 
   function navTo(tab: Tab) {
     setActiveTab(tab);
+    setSidebarOpen(false);
     sessionStorage.setItem("dashTab", tab);
+  }
+
+  async function togglePromptStatus(p: { id: string; status?: string }) {
+    if (togglingPromptId) return;
+    setTogglingPromptId(p.id);
+    const next = p.status === "paused" ? "active" : "paused";
+    try {
+      const res = await fetch(`/api/prompts/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json();
+      if (data.prompt) {
+        setBrand((b) => b ? {
+          ...b,
+          trackedPrompts: b.trackedPrompts.map((x) =>
+            x.id === p.id ? { ...x, status: data.prompt.status, cadence: data.prompt.cadence ?? x.cadence } : x
+          ),
+        } : b);
+      }
+    } finally {
+      setTogglingPromptId(null);
+    }
+  }
+
+  async function fetchPromptSuggestions() {
+    if (!brand || suggestingPrompts) return;
+    setSuggestingPrompts(true);
+    try {
+      const res = await fetch("/api/prompts/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id }),
+      });
+      const data = await res.json();
+      setPromptSuggestions(data.suggestions ?? []);
+    } finally {
+      setSuggestingPrompts(false);
+    }
+  }
+
+  async function addSuggestedPrompt(s: { text: string; category: string }) {
+    if (!brand || addingSuggestionText) return;
+    setAddingSuggestionText(s.text);
+    try {
+      const res = await fetch("/api/prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id, text: s.text, category: s.category }),
+      });
+      const data = await res.json();
+      if (data.prompt) {
+        setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
+        setPromptSuggestions((prev) => prev.filter((x) => x.text !== s.text));
+      }
+    } finally {
+      setAddingSuggestionText(null);
+    }
   }
 
   async function submitRedditOrder() {
@@ -1263,8 +1337,19 @@ function DashboardPage() {
       className="dashboard-signal flex h-screen overflow-hidden bg-[var(--cream)] text-[var(--ink)]"
       style={signalVars}
     >
-      {/* Sidebar */}
-      <aside className="w-[264px] shrink-0 flex flex-col border-r border-[var(--line)] bg-transparent px-2">
+      {/* Sidebar — fixed off-canvas drawer below lg, static column at lg+ */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-[var(--line)] bg-[var(--cream)] px-2 transition-transform duration-200 ease-out motion-reduce:transition-none ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:static lg:z-auto lg:translate-x-0 lg:bg-transparent lg:shrink-0 lg:transition-none`}
+      >
         <div className="px-3 py-5 flex items-center gap-2 shrink-0">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="12.5" r="1.7" fill="var(--rust)" />
@@ -1416,15 +1501,24 @@ function DashboardPage() {
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="bg-[var(--surface)]/70 backdrop-blur-sm border-b border-[var(--line)] px-6 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="bg-[var(--surface)]/70 backdrop-blur-sm border-b border-[var(--line)] px-4 sm:px-6 py-3 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open navigation"
+              className="lg:hidden shrink-0 -ml-1 p-1.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
             <div className="w-5 h-5 rounded bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-[10px] font-bold shrink-0">{brandInitial}</div>
-            <span className="font-medium text-[var(--ink-soft)]">{brand.domain}</span>
-            <span className="text-[var(--ink-faint)] mx-0.5">/</span>
-            <span className="text-[var(--ink-faint)]">{TAB_LABELS[activeTab]}</span>
+            <span className="font-medium text-[var(--ink-soft)] truncate">{brand.domain}</span>
+            <span className="text-[var(--ink-faint)] mx-0.5 hidden sm:inline">/</span>
+            <span className="text-[var(--ink-faint)] hidden sm:inline whitespace-nowrap">{TAB_LABELS[activeTab]}</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {selectedEngines.length > 0 && (
               <div className="hidden xl:flex items-center gap-1">
                 {selectedEngines.map((e) => (
@@ -1439,7 +1533,7 @@ function DashboardPage() {
             )}
             {/* "Next check in" countdown — shown once scanned, hidden during scan or non-scan tabs */}
             {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
-              <div className="flex items-center gap-1.5 text-xs text-[var(--ink-faint)] border border-[var(--line)] rounded-lg px-3 py-1.5">
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--ink-faint)] border border-[var(--line)] rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] animate-pulse" />
                 Next check in: <span className="font-medium text-[var(--ink-soft)]">{nextCheckIn}</span>
               </div>
@@ -1449,7 +1543,7 @@ function DashboardPage() {
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
-                className="flex items-center gap-1.5 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-[0_8px_20px_-8px_oklch(0.56_0.15_38_/_55%)]"
+                className="flex items-center gap-1.5 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-[0_8px_20px_-8px_oklch(0.56_0.15_38_/_55%)] whitespace-nowrap"
               >
                 {scanned ? "Re-scan" : "Start monitoring"}
               </button>
@@ -1485,7 +1579,7 @@ function DashboardPage() {
         </div>
 
         {/* Scrollable content */}
-        <div className={`flex-1 overflow-y-auto ${activeTab === "agent" ? "flex flex-col" : "px-6 py-6"}`}>
+        <div className={`flex-1 overflow-y-auto ${activeTab === "agent" ? "flex flex-col" : "px-4 py-5 sm:px-6 sm:py-6"}`}>
           {error && (
             <div className="px-6 pt-4">
               <div className="bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3 text-sm text-red-700 mb-5">{error}</div>
@@ -1559,7 +1653,7 @@ function DashboardPage() {
                     <MiniTrendChart runs={scanHistory} />
                   </div>
 
-                  <div className={`grid gap-5 ${scores.length === 3 ? "grid-cols-3" : scores.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  <div className={`grid gap-5 grid-cols-1 ${scores.length === 3 ? "sm:grid-cols-3" : scores.length === 2 ? "sm:grid-cols-2" : ""}`}>
                     {scores.map((s) => (
                       <div key={s.engine} className="flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] px-6 py-5.5">
                         <span className="text-[13px] font-semibold text-[var(--ink)]">{ENGINE_LABELS[s.engine]}</span>
@@ -1898,7 +1992,7 @@ function DashboardPage() {
 
                     {/* PROMPT card */}
                     <div className="panel rounded-2xl p-6 mb-4">
-                      <div className="flex gap-6">
+                      <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-bold text-[var(--ink-faint)] uppercase tracking-widest mb-3">Prompt</p>
                           <div className="flex items-center gap-2 mb-3">
@@ -1948,7 +2042,7 @@ function DashboardPage() {
                     </div>
 
                     {/* LLM Visibility Score + Top Brands */}
-                    <div className="grid grid-cols-[1fr_420px] gap-4 mb-4">
+                    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-4 mb-4">
                       {/* Area chart */}
                       <div className="panel rounded-2xl p-6">
                         <p className="text-sm font-semibold text-[var(--ink)] mb-0.5">LLM Visibility Score <span className="text-[var(--ink-faint)] font-normal text-xs ml-1">ⓘ</span></p>
@@ -2128,7 +2222,7 @@ function DashboardPage() {
                           </div>
                           <button onClick={() => navTo("citations")} className="text-xs font-semibold border border-[var(--line)] px-3 py-1.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors">View all</button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 mt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                           {/* Left: domain list */}
                           <div className="space-y-1.5">
                             {sortedCitDomains.map(([domain, info], i) => (
@@ -2209,7 +2303,7 @@ function DashboardPage() {
                   const brandedCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("brand")).length;
                   const competitorCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("competitor")).length;
                   const commercialCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("commercial")).length;
-                  const used = allPrompts.length;
+                  const used = allPrompts.filter((p) => p.status !== "paused").length;
                   const limit = 25;
                   const filtered = allPrompts.filter((p) => !promptSearch || p.text.toLowerCase().includes(promptSearch.toLowerCase()));
 
@@ -2219,7 +2313,7 @@ function DashboardPage() {
                       <p className="text-sm text-[var(--ink-faint)] mb-5">Manage your search prompts &amp; track visibility gaps</p>
 
                       {/* Stat cards */}
-                      <div className="grid grid-cols-4 gap-3 mb-5">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                         <StatCard label="Prompts" value={allPrompts.length} sub="tracked" />
                         {isFreeTier ? (
                           <BlurInline onUnlock={openPaywall}><StatCard label="With gaps" value={gaps.length} sub="need articles" /></BlurInline>
@@ -2259,9 +2353,11 @@ function DashboardPage() {
                         <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-[var(--ink)]/90 placeholder:text-[var(--ink-faint)]" />
                       </div>
 
-                      {/* Table */}
+                      {/* Table — scrolls horizontally on narrow screens */}
                       <div className="panel rounded-2xl overflow-hidden">
-                        <div className="grid grid-cols-[1fr_130px_120px_40px_32px] gap-x-4 px-5 py-3 border-b border-[var(--line)] bg-[var(--line-soft)]">
+                       <div className="overflow-x-auto">
+                       <div className="min-w-[640px]">
+                        <div className="grid grid-cols-[1fr_130px_120px_40px_60px] gap-x-4 px-5 py-3 border-b border-[var(--line)] bg-[var(--line-soft)]">
                           <span className="text-[11px] font-semibold text-[var(--ink-soft)]">Prompts</span>
                           <span className="text-[11px] font-semibold text-[var(--ink-soft)]">Engines</span>
                           <span className="text-[11px] font-semibold text-[var(--ink-soft)]">Competing with</span>
@@ -2283,7 +2379,7 @@ function DashboardPage() {
                           return (
                             <div
                               key={p.id}
-                              className="group grid grid-cols-[1fr_130px_120px_40px_32px] gap-x-4 px-5 py-4 border-b border-[var(--line)] last:border-0 hover:bg-[var(--line-soft)]/70 transition-colors items-center"
+                              className={`group grid grid-cols-[1fr_130px_120px_40px_60px] gap-x-4 px-5 py-4 border-b border-[var(--line)] last:border-0 hover:bg-[var(--line-soft)]/70 transition-colors items-center ${p.status === "paused" ? "opacity-55" : ""}`}
                             >
                               {/* Prompt with visibility ring — clickable */}
                               <button onClick={() => { if (isFreeTier) { openPaywall(); return; } setSelectedPromptId(p.id); setSelectedCitationDomain(null); history.pushState(null, ""); }} className="flex items-center gap-3 min-w-0 text-left">
@@ -2300,6 +2396,12 @@ function DashboardPage() {
                                   return isFreeTier ? <BlurInline onUnlock={openPaywall}>{ring}</BlurInline> : ring;
                                 })()}
                                 <span className="text-sm text-[var(--ink)]/90 font-medium leading-snug line-clamp-2">{p.text}</span>
+                                {p.status === "paused" && (
+                                  <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--line)] text-[var(--ink-soft)] px-1.5 py-0.5 rounded-full">Paused</span>
+                                )}
+                                {p.status !== "paused" && p.cadence === "weekly" && (
+                                  <span title="Won every scan for a week straight — now checked weekly. Drops back to daily if visibility slips." className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--olive-wash)] text-[var(--olive)] px-1.5 py-0.5 rounded-full">Monitoring</span>
+                                )}
                               </button>
                               {/* Engine mention dots */}
                               {(() => {
@@ -2347,8 +2449,21 @@ function DashboardPage() {
                                   <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
                                 </div>
                               )}
-                              {/* Delete */}
-                              <div className="flex justify-center">
+                              {/* Pause / Delete */}
+                              <div className="flex justify-center items-center gap-0.5">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); togglePromptStatus(p); }}
+                                  className={`transition-opacity p-1 rounded-lg hover:bg-[var(--line-soft)] text-[var(--ink-faint)]/70 hover:text-[var(--ink-soft)] ${p.status === "paused" ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                                  title={p.status === "paused" ? "Resume scanning this prompt" : "Pause — stop scanning this prompt"}
+                                >
+                                  {togglingPromptId === p.id ? (
+                                    <span className="w-3.5 h-3.5 border border-[var(--ink-faint)] border-t-transparent rounded-full animate-spin block" />
+                                  ) : p.status === "paused" ? (
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                  ) : (
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                                  )}
+                                </button>
                                 <button
                                   onClick={async (e) => {
                                     e.stopPropagation();
@@ -2377,6 +2492,8 @@ function DashboardPage() {
                         {filtered.length === 0 && (
                           <p className="text-sm text-[var(--ink-faint)] text-center py-10">No prompts match your search</p>
                         )}
+                       </div>
+                       </div>
                       </div>
 
                       {/* Add prompt */}
@@ -2433,6 +2550,48 @@ function DashboardPage() {
                           Add
                         </button>
                       </div>
+
+                      {/* Suggest fresh discovery prompts */}
+                      <div className="mt-4">
+                        {promptSuggestions.length === 0 ? (
+                          <button
+                            onClick={fetchPromptSuggestions}
+                            disabled={suggestingPrompts}
+                            className="flex items-center gap-1.5 text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)] transition-colors disabled:opacity-50"
+                          >
+                            {suggestingPrompts ? (
+                              <><span className="w-3 h-3 border border-[var(--rust)] border-t-transparent rounded-full animate-spin" /> Finding new prompts in your niche…</>
+                            ) : (
+                              <>✦ Suggest new discovery prompts</>
+                            )}
+                          </button>
+                        ) : (
+                          <div className="panel rounded-2xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-sm font-semibold text-[var(--ink)]">New discovery prompts</p>
+                                <p className="text-xs text-[var(--ink-faint)]">Questions people ask in your niche that you aren&apos;t tracking yet — none mention your brand</p>
+                              </div>
+                              <button onClick={() => setPromptSuggestions([])} className="text-[var(--ink-faint)]/70 hover:text-[var(--ink-soft)] text-lg leading-none shrink-0 ml-3">×</button>
+                            </div>
+                            <div className="space-y-1">
+                              {promptSuggestions.map((s) => (
+                                <div key={s.text} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--line-soft)] transition-colors">
+                                  <span className="text-sm text-[var(--ink)]/90 flex-1 min-w-0">{s.text}</span>
+                                  <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${s.category === "Competitor" ? "bg-[var(--rust-wash)] text-[var(--rust-deep)]" : "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{s.category}</span>
+                                  <button
+                                    onClick={() => addSuggestedPrompt(s)}
+                                    disabled={addingSuggestionText !== null}
+                                    className="shrink-0 text-xs font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] border border-[var(--line)] hover:border-[var(--rust)]/40 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                                  >
+                                    {addingSuggestionText === s.text ? "Adding…" : "+ Add"}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </>
                   );
                 })()
@@ -2458,7 +2617,7 @@ function DashboardPage() {
                     </div>
 
                     {/* Step content */}
-                    <div className="flex gap-8 px-8 py-8 min-h-[380px] items-center">
+                    <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 px-5 sm:px-8 py-6 sm:py-8 sm:min-h-[380px] items-center">
                       {/* Left: text */}
                       <div className="flex-1 min-w-0">
                         {citationOnboardingStep === 0 && (
@@ -2486,7 +2645,7 @@ function DashboardPage() {
                       </div>
 
                       {/* Right: illustration card */}
-                      <div className="w-80 shrink-0">
+                      <div className="w-full max-w-80 sm:w-80 shrink-0">
                         {citationOnboardingStep === 0 && (
                           <div className="panel rounded-2xl p-5">
                             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest mb-3">AI response</p>
@@ -2633,7 +2792,7 @@ function DashboardPage() {
                       <svg className="w-3.5 h-3.5 text-[var(--ink-faint)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01"/></svg>
                     </div>
                     <p className="text-xs text-[var(--ink-faint)] mb-3">Engage on these platforms to increase your AI visibility</p>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       {/* Reddit — live */}
                       <div className="bg-[var(--surface)] border-2 border-orange-200 rounded-xl p-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-3">
@@ -2730,7 +2889,7 @@ function DashboardPage() {
                       : null;
 
                     const chartBody = (
-                      <div className="grid grid-cols-[1fr_300px] gap-4 mb-5">
+                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 mb-5">
                         {/* Line / Bar chart */}
                         <div className="panel rounded-xl p-5">
                           <div className="flex items-start justify-between mb-1">
@@ -2918,8 +3077,10 @@ function DashboardPage() {
                           </select>
                         </div>
 
-                        {/* Domain table */}
+                        {/* Domain table — scrolls horizontally on narrow screens */}
                         <div className="panel rounded-xl overflow-hidden">
+                         <div className="overflow-x-auto">
+                         <div className="min-w-[560px]">
                           {/* Table header */}
                           <div className="grid grid-cols-[64px_1fr_80px_120px] gap-x-4 px-5 py-3 border-b border-[var(--line)] bg-[var(--line-soft)]">
                             <span className="text-[11px] font-semibold text-[var(--ink-soft)]">Rank</span>
@@ -3012,6 +3173,8 @@ function DashboardPage() {
                             );
                             return rowLocked ? <BlurInline key={domain} onUnlock={openPaywall}>{row}</BlurInline> : row;
                           })}
+                         </div>
+                         </div>
                         </div>
                       </>
                     );
@@ -3311,7 +3474,7 @@ function DashboardPage() {
           {/* KEYWORDS */}
           {/* ARTICLES */}
           {activeTab === "articles" && (
-            <div className="flex gap-5 h-full">
+            <div className="flex flex-col lg:flex-row gap-5 lg:h-full">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -3322,7 +3485,7 @@ function DashboardPage() {
                 </div>
 
                 {savedArticles.length > 0 && (
-                  <div className="grid grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                     <StatCard label="Published" value={publishedCount} sub="+0 this month" />
                     <StatCard label="In Draft" value={draftCount} sub={draftCount === 1 ? "1 ready for review" : ""} />
                     <StatCard label="Avg SEO Score" value={avgSeoScore ?? "—"} sub={`${savedArticles.filter(a => a.seoScore > 0).length} scored`} />
@@ -3358,8 +3521,8 @@ function DashboardPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="panel rounded-xl overflow-hidden">
-                    <table className="w-full">
+                  <div className="panel rounded-xl overflow-hidden overflow-x-auto">
+                    <table className="w-full min-w-[520px]">
                       <thead>
                         <tr className="border-b border-[var(--line)]">
                           <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Title</th>
@@ -3389,7 +3552,7 @@ function DashboardPage() {
               </div>
 
               {selectedArticle && (
-                <div className="w-72 shrink-0 panel rounded-xl p-5 flex flex-col gap-4 self-start sticky top-0">
+                <div className="w-full lg:w-72 shrink-0 panel rounded-xl p-5 flex flex-col gap-4 self-start lg:sticky lg:top-0">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-[var(--ink-soft)] uppercase tracking-widest">Article</p>
                     <button onClick={() => setSelectedArticle(null)} className="text-[var(--ink-faint)]/70 hover:text-[var(--ink-soft)] text-lg leading-none">×</button>
@@ -3498,8 +3661,8 @@ function DashboardPage() {
           {/* AGENT */}
           {activeTab === "agent" && (
             <div className="flex flex-1 min-h-0">
-              {/* Chat history sidebar */}
-              <div className="w-52 border-r border-[var(--line)] bg-[var(--line-soft)] flex flex-col shrink-0">
+              {/* Chat history sidebar — hidden on small screens; "+ New chat" stays in the top bar */}
+              <div className="w-52 border-r border-[var(--line)] bg-[var(--line-soft)] hidden md:flex flex-col shrink-0">
                 <div className="p-3 border-b border-[var(--line)]">
                   <button onClick={startNewChat} className="w-full flex items-center gap-2 text-sm text-[var(--ink-soft)] hover:text-[var(--ink)] hover:panel rounded-lg px-3 py-2 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -3620,7 +3783,7 @@ function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                   <StatCard label="Published / Mo" value={publishedThisMonth} sub={`${publishingLog.filter(e => e.status === "published").length} total`} />
                   <StatCard label="Syndications" value={publishingLog.filter(e => e.status === "published").length} sub="across all channels" />
                   <StatCard label="Channels Active" value={`${activeChannels.length}/${publishingChannels.length}`} sub={`${publishingChannels.filter(c => c.status === "paused").length} paused`} />
@@ -3638,7 +3801,7 @@ function DashboardPage() {
                       <button onClick={() => setShowAddChannel(true)} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add your first channel →</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {publishingChannels.map((ch) => (
                         <div key={ch.id} className="border border-[var(--line)] rounded-xl p-4">
                           <div className="flex items-center gap-2 mb-3">
@@ -3658,7 +3821,7 @@ function DashboardPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="panel rounded-xl p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <p className="text-sm font-semibold text-[var(--ink)]">Activity log</p>
@@ -3715,14 +3878,14 @@ function DashboardPage() {
                 <button onClick={() => setShowAddAlert(true)} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">+ New destination</button>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                 <StatCard label="Destinations" value={alertDestinations.length} sub="channels wired" />
                 <StatCard label="Active" value={alertDestinations.filter(d => d.status === "active").length} sub="enabled" />
                 <StatCard label="Recent Deliveries" value={alertDeliveries.length} sub="last 20" />
                 <StatCard label="Failed" value={alertDeliveries.filter(d => d.status === "failed").length} sub="need attention" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="panel rounded-xl overflow-hidden">
                   <div className="px-5 py-4 border-b border-[var(--line)]">
                     <p className="text-sm font-semibold text-[var(--ink)]">Destinations · {alertDestinations.length}</p>
@@ -3990,9 +4153,9 @@ function DashboardPage() {
 
           {/* ADMIN TAB */}
           {activeTab === "admin" && isAdmin && (
-            <div className="h-full flex gap-5">
+            <div className="lg:h-full flex flex-col lg:flex-row gap-5">
               {/* Left: user list */}
-              <div className="w-64 shrink-0 flex flex-col gap-2">
+              <div className="w-full lg:w-64 shrink-0 flex flex-col gap-2">
                 <div className="mb-2">
                   <h2 className="text-base font-semibold text-[var(--ink)]">Admin</h2>
                   <p className="text-xs text-[var(--ink-faint)] mt-0.5">All user tasks</p>
@@ -4287,7 +4450,7 @@ function DashboardPage() {
                 {/* Kind selector — clickable cards */}
                 <div>
                   <p className="text-xs font-semibold text-[var(--ink-soft)] uppercase tracking-widest mb-2">Where to send alerts</p>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {([
                       { value: "discord", label: "Discord", icon: (
                         <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
@@ -4472,7 +4635,7 @@ function DashboardPage() {
         return (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => { setEngageItem(null); setUpvoteEnabled(false); setUpvoteQty(10); setUpvoteSpeed("normal"); setTaskSubmitted(false); setEngageDraft(""); setTaskError(""); }} />
-          <div className="w-[420px] h-full bg-[var(--surface)] shadow-2xl flex flex-col overflow-hidden border-l border-[var(--line)]">
+          <div className="w-full max-w-[420px] h-full bg-[var(--surface)] shadow-2xl flex flex-col overflow-hidden border-l border-[var(--line)]">
             {/* Header */}
             <div className="px-5 py-4 border-b border-[var(--line)] flex items-center gap-3">
               <div className={`w-8 h-8 rounded-lg ${platformMeta.bg} flex items-center justify-center shrink-0`}>

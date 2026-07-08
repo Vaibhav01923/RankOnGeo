@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
 import { runScanForBrand } from "@/lib/scan-engine";
+import { isDueForScheduledScan } from "@/lib/prompt-cadence";
 import { AIEngine, BrandData } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -29,10 +30,13 @@ export async function GET(req: NextRequest) {
       brands.map(async (row) => {
         const { data: promptRows } = await db
           .from("tracked_prompts")
-          .select("id, text, category")
+          .select("id, text, category, status, cadence, won_streak, last_scanned_at")
           .eq("brand_id", row.id)
-          .limit(10); // 10 prompts × 2 engines = 20 calls per brand, ~1 min
-        if (!promptRows?.length) return null;
+          .neq("status", "paused")
+          .limit(20);
+        // Scheduled cadence: daily prompts always run; weekly (monitoring) only when due
+        const due = (promptRows ?? []).filter(isDueForScheduledScan).slice(0, 10); // 10 prompts × 2 engines = 20 calls per brand, ~1 min
+        if (!due.length) return null;
         return {
           id: row.id,
           domain: row.domain,
@@ -41,7 +45,7 @@ export async function GET(req: NextRequest) {
           description: row.description,
           targetAudience: row.target_audience,
           competitors: row.competitors ?? [],
-          trackedPrompts: promptRows.map((p) => ({ id: p.id, text: p.text, category: p.category })),
+          trackedPrompts: due.map((p) => ({ id: p.id, text: p.text, category: p.category })),
         } as BrandData;
       })
     )

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AIEngine, BrandData, ScanResult, VisibilityScore } from "@/lib/types";
+import { updatePromptCadence } from "@/lib/prompt-cadence";
 
 const getAnthropic = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const getOpenAI = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -310,6 +311,9 @@ export async function runScanForBrand(
         total_prompts: s.totalPrompts,
         avg_rank: s.avgRank,
       }))
+    );
+    await updatePromptCadence(db, brand.id!, runRow.id).catch((e: Error) =>
+      console.error("[scan] updatePromptCadence failed:", e)
     );
   }
 

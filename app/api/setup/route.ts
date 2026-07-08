@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { clientFromRequest } from "@/lib/supabase";
+import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -100,12 +101,6 @@ export async function POST(req: NextRequest) {
     ? `The user identified these competitors: ${userCompetitors.join(", ")}.`
     : "";
 
-  const branded = Math.round(promptCount * 0.20);
-  const competitorAlt = Math.round(promptCount * 0.25);
-  const categoryLeader = Math.round(promptCount * 0.20);
-  const comparison = Math.round(promptCount * 0.15);
-  const community = promptCount - branded - competitorAlt - categoryLeader - comparison;
-
   const prompt = `You are an AI visibility strategist. Analyze this website from "${domain}" and return JSON with EXACTLY ${promptCount} prompts.
 
 Return this exact structure:
@@ -121,37 +116,7 @@ Return this exact structure:
   ]
 }
 
-Generate EXACTLY ${promptCount} prompts using this strategy:
-
-**${branded} BRANDED** (category: "Branded") — 100% visibility, brand is always the answer:
-- "[brand] review"
-- "[brand] pricing"
-- "is [brand] free"
-- "[brand] getting started"
-- "[brand] vs alternatives"
-
-**${competitorAlt} COMPETITOR-ALTERNATIVE** (category: "Competitor") — user wants alternative to a named competitor:
-- "alternative to [Competitor]"
-- "best [Competitor] alternatives"
-- "[Competitor] alternative that [specific benefit]"
-Use real competitor names from this market.
-
-**${categoryLeader} CATEGORY LEADER** (category: "Commercial") — user wants best tool in category:
-- "best [specific tool type] for [specific audience]"
-- "top [category] tools in 2026"
-- "recommend a [category] solution for [use case]"
-Be hyper-specific to this brand's exact niche.
-
-**${comparison} COMPARISON** (category: "Competitor") — head-to-head that always mentions both brands:
-- "[Brand] vs [Competitor] which is better"
-- "[Brand] vs [Competitor] for [use case]"
-
-**${community} COMMUNITY/DISCUSSION** (category: "Commercial") — SHORT casual questions (3-7 words) that match Reddit thread titles and YouTube tutorials. These trigger AI to cite real community discussions:
-- "how good is [brand]"
-- "switching from [Competitor] to [brand]"
-- "which [category] tool should I use"
-- "is [brand] worth it"
-Keep these conversational, like Reddit post titles.
+${promptStrategy({ total: promptCount, brandName: "[Brand]", niche: "this brand's exact niche", competitors: "real competitor names from this market" })}
 
 ${competitorHint}
 
@@ -197,6 +162,10 @@ ${content}`;
   if (brandErr || !brandRow) {
     return NextResponse.json({ error: brandErr?.message ?? "Failed to save brand" }, { status: 500 });
   }
+
+  // Cap name-containing prompts at the branded quota (~20%) — the model
+  // sometimes anchors discovery prompts to the brand name anyway.
+  extracted.trackedPrompts = enforceBrandCap(extracted.trackedPrompts ?? [], extracted.name ?? "", promptCount);
 
   // Delete old prompts and insert fresh ones
   await db.from("tracked_prompts").delete().eq("brand_id", brandRow.id);

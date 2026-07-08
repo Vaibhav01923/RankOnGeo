@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
   const { data: prompts } = await db
     .from("tracked_prompts")
-    .select("id, text, category")
+    .select("id, text, category, status, cadence")
     .eq("brand_id", brandId);
 
   return NextResponse.json({
@@ -59,6 +59,6 @@ export async function GET(req: NextRequest) {
     description: brand.description,
     targetAudience: brand.target_audience,
     competitors: brand.competitors,
-    trackedPrompts: (prompts ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category })),
+    trackedPrompts: (prompts ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category, status: p.status, cadence: p.cadence })),
   });
 }

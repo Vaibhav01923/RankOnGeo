@@ -166,7 +166,7 @@ function AuditContent() {
   return (
     <div className="min-h-screen bg-[var(--cream)] text-[var(--ink)]" style={{ fontFamily: "var(--font-work-sans), sans-serif" }}>
       {/* Nav */}
-      <nav className="flex items-center justify-between px-8 py-4 bg-[var(--surface)] border-b border-[var(--line)]">
+      <nav className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-4 bg-[var(--surface)] border-b border-[var(--line)]">
         <a href="/" className="flex items-center gap-2">
           <LogoIcon />
           <span className="text-lg font-bold tracking-tight">RankOn<span className="text-[var(--rust)]">Geo</span></span>
@@ -182,7 +182,7 @@ function AuditContent() {
               value={inputDomain}
               onChange={(e) => setInputDomain(e.target.value)}
               placeholder="anothersite.com"
-              className="text-sm text-[var(--ink)] bg-transparent outline-none w-48 placeholder:text-[var(--ink-faint)]"
+              className="text-sm text-[var(--ink)] bg-transparent outline-none w-32 sm:w-48 placeholder:text-[var(--ink-faint)]"
             />
           </div>
           <button
@@ -195,7 +195,7 @@ function AuditContent() {
         </form>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-8 py-14 pb-36">
+      <main className="max-w-5xl mx-auto px-5 sm:px-8 py-14 pb-36">
         {/* Loading */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-32 gap-5">
@@ -250,7 +250,7 @@ function AuditContent() {
               </div>
 
               {/* ── STAT CARDS ── */}
-              <div className="grid grid-cols-4 gap-3 mb-10">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
                 <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-5">
                   <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)] font-medium mb-2">Opportunity Score</p>
                   <p className="font-signal-mono text-4xl font-semibold text-[var(--ink)] leading-none mb-1">{opportunityScore}<span className="text-2xl text-[var(--ink-faint)]">%</span></p>
@@ -345,7 +345,7 @@ function AuditContent() {
               )}
 
               {/* ── BRAND + KEYWORDS (side by side) ── */}
-              <div className="grid grid-cols-2 gap-6 mb-6 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
                 {/* Brand snapshot */}
                 <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-7">
                   <div className="flex items-center gap-2 mb-5">
@@ -494,7 +494,7 @@ function AuditContent() {
                     {result.article.intro}
                   </p>
                 )}
-                <div className="grid grid-cols-3 gap-2.5 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6">
                   {result.article.sections.map((s, i) => (
                     <div key={i} className="bg-[var(--cream)] border border-[var(--line)] rounded-xl px-4 py-3 flex items-center gap-3">
                       <div className="w-5 h-5 bg-[var(--rust)] text-[var(--surface)] rounded flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</div>
@@ -551,7 +551,7 @@ function AuditContent() {
                 Annual <span className="text-xs bg-[var(--rust-wash)] text-[var(--rust-deep)] px-1.5 py-0.5 rounded font-semibold">−17%</span>
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
               {[
                 { name: "Free", desc: "Get started, no card needed.", price: "0", cta: "Start free →", action: () => router.push(`/setup?domain=${domain}`), highlight: false, features: ["1 website", "10 tracked prompts", "3 AI engines", "Manual refresh", "Basic visibility score"] },
                 { name: "Pro", desc: "For solopreneurs & small sites.", price: billing === "annual" ? "41" : "49", cta: "Get started →", action: () => startCheckout("starter"), highlight: false, features: ["50 credits for Reddit upvotes", "1 website", "50 tracked prompts", "4,000 AI responses/mo", "3 AI engines", "Weekly refresh", "CMS publishing"] },

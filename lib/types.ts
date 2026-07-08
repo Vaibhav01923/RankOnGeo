@@ -13,6 +13,8 @@ export type TrackedPrompt = {
   id: string;
   text: string;
   category: string;
+  status?: "active" | "paused";
+  cadence?: "daily" | "weekly";
 };
 
 export type AIEngine = "chatgpt" | "claude" | "gemini" | "perplexity" | "google" | "grok";
