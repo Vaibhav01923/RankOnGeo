@@ -5,15 +5,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createOrder as createBuyUpvotesOrder, BuyUpvotesError } from "@/lib/buyupvotes";
 import type { RedditServiceType } from "@/lib/types";
 
+// Priced at a consistent 25 credits per $1 of actual BuyUpvotes cost
+// (confirmed against their live /services rates: post votes $0.02/unit,
+// comment votes $0.04/unit, custom comments $0.20/unit).
 const CREDIT_COST: Record<RedditServiceType, number> = {
   post_upvote: 0.5,
   post_downvote: 0.5,
+  comment_upvote: 1,
+  comment_downvote: 1,
   custom_comments: 5,
 };
 
-const QUANTITY_LIMITS: Record<"post_upvote" | "post_downvote", { min: number; max: number }> = {
+const QUANTITY_LIMITS: Record<"post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote", { min: number; max: number }> = {
   post_upvote: { min: 5, max: 1000 },
   post_downvote: { min: 5, max: 1000 },
+  comment_upvote: { min: 5, max: 1000 },
+  comment_downvote: { min: 5, max: 1000 },
 };
 
 // BuyUpvotes' speed param is deliveries/hour (10-900); map our simple slow/normal/fast picker onto it.

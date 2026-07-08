@@ -119,7 +119,7 @@ export const pollRedditOrders = inngest.createFunction(
             row.service_type === "custom_comments"
               ? await createBuyUpvotesOrder({ service: "custom_comments", link: row.url, comments: row.reply_text ?? "", delay1: 2, delay2: 5 })
               : await createBuyUpvotesOrder({
-                  service: row.service_type as "post_upvote" | "post_downvote",
+                  service: row.service_type as "post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote",
                   link: row.url,
                   quantity: row.upvotes_ordered,
                   speed: SPEED_MAP[row.delivery_speed] ?? SPEED_MAP.normal,

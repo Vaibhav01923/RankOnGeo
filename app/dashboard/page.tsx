@@ -17,10 +17,19 @@ const ENGINE_LABELS: Record<AIEngine, string> = {
   grok: "Grok",
 };
 
-const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; creditsPerUnit: number; min: number; max: number }> = {
-  post_upvote: { label: "Upvotes", creditsPerUnit: 0.5, min: 5, max: 1000 },
-  post_downvote: { label: "Downvotes", creditsPerUnit: 0.5, min: 5, max: 1000 },
-  custom_comments: { label: "Comment", creditsPerUnit: 5, min: 1, max: 1 },
+const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "post" | "comment"; creditsPerUnit: number; min: number; max: number; caveat?: string }> = {
+  post_upvote: { label: "Upvotes", target: "post", creditsPerUnit: 0.5, min: 5, max: 1000 },
+  post_downvote: {
+    label: "Downvotes", target: "post", creditsPerUnit: 0.5, min: 5, max: 1000,
+    caveat: "Only works on posts less than 24 hours old — on older posts the vote count may not visibly change, but it still limits the post's reach.",
+  },
+  comment_upvote: { label: "Upvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
+  comment_downvote: { label: "Downvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
+  custom_comments: { label: "Post a new comment", target: "post", creditsPerUnit: 5, min: 1, max: 1 },
+};
+const REDDIT_TARGET_SERVICES: Record<"post" | "comment", RedditServiceType[]> = {
+  post: ["post_upvote", "post_downvote", "custom_comments"],
+  comment: ["comment_upvote", "comment_downvote"],
 };
 
 const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
@@ -1268,6 +1277,7 @@ function DashboardPage() {
 
   // Citations derived data
   const engagedUrls = new Set(engageTasks.map((t) => t.url));
+  const redditOrderTarget: "post" | "comment" = REDDIT_SERVICE_META[redditOrderService].target;
   const CITATION_BLOCKED = [
     "google.com", "googleapis.com", "googleusercontent.com",
     "gstatic.com", "googlesyndication.com", "doubleclick.net",
@@ -4011,10 +4021,32 @@ function DashboardPage() {
 
               {/* Standalone order form */}
               <div className="panel rounded-xl p-4 mb-6">
-                <p className="text-sm font-semibold text-[var(--ink)] mb-3">Order Reddit engagement</p>
+                <p className="text-sm font-semibold text-[var(--ink)] mb-1">Order Reddit engagement</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-3">First pick what you're boosting — a whole post/thread, or one specific comment.</p>
 
+                {/* Tier 1: target — the axis people actually get confused about */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {(["post", "comment"] as const).map((target) => (
+                    <button
+                      key={target}
+                      onClick={() => setRedditOrderService(REDDIT_TARGET_SERVICES[target][0])}
+                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                        redditOrderTarget === target
+                          ? "border-[#FF4500] bg-[#FF4500]/5"
+                          : "border-[var(--line)] hover:bg-[var(--line-soft)]"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold text-[var(--ink)]">{target === "post" ? "A whole post" : "One specific comment"}</p>
+                      <p className="text-[10px] text-[var(--ink-faint)] mt-0.5">
+                        {target === "post" ? "Boost the thread's overall visibility" : "Boost one reply's ranking within a thread"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tier 2: action within that target */}
                 <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
-                  {(["post_upvote", "post_downvote", "custom_comments"] as const).map((s) => (
+                  {REDDIT_TARGET_SERVICES[redditOrderTarget].map((s) => (
                     <button
                       key={s}
                       onClick={() => setRedditOrderService(s)}
@@ -4030,9 +4062,14 @@ function DashboardPage() {
                 <input
                   value={redditOrderUrl}
                   onChange={(e) => setRedditOrderUrl(e.target.value)}
-                  placeholder="https://www.reddit.com/r/.../comments/..."
-                  className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 mb-3 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                  placeholder={redditOrderTarget === "comment" ? "https://www.reddit.com/r/.../comments/.../comment/..." : "https://www.reddit.com/r/.../comments/..."}
+                  className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
                 />
+                <p className="text-[10px] text-[var(--ink-faint)] mt-1 mb-3">
+                  {redditOrderTarget === "comment"
+                    ? "Paste the comment's own link, not the post's — on Reddit, click the timestamp under the specific comment (or its \"…\" menu → Share → Copy Link) to get it."
+                    : "The link to the post/thread itself."}
+                </p>
 
                 {redditOrderService === "custom_comments" ? (
                   <div className="mb-3">
@@ -4071,8 +4108,8 @@ function DashboardPage() {
                   </div>
                 )}
 
-                {redditOrderService === "post_downvote" && (
-                  <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)] rounded-lg px-3 py-2 mb-3">Downvotes only work on posts less than 24 hours old — on older posts the vote count may not visibly change, but it still limits the post's reach.</p>
+                {REDDIT_SERVICE_META[redditOrderService].caveat && (
+                  <p className="text-[10px] text-[var(--rust-deep)] bg-[var(--rust-wash)] rounded-lg px-3 py-2 mb-3">{REDDIT_SERVICE_META[redditOrderService].caveat}</p>
                 )}
 
                 <div className="flex items-center justify-between text-[10px] text-[var(--ink-faint)] bg-[var(--line-soft)] rounded-lg px-3 py-2 mb-3">
@@ -4151,7 +4188,10 @@ function DashboardPage() {
                 <div className="space-y-3">
                   {engageTasks.filter((t) => taskMatchesFilter(t, taskFilter)).map((task) => {
                     const badge = TASK_STATUS_BADGE[task.status] ?? TASK_STATUS_BADGE.pending;
-                    const serviceLabel = REDDIT_SERVICE_META[task.serviceType]?.label ?? "Upvotes";
+                    const serviceMeta = REDDIT_SERVICE_META[task.serviceType] ?? REDDIT_SERVICE_META.post_upvote;
+                    // Post vs comment upvotes share the word "Upvotes" — qualify it here since
+                    // this list has no tab grouping to disambiguate them like the order form does.
+                    const serviceLabel = task.serviceType === "custom_comments" ? serviceMeta.label : `${serviceMeta.target === "comment" ? "Comment" : "Post"} ${serviceMeta.label}`;
                     return (
                     <div key={task.id} className="panel rounded-xl p-4 hover:border-[var(--line)] transition-colors">
                       <div className="flex items-start gap-3">
@@ -4797,26 +4837,49 @@ function DashboardPage() {
                     <p className="text-xs text-[var(--ink-faint)]">{engageDraft.trim().split(/\s+/).length} words · edit freely before posting</p>
                   )}
 
-                  {/* Ordering upvotes/comments lives in one place — the Tasks tab. This just hands off the link. */}
+                  {/* Ordering upvotes lives in one place — the Tasks tab. These are two
+                      distinct hand-offs, kept visually and textually separate on purpose:
+                      boosting the post vs. boosting your own reply are different targets
+                      on BuyUpvotes' side (different links, different services). */}
                   {engagePlatform === "reddit" && (
-                    <button
-                      onClick={() => {
-                        setRedditOrderUrl(engageItem.url);
-                        setRedditOrderService("post_upvote");
-                        setEngageItem(null);
-                        navTo("tasks");
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 border border-[var(--line)] rounded-xl hover:bg-[var(--line-soft)] transition-colors text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-[#FF4500]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-[var(--ink)]/90">Order upvotes to rank this reply</p>
-                        <p className="text-[10px] text-[var(--ink-faint)]">Opens Tasks with this link pre-filled</p>
-                      </div>
-                      <svg className="w-4 h-4 text-[var(--ink-faint)] ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          setRedditOrderUrl(engageItem.url);
+                          setRedditOrderService("post_upvote");
+                          setEngageItem(null);
+                          navTo("tasks");
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 border border-[var(--line)] rounded-xl hover:bg-[var(--line-soft)] transition-colors text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 flex items-center justify-center shrink-0">
+                          <svg className="w-4 h-4 text-[#FF4500]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[var(--ink)]/90">Boost this post</p>
+                          <p className="text-[10px] text-[var(--ink-faint)]">Upvotes on the whole thread — opens Tasks with this link pre-filled</p>
+                        </div>
+                        <svg className="w-4 h-4 text-[var(--ink-faint)] ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRedditOrderUrl("");
+                          setRedditOrderService("comment_upvote");
+                          setEngageItem(null);
+                          navTo("tasks");
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 border border-[var(--line)] rounded-xl hover:bg-[var(--line-soft)] transition-colors text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 flex items-center justify-center shrink-0">
+                          <svg className="w-4 h-4 text-[#FF4500]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.395-3.72C3.512 16.117 3 14.612 3 13c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[var(--ink)]/90">Boost your comment, once it's posted</p>
+                          <p className="text-[10px] text-[var(--ink-faint)]">Different from the post — after you post this reply on Reddit, come back and paste the comment's own link</p>
+                        </div>
+                        <svg className="w-4 h-4 text-[var(--ink-faint)] ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    </div>
                   )}
                 </>
               )}

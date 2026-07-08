@@ -25,10 +25,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export type BuyUpvotesService = "post_upvote" | "post_downvote" | "custom_comments";
+export type BuyUpvotesService = "post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote" | "custom_comments";
 
 export type CreateOrderParams =
-  | { service: "post_upvote" | "post_downvote"; link: string; quantity: number; speed?: number }
+  | { service: "post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote"; link: string; quantity: number; speed?: number }
   | { service: "custom_comments"; link: string; comments: string; delay1?: number; delay2?: number };
 
 export type CreateOrderResponse = {
