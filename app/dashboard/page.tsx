@@ -3119,7 +3119,7 @@ function DashboardPage() {
                             <p className="text-sm font-semibold text-[var(--ink)]">Top Cited Domains <span className="text-[var(--ink-faint)] font-normal text-xs ml-1">ⓘ</span></p>
                           </div>
                           <p className="text-base font-bold text-[var(--ink)] mb-4">{citationDomains.length} Domains</p>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
                             {citationDomains.slice(0, 7).map(([domain, info], i) => {
                               const pct = results.length ? Math.round((info.count / results.length) * 100) : 0;
                               return (
