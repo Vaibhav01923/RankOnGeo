@@ -529,6 +529,66 @@ function DashboardPage() {
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
+  const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
+  const [buyCreditsQty, setBuyCreditsQty] = useState(50);
+  const [buyCreditsSubmitting, setBuyCreditsSubmitting] = useState(false);
+  const [analyticsUsage, setAnalyticsUsage] = useState<{ quota: number; totalEvents: number; overageEvents: number; creditsCharged: number; ingestionPaused: boolean } | null>(null);
+  const [showDeleteBrandModal, setShowDeleteBrandModal] = useState(false);
+  const [deleteBrandConfirmText, setDeleteBrandConfirmText] = useState("");
+  const [deletingBrand, setDeletingBrand] = useState(false);
+
+  const deleteBrand = () => {
+    if (!brand) return;
+    setDeletingBrand(true);
+    fetch(`/api/brand?id=${brand.id}`, { method: "DELETE" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) return;
+        const remaining = allBrands.filter((b) => b.id !== brand.id);
+        window.location.href = remaining.length ? `/dashboard?brandId=${remaining[0].id}` : "/setup";
+      })
+      .finally(() => setDeletingBrand(false));
+  };
+
+  const buyCredits = () => {
+    setBuyCreditsSubmitting(true);
+    fetch("/api/dodo/credits-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity: buyCreditsQty, cancelPath: window.location.pathname + window.location.search }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.url) window.location.href = d.url; })
+      .finally(() => setBuyCreditsSubmitting(false));
+  };
+
+  // Shared Web+LLM Analytics monthly-usage widget, shown on both tabs since
+  // the quota (and any overage) is combined across both event types.
+  const renderAnalyticsUsageBar = () => {
+    if (!analyticsUsage) return null;
+    const { quota, totalEvents, overageEvents, creditsCharged, ingestionPaused } = analyticsUsage;
+    const pct = quota > 0 ? Math.min(100, Math.round((totalEvents / quota) * 100)) : 0;
+    return (
+      <div className="panel rounded-xl px-5 py-4 mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-[var(--ink)]">Monthly usage</p>
+          <p className="text-xs text-[var(--ink-faint)]">
+            {totalEvents.toLocaleString()} / {quota.toLocaleString()} events
+            {overageEvents > 0 && ` · +${overageEvents.toLocaleString()} over (${creditsCharged} credits)`}
+          </p>
+        </div>
+        <div className="h-1.5 rounded-full bg-[var(--line-soft)] overflow-hidden">
+          <div className={`h-full rounded-full ${overageEvents > 0 ? "bg-[var(--rust)]" : "bg-[var(--ink-faint)]"}`} style={{ width: `${pct}%` }} />
+        </div>
+        {ingestionPaused && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[var(--rust-wash)] px-3 py-2">
+            <p className="text-xs text-[var(--rust-deep)] font-medium">Analytics tracking is paused — out of credits to cover this month&apos;s overage.</p>
+            <button onClick={() => setShowBuyCreditsModal(true)} className="text-xs font-semibold text-[var(--rust-deep)] underline shrink-0">Buy credits</button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -709,6 +769,17 @@ function DashboardPage() {
               }
             });
         }, 3000);
+      }
+
+      // Credit top-ups are granted by Dodo automatically on successful
+      // payment (same as plan credits) — just refresh a few times so the
+      // sidebar balance updates without a manual reload.
+      if (searchParams.get("credits") === "success") {
+        let attempts = 0;
+        const poll = setInterval(() => {
+          attempts++;
+          fetchCredits().finally(() => { if (attempts >= 5) clearInterval(poll); });
+        }, 2000);
       }
     });
 
@@ -895,6 +966,14 @@ function DashboardPage() {
       .then((d) => { if (d.stats) setLlmAnalyticsData(d); })
       .finally(() => { setLlmAnalyticsLoaded(true); setLlmAnalyticsFetching(false); });
   }, [activeTab, brand, llmAnalyticsDays, llmAnalyticsRefreshKey]);
+
+  // Combined Web+LLM Analytics usage-vs-quota, shown on both analytics tabs
+  useEffect(() => {
+    if ((activeTab !== "webAnalytics" && activeTab !== "llmAnalytics") || !brand) return;
+    fetch(`/api/analytics/usage?brandId=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.quota === "number") setAnalyticsUsage(d); });
+  }, [activeTab, brand, webAnalyticsRefreshKey, llmAnalyticsRefreshKey]);
 
   // Show citations onboarding dialog + fetch citation history when tab opens
   useEffect(() => {
@@ -1723,10 +1802,17 @@ function DashboardPage() {
 
         <div className="mx-1 mb-3 mt-3 shrink-0 pt-3 border-t border-[var(--line)]">
           {credits && (
-            <div className="mb-2 flex items-center justify-between rounded-[10px] bg-[var(--rust-wash)] px-3 py-2">
+            <button
+              onClick={() => setShowBuyCreditsModal(true)}
+              className="mb-2 w-full flex items-center justify-between rounded-[10px] bg-[var(--rust-wash)] px-3 py-2 hover:bg-[var(--rust-wash)]/70 transition-colors"
+              title="Buy more credits"
+            >
               <span className="text-xs font-medium text-[var(--rust-deep)]">Credits</span>
-              <span className="font-signal-mono text-xs font-bold text-[var(--rust-deep)]">{credits.balance}</span>
-            </div>
+              <span className="flex items-center gap-1.5">
+                <span className="font-signal-mono text-xs font-bold text-[var(--rust-deep)]">{credits.balance}</span>
+                <svg className="w-3 h-3 text-[var(--rust-deep)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              </span>
+            </button>
           )}
           <div className="rounded-[10px] px-2 py-2 flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">
@@ -1763,6 +1849,15 @@ function DashboardPage() {
             <span className="font-medium text-[var(--ink-soft)] truncate">{brand.domain}</span>
             <span className="text-[var(--ink-faint)] mx-0.5 hidden sm:inline">/</span>
             <span className="text-[var(--ink-faint)] hidden sm:inline whitespace-nowrap">{TAB_LABELS[activeTab]}</span>
+            <button
+              onClick={() => { setDeleteBrandConfirmText(""); setShowDeleteBrandModal(true); }}
+              title="Delete this brand"
+              className="shrink-0 p-1 rounded-md text-[var(--ink-faint)] hover:text-red-600 hover:bg-red-500/10 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -3678,6 +3773,8 @@ function DashboardPage() {
                   <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
                 </div>
 
+                {renderAnalyticsUsageBar()}
+
                 <div className="panel rounded-xl overflow-hidden mb-5">
                   <button
                     onClick={() => setWebDetailsExpanded((v) => !v)}
@@ -3827,6 +3924,8 @@ function DashboardPage() {
                   <StatCard label="Live Bots" value={llmAnalyticsData?.stats.liveBots ?? 0} sub="last 5 min" />
                   <StatCard label="Bot Pageviews" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
                 </div>
+
+                {renderAnalyticsUsageBar()}
 
                 <div className="panel rounded-xl overflow-hidden mb-5">
                   <button
@@ -4030,6 +4129,93 @@ function DashboardPage() {
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
                   Learn to Setup Analytics →
                 </a>
+              </div>
+            </div>
+          )}
+
+          {/* Delete brand modal — irreversible, requires typing the domain to confirm */}
+          {showDeleteBrandModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !deletingBrand && setShowDeleteBrandModal(false)}>
+              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-base font-semibold text-red-600">Delete {brand.name}?</p>
+                  <button onClick={() => setShowDeleteBrandModal(false)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-4">
+                  This permanently deletes all tracked prompts, scan history, articles, citations, and analytics data for <span className="font-medium text-[var(--ink-soft)]">{brand.domain}</span>. This cannot be undone.
+                </p>
+
+                <label className="block text-xs font-medium text-[var(--ink-soft)] mb-1.5">
+                  Type <span className="font-mono font-semibold text-[var(--ink)]">{brand.domain}</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteBrandConfirmText}
+                  onChange={(e) => setDeleteBrandConfirmText(e.target.value)}
+                  placeholder={brand.domain}
+                  className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm mb-4 bg-[var(--surface)] text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-red-500/40"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowDeleteBrandModal(false)}
+                    className="flex-1 text-sm font-semibold border border-[var(--line)] px-3 py-2.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={deleteBrand}
+                    disabled={deleteBrandConfirmText !== brand.domain || deletingBrand}
+                    className="flex-1 text-sm font-semibold bg-red-600 text-white px-3 py-2.5 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingBrand ? "Deleting…" : "Delete brand"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Buy credits modal — $1/credit, one-time top-up on top of the plan's monthly grant */}
+          {showBuyCreditsModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowBuyCreditsModal(false)}>
+              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-base font-semibold text-[var(--ink)]">Buy credits</p>
+                  <button onClick={() => setShowBuyCreditsModal(false)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per credit, added on top of your current balance. Used for Reddit engagement orders and Web/LLM Analytics overage.</p>
+
+                <div className="text-center mb-3">
+                  <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{buyCreditsQty}</span>
+                  <span className="text-sm text-[var(--ink-faint)] ml-1.5">credits</span>
+                </div>
+
+                <input
+                  type="range"
+                  min={10}
+                  max={1000}
+                  step={5}
+                  value={buyCreditsQty}
+                  onChange={(e) => setBuyCreditsQty(Number(e.target.value))}
+                  className="w-full accent-[var(--rust)] mb-4"
+                />
+
+                <div className="flex items-center justify-between border border-[var(--line)] rounded-lg px-3 py-2 mb-4 bg-[var(--line-soft)]">
+                  <span className="text-xs text-[var(--ink-soft)]">Total</span>
+                  <span className="font-signal-mono text-sm font-bold text-[var(--ink)]">${buyCreditsQty.toLocaleString()}</span>
+                </div>
+
+                <button
+                  onClick={buyCredits}
+                  disabled={buyCreditsSubmitting}
+                  className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[var(--rust)] text-white px-3 py-2.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors disabled:opacity-60"
+                >
+                  {buyCreditsSubmitting ? "Redirecting…" : `Buy ${buyCreditsQty} credits — $${buyCreditsQty}`}
+                </button>
               </div>
             </div>
           )}

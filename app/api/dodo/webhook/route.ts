@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import type { WebhookPayload } from "dodopayments/resources/webhook-events";
 import { serverClient } from "@/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const getDodo = () =>
   new DodoPayments({
@@ -14,6 +15,56 @@ const getDodo = () =>
 // (attached per-product in the Dodo dashboard/API) — this webhook only
 // tracks which plan a user is on and their Dodo customer/subscription ids,
 // which app/api/credits and app/api/tasks need to query/debit that ledger.
+
+// Reverse-lookup of product_id -> our internal plan key. Authoritative source
+// for "which plan is this" — metadata.plan is only set at checkout time and
+// goes stale the moment a subscription's plan changes (upgrade/downgrade,
+// including ones made directly in the Dodo dashboard), so always prefer this
+// over metadata when a product_id is available.
+const PRODUCT_ID_TO_PLAN: Record<string, string> = {
+  [process.env.DODO_STARTER_PRODUCT_ID ?? ""]: "starter",
+  [process.env.DODO_GROWTH_PRODUCT_ID ?? ""]: "growth",
+  [process.env.DODO_ENTERPRISE_PRODUCT_ID ?? ""]: "enterprise",
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function upsertPlanFromSubscription(db: SupabaseClient<any, any, any>, sub: WebhookPayload.Subscription, eventType: string) {
+  const plan = PRODUCT_ID_TO_PLAN[sub.product_id] ?? sub.metadata?.plan ?? "starter";
+  let userId: string | undefined = sub.metadata?.userId;
+
+  // metadata.userId has been observed missing/empty on real webhook
+  // deliveries even though the checkout session was created with it —
+  // this silently no-op'd the upsert while still returning 200, which is
+  // indistinguishable from success in Dodo's dashboard. Fall back to
+  // matching the subscription's customer email against our own users.
+  if (!userId && sub.customer?.email) {
+    const { data: usersData } = await db.auth.admin.listUsers({ perPage: 1000 });
+    userId = usersData?.users.find((u: { email?: string }) => u.email === sub.customer.email)?.id;
+    console.error(`[dodo webhook] ${eventType} missing metadata.userId, fell back to email match`, {
+      subscriptionId: sub.subscription_id,
+      customerEmail: sub.customer.email,
+      resolvedUserId: userId ?? null,
+    });
+  }
+
+  if (userId) {
+    await db.from("user_plans").upsert(
+      {
+        user_id: userId,
+        plan,
+        dodo_customer_id: sub.customer?.customer_id ?? null,
+        dodo_subscription_id: sub.subscription_id,
+        current_period_end: sub.next_billing_date ?? null,
+      },
+      { onConflict: "user_id" }
+    );
+  } else {
+    console.error(`[dodo webhook] ${eventType} could not resolve a user — no metadata.userId and no email match`, {
+      subscriptionId: sub.subscription_id,
+      customerEmail: sub.customer?.email,
+    });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -34,42 +85,15 @@ export async function POST(req: NextRequest) {
   const db = serverClient();
 
   if (event.type === "subscription.active") {
-    const sub = event.data as WebhookPayload.Subscription;
-    const plan = sub.metadata?.plan ?? "starter";
-    let userId: string | undefined = sub.metadata?.userId;
+    await upsertPlanFromSubscription(db, event.data as WebhookPayload.Subscription, event.type);
+  }
 
-    // metadata.userId has been observed missing/empty on real webhook
-    // deliveries even though the checkout session was created with it —
-    // this silently no-op'd the upsert while still returning 200, which is
-    // indistinguishable from success in Dodo's dashboard. Fall back to
-    // matching the subscription's customer email against our own users.
-    if (!userId && sub.customer?.email) {
-      const { data: usersData } = await db.auth.admin.listUsers({ perPage: 1000 });
-      userId = usersData?.users.find((u) => u.email === sub.customer.email)?.id;
-      console.error("[dodo webhook] subscription.active missing metadata.userId, fell back to email match", {
-        subscriptionId: sub.subscription_id,
-        customerEmail: sub.customer.email,
-        resolvedUserId: userId ?? null,
-      });
-    }
-
-    if (userId) {
-      await db.from("user_plans").upsert(
-        {
-          user_id: userId,
-          plan,
-          dodo_customer_id: sub.customer?.customer_id ?? null,
-          dodo_subscription_id: sub.subscription_id,
-          current_period_end: sub.next_billing_date ?? null,
-        },
-        { onConflict: "user_id" }
-      );
-    } else {
-      console.error("[dodo webhook] subscription.active could not resolve a user — no metadata.userId and no email match", {
-        subscriptionId: sub.subscription_id,
-        customerEmail: sub.customer?.email,
-      });
-    }
+  // Fires when an existing subscription's plan/product changes — including
+  // upgrades/downgrades made directly in the Dodo dashboard rather than
+  // through our own checkout, which was silently ignored before this (the
+  // subscription stayed "active" so no other event ever corrected `plan`).
+  if (event.type === "subscription.plan_changed" || event.type === "subscription.updated") {
+    await upsertPlanFromSubscription(db, event.data as WebhookPayload.Subscription, event.type);
   }
 
   if (event.type === "subscription.renewed") {

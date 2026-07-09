@@ -11,5 +11,12 @@ export async function findPaidBrandBySiteKey(db: SupabaseClient<any, any, any>, 
   const { data: plan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", brand.user_id).maybeSingle();
   if (!plan?.dodo_subscription_id) return null;
 
+  // Ingestion is paused when this brand has run over its plan's monthly event
+  // quota and the overage debit failed for insufficient credits — see
+  // inngest/functions/analytics-billing.ts. Resumes automatically once
+  // credits are topped up (next poller tick) or the billing period rolls over.
+  const { data: cycle } = await db.from("analytics_usage_cycles").select("ingestion_paused").eq("brand_id", brand.id).maybeSingle();
+  if (cycle?.ingestion_paused) return null;
+
   return { id: brand.id };
 }

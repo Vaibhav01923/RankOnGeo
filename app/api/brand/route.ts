@@ -43,6 +43,25 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
+export async function DELETE(req: NextRequest) {
+  const db = clientFromRequest(req);
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Every table with a brand_id FK cascades on delete (tracked_prompts,
+  // scan_results, articles, web_visits/bot_visits, etc.) — this one delete
+  // removes all of a brand's history in one shot. Scoped to user_id so a
+  // brand id from another account can never be deleted via this route.
+  const { error, count } = await db.from("brands").delete({ count: "exact" }).eq("id", id).eq("user_id", user.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!count) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+
+  return NextResponse.json({ success: true });
+}
+
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("id");
   if (!brandId) return NextResponse.json({ error: "id is required" }, { status: 400 });

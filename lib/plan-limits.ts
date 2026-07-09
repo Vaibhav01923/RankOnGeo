@@ -8,6 +8,15 @@ export function promptLimitForPlan(plan: string | null | undefined): number {
   return plan ? PLAN_PROMPT_LIMITS[plan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
 }
 
+// Included monthly Web+LLM Analytics events per plan (web_visits + bot_visits
+// combined). Usage past this is metered via Dodo credits — see
+// lib/analytics-billing.ts and inngest/functions/analytics-billing.ts.
+export const PLAN_ANALYTICS_EVENT_QUOTAS: Record<string, number> = { starter: 20000, growth: 100000, enterprise: 500000 };
+
+export function analyticsEventQuotaForPlan(plan: string | null | undefined): number {
+  return plan ? PLAN_ANALYTICS_EVENT_QUOTAS[plan] ?? 0 : 0;
+}
+
 // Costs scale with how many prompts actually get scanned — paused ones are
 // skipped by every scan (see isDueForScheduledScan), so only active prompts
 // count against the limit. Existing brands already over their limit are
