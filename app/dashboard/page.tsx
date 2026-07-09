@@ -3698,7 +3698,7 @@ function DashboardPage() {
                   <p className="text-sm font-semibold text-[var(--ink)] mb-3">Add this script to the &lt;head&gt; section of your website:</p>
                   <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 mb-3 bg-[var(--line-soft)]">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" /></svg>
-                    <span className="truncate">{webAnalyticsData?.domain ? `https://${webAnalyticsData.domain.replace(/^https?:\/\//, "")}/` : ""}</span>
+                    <span className="truncate">{webAnalyticsData?.domain ? `https://${webAnalyticsData.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}/` : ""}</span>
                   </div>
                   <div className="relative bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 pr-24 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3">
                     {`<script src="https://rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`}
@@ -3948,7 +3948,7 @@ function DashboardPage() {
                   <span className="truncate">
                     {(() => {
                       const domain = websiteIdModal === "web" ? webAnalyticsData?.domain : llmAnalyticsData?.domain;
-                      return domain ? `https://${domain.replace(/^https?:\/\//, "")}/` : "";
+                      return domain ? `https://${domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}/` : "";
                     })()}
                   </span>
                 </div>
