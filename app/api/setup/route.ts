@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { clientFromRequest } from "@/lib/supabase";
 import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
+import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -63,9 +64,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   const userId = user?.id;
 
-  const PLAN_AUTO_COUNTS: Record<string, number> = { starter: 50, growth: 150, enterprise: 400 };
   const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
-  const FREE_AUTO_COUNT = 20;
   const FREE_BRAND_LIMIT = 1;
   let activePlan: string | null = null;
   if (userId) {
@@ -76,7 +75,7 @@ export async function POST(req: NextRequest) {
       .single();
     if (planRow?.dodo_subscription_id) activePlan = planRow.plan;
   }
-  const promptCount = activePlan ? PLAN_AUTO_COUNTS[activePlan] ?? FREE_AUTO_COUNT : FREE_AUTO_COUNT;
+  const promptCount = activePlan ? PLAN_PROMPT_LIMITS[activePlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
   const brandLimit = activePlan ? BRAND_LIMITS[activePlan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
 
   // Check the plan-based website limit before crawling/analyzing (expensive) —

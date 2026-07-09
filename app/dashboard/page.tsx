@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PricingCards } from "@/app/_components/PricingCards";
+import { promptLimitForPlan } from "@/lib/plan-limits";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
   chatgpt: "ChatGPT",
@@ -575,6 +576,7 @@ function DashboardPage() {
   }, []);
   const [selectedResponseResult, setSelectedResponseResult] = useState<ScanResult | null>(null);
   const [promptSearch, setPromptSearch] = useState("");
+  const [promptStatusFilter, setPromptStatusFilter] = useState<"active" | "paused">("active");
   const [newPromptText, setNewPromptText] = useState("");
   const [togglingPromptId, setTogglingPromptId] = useState<string | null>(null);
   const [suggestingPrompts, setSuggestingPrompts] = useState(false);
@@ -1263,6 +1265,7 @@ function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
       });
+      if (res.status === 402) { openPaywall(); return; }
       const data = await res.json();
       if (data.prompt) {
         setBrand((b) => b ? {
@@ -1376,6 +1379,26 @@ function DashboardPage() {
     }
   }
 
+  async function addManualPrompt() {
+    if (!brand || !newPromptText.trim() || addingPrompt) return;
+    setAddingPrompt(true);
+    try {
+      const res = await fetch("/api/prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id, text: newPromptText.trim(), category: "Commercial" }),
+      });
+      if (res.status === 402) { openPaywall(); return; }
+      const data = await res.json();
+      if (data.prompt) {
+        setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
+        setNewPromptText("");
+      }
+    } finally {
+      setAddingPrompt(false);
+    }
+  }
+
   async function addSuggestedPrompt(s: { id: string; text: string; category: string }) {
     if (!brand || addingSuggestionText) return;
     setAddingSuggestionText(s.text);
@@ -1385,6 +1408,7 @@ function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId: brand.id, suggestionId: s.id, text: s.text, category: s.category }),
       });
+      if (res.status === 402) { openPaywall(); return; }
       const data = await res.json();
       if (data.prompt) {
         setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
@@ -2530,12 +2554,17 @@ function DashboardPage() {
                 /* ── PROMPTS LIST VIEW ── */
                 (() => {
                   const allPrompts = brand.trackedPrompts;
-                  const brandedCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("brand")).length;
-                  const competitorCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("competitor")).length;
-                  const commercialCount = allPrompts.filter((p) => p.category?.toLowerCase().includes("commercial")).length;
-                  const used = allPrompts.filter((p) => p.status !== "paused").length;
-                  const limit = 25;
-                  const filtered = allPrompts.filter((p) => !promptSearch || p.text.toLowerCase().includes(promptSearch.toLowerCase()));
+                  const activePrompts = allPrompts.filter((p) => p.status !== "paused");
+                  const pausedPrompts = allPrompts.filter((p) => p.status === "paused");
+                  // Only active prompts actually get scanned (and cost us API calls), so
+                  // usage/breakdown counts are active-only — consistent with the limit itself.
+                  const brandedCount = activePrompts.filter((p) => p.category?.toLowerCase().includes("brand")).length;
+                  const competitorCount = activePrompts.filter((p) => p.category?.toLowerCase().includes("competitor")).length;
+                  const commercialCount = activePrompts.filter((p) => p.category?.toLowerCase().includes("commercial")).length;
+                  const used = activePrompts.length;
+                  const limit = promptLimitForPlan(credits?.plan);
+                  const statusScoped = promptStatusFilter === "active" ? activePrompts : pausedPrompts;
+                  const filtered = statusScoped.filter((p) => !promptSearch || p.text.toLowerCase().includes(promptSearch.toLowerCase()));
 
                   return (
                     <>
@@ -2577,6 +2606,21 @@ function DashboardPage() {
                         </div>
                       </div>
 
+                      {/* Active / Paused filter */}
+                      <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
+                        {(["active", "paused"] as const).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setPromptStatusFilter(s)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-all ${
+                              promptStatusFilter === s ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
+                            }`}
+                          >
+                            {s} ({s === "active" ? activePrompts.length : pausedPrompts.length})
+                          </button>
+                        ))}
+                      </div>
+
                       {/* Search */}
                       <div className="flex items-center gap-2 panel rounded-xl px-3 py-2 mb-4">
                         <svg className="w-4 h-4 text-[var(--ink-faint)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -2610,7 +2654,7 @@ function DashboardPage() {
                           return (
                             <div
                               key={p.id}
-                              className={`group grid grid-cols-[1fr_130px_120px_40px_60px] gap-x-4 px-5 py-4 border-b border-[var(--line)] last:border-0 hover:bg-[var(--line-soft)]/70 transition-colors items-center ${p.status === "paused" ? "opacity-55" : ""}`}
+                              className="group grid grid-cols-[1fr_130px_120px_40px_60px] gap-x-4 px-5 py-4 border-b border-[var(--line)] last:border-0 hover:bg-[var(--line-soft)]/70 transition-colors items-center"
                             >
                               {/* Prompt with visibility ring — clickable */}
                               <button onClick={() => { if (isFreeTier) { openPaywall(); return; } setSelectedPromptId(p.id); setSelectedCitationDomain(null); history.pushState(null, ""); }} className="flex items-center gap-3 min-w-0 text-left">
@@ -2634,9 +2678,6 @@ function DashboardPage() {
                                   return isFreeTier ? <BlurInline onUnlock={openPaywall}>{ring}</BlurInline> : ring;
                                 })()}
                                 <span className="text-sm text-[var(--ink)]/90 font-medium leading-snug line-clamp-2">{p.text}</span>
-                                {p.status === "paused" && (
-                                  <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--line)] text-[var(--ink-soft)] px-1.5 py-0.5 rounded-full">Paused</span>
-                                )}
                                 {p.status !== "paused" && p.cadence === "weekly" && (
                                   <span title="Won every scan for a week straight — now checked weekly. Drops back to daily if visibility slips." className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--olive-wash)] text-[var(--olive)] px-1.5 py-0.5 rounded-full">Monitoring</span>
                                 )}
@@ -2728,7 +2769,9 @@ function DashboardPage() {
                         })}
 
                         {filtered.length === 0 && (
-                          <p className="text-sm text-[var(--ink-faint)] text-center py-10">No prompts match your search</p>
+                          <p className="text-sm text-[var(--ink-faint)] text-center py-10">
+                            {promptSearch ? "No prompts match your search" : promptStatusFilter === "paused" ? "No paused prompts" : "No active prompts"}
+                          </p>
                         )}
                        </div>
                        </div>
@@ -2739,25 +2782,8 @@ function DashboardPage() {
                         <input
                           value={newPromptText}
                           onChange={(e) => setNewPromptText(e.target.value)}
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter" && newPromptText.trim() && !addingPrompt) {
-                              e.preventDefault();
-                              setAddingPrompt(true);
-                              try {
-                                const res = await fetch("/api/prompts", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ brandId: brand.id, text: newPromptText.trim(), category: "Commercial" }),
-                                });
-                                const data = await res.json();
-                                if (data.prompt) {
-                                  setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
-                                  setNewPromptText("");
-                                }
-                              } finally {
-                                setAddingPrompt(false);
-                              }
-                            }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); addManualPrompt(); }
                           }}
                           placeholder="Add a new prompt…"
                           className="flex-1 bg-[var(--line-soft)] shadow-[inset_0_0_0_1px_rgba(48,40,33,0.1)] rounded-xl px-4 py-2.5 text-sm text-[var(--ink)]/90 placeholder:text-[var(--ink-faint)] outline-none focus:ring-2 focus:ring-[var(--rust)]/40"
@@ -2765,22 +2791,7 @@ function DashboardPage() {
                         <button
                           disabled={!newPromptText.trim() || addingPrompt}
                           onClick={async () => {
-                            if (!newPromptText.trim() || addingPrompt) return;
-                            setAddingPrompt(true);
-                            try {
-                              const res = await fetch("/api/prompts", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ brandId: brand.id, text: newPromptText.trim(), category: "Commercial" }),
-                              });
-                              const data = await res.json();
-                              if (data.prompt) {
-                                setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
-                                setNewPromptText("");
-                              }
-                            } finally {
-                              setAddingPrompt(false);
-                            }
+                            await addManualPrompt();
                           }}
                           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-xl hover:bg-[var(--rust-deep)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                         >

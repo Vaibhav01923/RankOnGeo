@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { generatePromptSuggestions } from "@/lib/prompt-suggestions";
+import { assertUnderPromptLimit } from "@/lib/plan-limits";
 
 // Moves one suggestion into tracked_prompts, then backfills the pool with a
 // single fresh replacement — so the suggestion list stays at a steady size
@@ -22,6 +23,11 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .single();
   if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+
+  const limitCheck = await assertUnderPromptLimit(db, user.id, brandId);
+  if (!limitCheck.ok) {
+    return NextResponse.json({ error: `Your plan tracks up to ${limitCheck.limit} active prompts. Upgrade to track more.` }, { status: 402 });
+  }
 
   const { data: prompt, error } = await db
     .from("tracked_prompts")
