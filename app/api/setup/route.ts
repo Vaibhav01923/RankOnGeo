@@ -162,27 +162,39 @@ ${content}`;
     return NextResponse.json({ error: brandErr?.message ?? "Failed to save brand" }, { status: 500 });
   }
 
-  // Cap name-containing prompts at the branded quota (~20%) — the model
-  // sometimes anchors discovery prompts to the brand name anyway.
-  extracted.trackedPrompts = enforceBrandCap(extracted.trackedPrompts ?? [], extracted.name ?? "", promptCount);
-
-  // Delete old prompts and insert fresh ones
-  await db.from("tracked_prompts").delete().eq("brand_id", brandRow.id);
-  const promptRows = extracted.trackedPrompts.map((p: TrackedPrompt) => ({
-    brand_id: brandRow.id,
-    text: p.text,
-    category: p.category,
-  }));
-  const { data: savedPrompts } = await db
+  // Never silently wipe an already-onboarded brand's tracked prompts (and
+  // orphan their scan history) just because /setup got re-triggered for a
+  // domain the user already tracks — this page auto-analyzes on load from a
+  // ?domain= link (e.g. from /audit), with no confirmation step, so revisiting
+  // it for an existing brand must be a safe no-op on prompts, not a reset.
+  const { count: existingPromptCount } = await db
     .from("tracked_prompts")
-    .insert(promptRows)
-    .select();
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandRow.id);
 
-  const trackedPrompts: TrackedPrompt[] = (savedPrompts ?? []).map((p) => ({
-    id: p.id,
-    text: p.text,
-    category: p.category,
-  }));
+  let trackedPrompts: TrackedPrompt[];
+
+  if (existingPromptCount && existingPromptCount > 0) {
+    const { data: existing } = await db
+      .from("tracked_prompts")
+      .select("id, text, category")
+      .eq("brand_id", brandRow.id);
+    trackedPrompts = (existing ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category }));
+  } else {
+    // Cap name-containing prompts at the branded quota (~20%) — the model
+    // sometimes anchors discovery prompts to the brand name anyway.
+    extracted.trackedPrompts = enforceBrandCap(extracted.trackedPrompts ?? [], extracted.name ?? "", promptCount);
+    const promptRows = extracted.trackedPrompts.map((p: TrackedPrompt) => ({
+      brand_id: brandRow.id,
+      text: p.text,
+      category: p.category,
+    }));
+    const { data: savedPrompts } = await db
+      .from("tracked_prompts")
+      .insert(promptRows)
+      .select();
+    trackedPrompts = (savedPrompts ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category }));
+  }
 
   const brandData: BrandData = {
     domain,

@@ -157,7 +157,7 @@ function SetupContent() {
         niche: editedNiche || brand.niche,
         competitors: editedCompetitors,
         targetAudience: editedAudience,
-        prompts: prompts.filter((p) => !deselectedIds.has(p.id)).map((p) => ({ text: p.text, category: p.category })),
+        prompts: prompts.filter((p) => !deselectedIds.has(p.id)).map((p) => ({ id: p.id, text: p.text, category: p.category })),
       }),
     });
     setSaving(false);

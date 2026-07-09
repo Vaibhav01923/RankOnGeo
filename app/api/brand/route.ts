@@ -17,11 +17,25 @@ export async function PUT(req: NextRequest) {
 
   if (brandErr) return NextResponse.json({ error: brandErr.message }, { status: 500 });
 
+  // Reconcile rather than blindly delete-and-replace: prompts the user is
+  // keeping must keep their real row (and its scan history/cadence state)
+  // instead of being recreated with a new id — otherwise confirming this
+  // screen for an already-tracked brand would silently orphan everything.
   if (Array.isArray(prompts)) {
-    await db.from("tracked_prompts").delete().eq("brand_id", id);
-    if (prompts.length > 0) {
+    const incoming = prompts as { id?: string; text: string; category: string }[];
+    const { data: existingRows } = await db.from("tracked_prompts").select("id").eq("brand_id", id);
+    const existingIds = new Set((existingRows ?? []).map((r) => r.id as string));
+
+    const keptIds = new Set(incoming.map((p) => p.id).filter((pid): pid is string => !!pid && existingIds.has(pid)));
+    const toRemove = [...existingIds].filter((eid) => !keptIds.has(eid));
+    if (toRemove.length > 0) {
+      await db.from("tracked_prompts").delete().in("id", toRemove);
+    }
+
+    const toInsert = incoming.filter((p) => !p.id || !existingIds.has(p.id));
+    if (toInsert.length > 0) {
       await db.from("tracked_prompts").insert(
-        prompts.map((p: { text: string; category: string }) => ({ brand_id: id, text: p.text, category: p.category }))
+        toInsert.map((p) => ({ brand_id: id, text: p.text, category: p.category }))
       );
     }
   }
