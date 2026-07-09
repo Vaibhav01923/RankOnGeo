@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
+import { findPaidBrandBySiteKey } from "@/lib/analytics-access";
 
 // Called cross-origin from the browser on the customer's own site (public/track.js),
 // so this needs real CORS handling — unlike server-to-server endpoints elsewhere in
@@ -22,9 +23,9 @@ export async function POST(req: NextRequest) {
   }
 
   const db = serverClient();
-  const { data: brand } = await db.from("brands").select("id").eq("site_key", siteKey).maybeSingle();
+  const brand = await findPaidBrandBySiteKey(db, siteKey);
 
-  // Never leak "invalid site key" to a public, unauthenticated endpoint — just no-op.
+  // Never leak "invalid site key" vs "not a paid plan" to a public endpoint — just no-op either way.
   if (!brand) return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });
 
   await db.from("web_visits").insert({

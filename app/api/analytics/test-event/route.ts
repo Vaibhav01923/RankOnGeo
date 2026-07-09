@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
   const { data: brand } = await db.from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
   if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
+  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  if (!userPlan?.dodo_subscription_id) {
+    return NextResponse.json({ error: "Subscribe to a plan to use Web/LLM Analytics" }, { status: 402 });
+  }
+
   const admin = serverClient();
 
   if (type === "web") {

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
+const ALLOWED_DAYS = [7, 30, 90];
 
 export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -12,30 +13,48 @@ export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
-  const { data: brand } = await db.from("brands").select("id, site_key").eq("id", brandId).eq("user_id", user.id).single();
+  const daysParam = Number(req.nextUrl.searchParams.get("days"));
+  const days = ALLOWED_DAYS.includes(daysParam) ? daysParam : 30;
+
+  const { data: brand } = await db.from("brands").select("id, domain, site_key").eq("id", brandId).eq("user_id", user.id).single();
   if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const since = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
+  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  const isFree = !userPlan?.dodo_subscription_id;
+
+  const since = new Date(Date.now() - days * DAY_MS).toISOString();
   const { data: rows } = await db
     .from("bot_visits")
-    .select("bot_name, path, referrer, created_at")
+    .select("bot_name, path, created_at")
     .eq("brand_id", brandId)
     .gte("created_at", since)
     .order("created_at", { ascending: false });
 
   const visits = rows ?? [];
   const liveCutoff = Date.now() - LIVE_WINDOW_MS;
+  const liveVisits = visits.filter((v) => new Date(v.created_at).getTime() >= liveCutoff);
 
-  const liveBots = new Set(visits.filter((v) => new Date(v.created_at).getTime() >= liveCutoff).map((v) => v.bot_name)).size;
+  const liveBots = new Set(liveVisits.map((v) => v.bot_name)).size;
   const botPageviews = visits.length;
 
   const byBot: Record<string, number> = {};
   for (const v of visits) byBot[v.bot_name] = (byBot[v.bot_name] ?? 0) + 1;
 
+  const pageCounts = new Map<string, number>();
+  const botCounts = new Map<string, number>();
+  for (const v of liveVisits) {
+    pageCounts.set(v.path, (pageCounts.get(v.path) ?? 0) + 1);
+    botCounts.set(v.bot_name, (botCounts.get(v.bot_name) ?? 0) + 1);
+  }
+  const toSortedList = (m: Map<string, number>) =>
+    [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+
   return NextResponse.json({
+    domain: brand.domain,
     siteKey: brand.site_key,
+    isFree,
     stats: { liveBots, botPageviews },
     breakdown: Object.entries(byBot).map(([botName, count]) => ({ botName, count })).sort((a, b) => b.count - a.count),
-    recent: visits.slice(0, 20).map((v) => ({ botName: v.bot_name, path: v.path, referrer: v.referrer, createdAt: v.created_at })),
+    live: { pages: toSortedList(pageCounts), bots: toSortedList(botCounts) },
   });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
 import { detectBot } from "@/lib/bot-detection";
+import { findPaidBrandBySiteKey } from "@/lib/analytics-access";
 
 // Called server-to-server from the customer's own backend/middleware (see
 // app/docs/llm-analytics) — not a browser request, so no CORS handling needed.
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (!botName) return NextResponse.json({ ok: true, tracked: false });
 
   const db = serverClient();
-  const { data: brand } = await db.from("brands").select("id").eq("site_key", siteKey).maybeSingle();
+  const brand = await findPaidBrandBySiteKey(db, siteKey);
   if (!brand) return NextResponse.json({ ok: true, tracked: false });
 
   await db.from("bot_visits").insert({

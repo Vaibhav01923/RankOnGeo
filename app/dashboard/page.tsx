@@ -155,18 +155,21 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 type BotBreakdown = { botName: string; count: number };
-type WebAnalyticsRecent = { path: string; referrer: string | null; createdAt: string };
-type BotAnalyticsRecent = { botName: string; path: string; referrer: string | null; createdAt: string };
+type NamedCount = { label: string; count: number };
 type WebAnalyticsData = {
+  domain: string;
   siteKey: string;
+  isFree: boolean;
   stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number };
-  recent: WebAnalyticsRecent[];
+  live: { pages: NamedCount[]; referrers: NamedCount[] };
 };
 type LlmAnalyticsData = {
+  domain: string;
   siteKey: string;
+  isFree: boolean;
   stats: { liveBots: number; botPageviews: number };
   breakdown: BotBreakdown[];
-  recent: BotAnalyticsRecent[];
+  live: { pages: NamedCount[]; bots: NamedCount[] };
 };
 
 const BOT_NAME_LABELS: Record<string, string> = {
@@ -456,11 +459,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-function referrerHost(referrer: string | null): string {
-  if (!referrer) return "Direct";
-  try { return new URL(referrer).hostname; } catch { return "Direct"; }
-}
-
 const CHANNEL_ICONS: Record<string, string> = {
   wordpress: "📝", webflow: "🌊", webhook: "🔗", discord: "💬", framer: "🎨",
 };
@@ -648,10 +646,21 @@ function DashboardPage() {
   // Web/LLM analytics state
   const [webAnalyticsData, setWebAnalyticsData] = useState<WebAnalyticsData | null>(null);
   const [webAnalyticsLoaded, setWebAnalyticsLoaded] = useState(false);
+  const [webAnalyticsFetching, setWebAnalyticsFetching] = useState(false);
+  const [webAnalyticsRefreshKey, setWebAnalyticsRefreshKey] = useState(0);
   const [llmAnalyticsData, setLlmAnalyticsData] = useState<LlmAnalyticsData | null>(null);
   const [llmAnalyticsLoaded, setLlmAnalyticsLoaded] = useState(false);
+  const [llmAnalyticsFetching, setLlmAnalyticsFetching] = useState(false);
+  const [llmAnalyticsRefreshKey, setLlmAnalyticsRefreshKey] = useState(0);
   const [sendingTestEvent, setSendingTestEvent] = useState(false);
+  const [testEventError, setTestEventError] = useState("");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [webAnalyticsDays, setWebAnalyticsDays] = useState(30);
+  const [llmAnalyticsDays, setLlmAnalyticsDays] = useState(30);
+  const [websiteIdModal, setWebsiteIdModal] = useState<"web" | "bot" | null>(null);
+  const [copiedWebsiteId, setCopiedWebsiteId] = useState(false);
+  const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
+  const [llmDetailsExpanded, setLlmDetailsExpanded] = useState(true);
 
   useEffect(() => {
     const savedTab = sessionStorage.getItem("dashTab");
@@ -857,23 +866,25 @@ function DashboardPage() {
       .finally(() => setFeedbackLoaded(true));
   }, [activeTab, feedbackLoaded]);
 
-  // Load web analytics when that tab opens
+  // Load web analytics when the tab opens, the date range changes, or a test event was sent
   useEffect(() => {
-    if (activeTab !== "webAnalytics" || !brand || webAnalyticsLoaded) return;
-    fetch(`/api/analytics/web?brandId=${brand.id}`)
+    if (activeTab !== "webAnalytics" || !brand) return;
+    setWebAnalyticsFetching(true);
+    fetch(`/api/analytics/web?brandId=${brand.id}&days=${webAnalyticsDays}`)
       .then((r) => r.json())
       .then((d) => { if (d.stats) setWebAnalyticsData(d); })
-      .finally(() => setWebAnalyticsLoaded(true));
-  }, [activeTab, brand, webAnalyticsLoaded]);
+      .finally(() => { setWebAnalyticsLoaded(true); setWebAnalyticsFetching(false); });
+  }, [activeTab, brand, webAnalyticsDays, webAnalyticsRefreshKey]);
 
-  // Load LLM (AI bot) analytics when that tab opens
+  // Load LLM (AI bot) analytics when the tab opens, the date range changes, or a test event was sent
   useEffect(() => {
-    if (activeTab !== "llmAnalytics" || !brand || llmAnalyticsLoaded) return;
-    fetch(`/api/analytics/bot?brandId=${brand.id}`)
+    if (activeTab !== "llmAnalytics" || !brand) return;
+    setLlmAnalyticsFetching(true);
+    fetch(`/api/analytics/bot?brandId=${brand.id}&days=${llmAnalyticsDays}`)
       .then((r) => r.json())
       .then((d) => { if (d.stats) setLlmAnalyticsData(d); })
-      .finally(() => setLlmAnalyticsLoaded(true));
-  }, [activeTab, brand, llmAnalyticsLoaded]);
+      .finally(() => { setLlmAnalyticsLoaded(true); setLlmAnalyticsFetching(false); });
+  }, [activeTab, brand, llmAnalyticsDays, llmAnalyticsRefreshKey]);
 
   // Show citations onboarding dialog + fetch citation history when tab opens
   useEffect(() => {
@@ -1278,6 +1289,7 @@ function DashboardPage() {
   async function sendTestEvent(type: "web" | "bot") {
     if (!brand || sendingTestEvent) return;
     setSendingTestEvent(true);
+    setTestEventError("");
     try {
       const res = await fetch("/api/analytics/test-event", {
         method: "POST",
@@ -1285,8 +1297,11 @@ function DashboardPage() {
         body: JSON.stringify({ brandId: brand.id, type }),
       });
       if (res.ok) {
-        if (type === "web") { setWebAnalyticsLoaded(false); }
-        else { setLlmAnalyticsLoaded(false); }
+        if (type === "web") setWebAnalyticsRefreshKey((k) => k + 1);
+        else setLlmAnalyticsRefreshKey((k) => k + 1);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setTestEventError(d.error ?? "Failed to send test event");
       }
     } finally {
       setSendingTestEvent(false);
@@ -3601,116 +3616,257 @@ function DashboardPage() {
           )}
 
           {/* WEB ANALYTICS TAB */}
-          {activeTab === "webAnalytics" && (
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="mb-5">
-                <h2 className="text-lg font-semibold text-[var(--ink)]">Web Analytics</h2>
-                <p className="text-sm text-[var(--ink-soft)] mt-0.5">Privacy-first analytics for your website — last 30 days</p>
-              </div>
+          {activeTab === "webAnalytics" && (() => {
+            const webBody = !webAnalyticsLoaded ? (
+              <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
+            ) : (
+              <div className={webAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                  <StatCard label="Live Visitors" value={webAnalyticsData?.stats.liveVisitors ?? 0} sub="last 5 min" />
+                  <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
+                  <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
+                  <StatCard label="Visit Duration" value={`${webAnalyticsData?.stats.avgDurationSeconds ?? 0}s`} />
+                  <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
+                </div>
 
-              {!webAnalyticsLoaded ? (
-                <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
-                    <StatCard label="Live Visitors" value={webAnalyticsData?.stats.liveVisitors ?? 0} sub="last 5 min" />
-                    <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
-                    <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
-                    <StatCard label="Visit Duration" value={`${webAnalyticsData?.stats.avgDurationSeconds ?? 0}s`} />
-                    <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
-                  </div>
-
-                  <div className="panel rounded-xl p-5 mb-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Set up tracking</p>
-                    <p className="text-xs text-[var(--ink-faint)] mb-3">Add this script to the &lt;head&gt; section of your website:</p>
-                    <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3">
-                      {`<script src="https://rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`}
+                <div className="panel rounded-xl overflow-hidden mb-5">
+                  <button
+                    onClick={() => setWebDetailsExpanded((v) => !v)}
+                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-[var(--ink)]">Live Visitor Details</p>
+                    <svg className={`w-4 h-4 text-[var(--ink-faint)] transition-transform ${webDetailsExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {webDetailsExpanded && (
+                    <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-[var(--line)] pt-4">
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90 mb-2">Pages</p>
+                        {!webAnalyticsData?.live.pages.length ? (
+                          <p className="text-xs text-[var(--ink-faint)]">No active pages</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {webAnalyticsData.live.pages.map((p) => (
+                              <div key={p.label} className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-mono text-[var(--ink)]/80 truncate">{p.label}</span>
+                                <span className="text-xs font-semibold text-[var(--ink)] shrink-0">{p.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90 mb-2">Referrers</p>
+                        {!webAnalyticsData?.live.referrers.length ? (
+                          <p className="text-xs text-[var(--ink-faint)]">No active referrers</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {webAnalyticsData.live.referrers.map((r) => (
+                              <div key={r.label} className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-[var(--ink)]/80 truncate">{r.label}</span>
+                                <span className="text-xs font-semibold text-[var(--ink)] shrink-0">{r.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
+                  )}
+                </div>
+
+                {webAnalyticsData?.stats.pageviews === 0 && (
+                  <div className="flex flex-col items-center text-center py-10 mb-2">
+                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No Analytics Data Yet</p>
+                    <p className="text-sm text-[var(--ink-faint)] mb-5">Start tracking your website visitors by adding the tracking script below.</p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      {[
+                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2-7 4 14 2-7h4" />, label: "Real-time visitor tracking" },
+                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10M12 20V4M20 20v-6" />, label: "Detailed traffic analytics" },
+                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />, label: "Privacy-focused insights" },
+                      ].map((f) => (
+                        <div key={f.label} className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
+                          <span className="w-6 h-6 rounded-lg bg-[var(--rust-wash)] flex items-center justify-center shrink-0">
+                            <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{f.icon}</svg>
+                          </span>
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="panel rounded-xl p-5">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-3">Add this script to the &lt;head&gt; section of your website:</p>
+                  <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 mb-3 bg-[var(--line-soft)]">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" /></svg>
+                    <span className="truncate">{webAnalyticsData?.domain ? `https://${webAnalyticsData.domain.replace(/^https?:\/\//, "")}/` : ""}</span>
+                  </div>
+                  <div className="relative bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 pr-24 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3">
+                    {`<script src="https://rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(`<script src="https://rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`);
                           setCopiedSnippet(true);
                           setTimeout(() => setCopiedSnippet(false), 2000);
                         }}
-                        className="text-xs font-semibold border border-[var(--line)] px-3 py-1.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
+                        title="Copy"
+                        className="w-7 h-7 rounded-md border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line)] transition-colors"
                       >
-                        {copiedSnippet ? "Copied!" : "Copy script"}
+                        {copiedSnippet ? (
+                          <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="11" height="11" rx="1.5" /><path d="M5 15V5a2 2 0 012-2h10" /></svg>
+                        )}
                       </button>
                       <button
                         onClick={() => sendTestEvent("web")}
                         disabled={sendingTestEvent}
-                        className="text-xs font-semibold border border-[var(--line)] px-3 py-1.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+                        className="h-7 px-2.5 rounded-md bg-[var(--ink)] text-[var(--surface)] text-[11px] font-semibold flex items-center gap-1 hover:opacity-90 disabled:opacity-50 transition-opacity"
                       >
-                        {sendingTestEvent ? "Sending…" : "Send test event"}
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        {sendingTestEvent ? "…" : "Test"}
                       </button>
-                      <a href="/docs/web-analytics" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--rust)] hover:underline">
-                        Full setup docs →
-                      </a>
                     </div>
                   </div>
+                  {testEventError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{testEventError}</p>}
+                  <a href="/docs/web-analytics" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--rust)] hover:underline inline-flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                    Read Documentation
+                  </a>
+                </div>
+              </div>
+            );
 
-                  <div className="panel rounded-xl p-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-4">Live Visitor Details</p>
-                    {!webAnalyticsData?.recent.length ? (
-                      <EmptyState label="No analytics data yet" sub="Add the tracking script above, or send a test event to see how it looks" />
-                    ) : (
-                      <div className="space-y-2">
-                        {webAnalyticsData.recent.map((v, i) => (
-                          <div key={i} className="flex items-center gap-3 py-2 border-b border-[var(--line)] last:border-0">
-                            <span className="text-xs font-mono text-[var(--ink)]/80 flex-1 truncate">{v.path}</span>
-                            <span className="text-[10px] text-[var(--ink-faint)] truncate max-w-[160px]">{referrerHost(v.referrer)}</span>
-                            <span className="text-[10px] text-[var(--ink-faint)] shrink-0">{timeAgo(v.createdAt)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+            return (
+              <div className="max-w-4xl mx-auto w-full">
+                <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
+                  <div>
+                    <h2 className="text-lg font-semibold text-[var(--ink)]">Web Analytics</h2>
+                    <p className="text-sm text-[var(--ink-soft)] mt-0.5">Privacy first analytics for your website</p>
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={webAnalyticsDays}
+                      onChange={(e) => setWebAnalyticsDays(Number(e.target.value))}
+                      className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
+                    >
+                      <option value={7}>Last 7 Days</option>
+                      <option value={30}>Last 30 Days</option>
+                      <option value={90}>Last 90 Days</option>
+                    </select>
+                    <button
+                      onClick={() => setWebsiteIdModal("web")}
+                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
+                    >
+                      Get Website Id
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </button>
+                  </div>
+                </div>
+                {isFreeTier ? <BlurBlock onUnlock={openPaywall}>{webBody}</BlurBlock> : webBody}
+              </div>
+            );
+          })()}
 
           {/* LLM ANALYTICS TAB */}
-          {activeTab === "llmAnalytics" && (
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="mb-5">
-                <h2 className="text-lg font-semibold text-[var(--ink)]">LLM Analytics</h2>
-                <p className="text-sm text-[var(--ink-soft)] mt-0.5">AI and bot traffic analytics — last 30 days</p>
-              </div>
+          {activeTab === "llmAnalytics" && (() => {
+            const llmBody = !llmAnalyticsLoaded ? (
+              <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
+            ) : (
+              <div className={llmAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <StatCard label="Live Bots" value={llmAnalyticsData?.stats.liveBots ?? 0} sub="last 5 min" />
+                  <StatCard label="Bot Pageviews" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
+                </div>
 
-              {!llmAnalyticsLoaded ? (
-                <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <StatCard label="Live Bots" value={llmAnalyticsData?.stats.liveBots ?? 0} sub="last 5 min" />
-                    <StatCard label="Bot Pageviews" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
-                  </div>
-
-                  {!!llmAnalyticsData?.breakdown.length && (
-                    <div className="panel rounded-xl p-5 mb-5">
-                      <p className="text-sm font-semibold text-[var(--ink)] mb-3">Breakdown by bot</p>
-                      <div className="space-y-2">
-                        {llmAnalyticsData.breakdown.map((b) => (
-                          <div key={b.botName} className="flex items-center gap-3">
-                            <span className="text-xs text-[var(--ink)]/80 font-medium w-24 shrink-0">{BOT_NAME_LABELS[b.botName] ?? b.botName}</span>
-                            <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
-                              <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((b.count / llmAnalyticsData.stats.botPageviews) * 100)}%` }} />
-                            </div>
-                            <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{b.count}</span>
+                <div className="panel rounded-xl overflow-hidden mb-5">
+                  <button
+                    onClick={() => setLlmDetailsExpanded((v) => !v)}
+                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-[var(--ink)]">Live Bot Details</p>
+                    <svg className={`w-4 h-4 text-[var(--ink-faint)] transition-transform ${llmDetailsExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {llmDetailsExpanded && (
+                    <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-[var(--line)] pt-4">
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90 mb-2">Pages</p>
+                        {!llmAnalyticsData?.live.pages.length ? (
+                          <p className="text-xs text-[var(--ink-faint)]">No active pages</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {llmAnalyticsData.live.pages.map((p) => (
+                              <div key={p.label} className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-mono text-[var(--ink)]/80 truncate">{p.label}</span>
+                                <span className="text-xs font-semibold text-[var(--ink)] shrink-0">{p.count}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--ink)]/90 mb-2">Bots</p>
+                        {!llmAnalyticsData?.live.bots.length ? (
+                          <p className="text-xs text-[var(--ink-faint)]">No active bots</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {llmAnalyticsData.live.bots.map((b) => (
+                              <div key={b.label} className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-[var(--ink)]/80 truncate">{BOT_NAME_LABELS[b.label] ?? b.label}</span>
+                                <span className="text-xs font-semibold text-[var(--ink)] shrink-0">{b.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
+                </div>
 
+                {!!llmAnalyticsData?.breakdown.length && (
                   <div className="panel rounded-xl p-5 mb-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Set up AI bot tracking</p>
-                    <p className="text-xs text-[var(--ink-faint)] mb-3">
-                      AI crawlers mostly don&apos;t run JavaScript, so this needs a server-side call from your own middleware — see the docs for a ready-to-paste Next.js example.
-                    </p>
-                    <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3 whitespace-pre">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">Breakdown by bot</p>
+                    <div className="space-y-2">
+                      {llmAnalyticsData.breakdown.map((b) => (
+                        <div key={b.botName} className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--ink)]/80 font-medium w-24 shrink-0">{BOT_NAME_LABELS[b.botName] ?? b.botName}</span>
+                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((b.count / llmAnalyticsData.stats.botPageviews) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{b.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {llmAnalyticsData?.stats.botPageviews === 0 && (
+                  <div className="flex flex-col items-center text-center py-10 mb-2">
+                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No AI Bot Data Yet</p>
+                    <p className="text-sm text-[var(--ink-faint)] mb-5">Start tracking AI bots and crawlers by setting up server-side middleware.</p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      {[
+                        { icon: <><rect x="6" y="6" width="12" height="12" rx="2" /><path strokeLinecap="round" d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" /></>, label: "AI bot detection" },
+                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2-7 4 14 2-7h4" />, label: "Real-time AI crawler tracking" },
+                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10M12 20V4M20 20v-6" />, label: "Detailed bot analytics" },
+                      ].map((f) => (
+                        <div key={f.label} className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
+                          <span className="w-6 h-6 rounded-lg bg-[var(--rust-wash)] flex items-center justify-center shrink-0">
+                            <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{f.icon}</svg>
+                          </span>
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="panel rounded-xl p-5">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-1">Set up server-side middleware to track AI bots and crawlers</p>
+                  <p className="text-xs text-[var(--ink-faint)] mb-3">
+                    AI crawlers mostly don&apos;t run JavaScript, so this needs a server-side call from your own middleware — see the docs for a ready-to-paste Next.js example.
+                  </p>
+                  <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3 whitespace-pre">
 {`curl -X POST https://rankongeo.com/api/track/bot \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -3719,39 +3875,113 @@ function DashboardPage() {
     "userAgent": "GPTBot/1.0",
     "referrer": ""
   }'`}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={() => sendTestEvent("bot")}
-                        disabled={sendingTestEvent}
-                        className="text-xs font-semibold border border-[var(--line)] px-3 py-1.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
-                      >
-                        {sendingTestEvent ? "Sending…" : "Send test event"}
-                      </button>
-                      <a href="/docs/llm-analytics" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--rust)] hover:underline">
-                        Full setup docs →
-                      </a>
-                    </div>
                   </div>
+                  {testEventError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{testEventError}</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <a
+                      href="/docs/llm-analytics"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                      Read Documentation
+                    </a>
+                    <button
+                      onClick={() => sendTestEvent("bot")}
+                      disabled={sendingTestEvent}
+                      className="text-xs font-semibold border border-[var(--line)] px-3 py-2 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="6" y="6" width="12" height="12" rx="2" /><path strokeLinecap="round" d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" /></svg>
+                      {sendingTestEvent ? "Sending…" : "Test AI Tracker"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
 
-                  <div className="panel rounded-xl p-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-4">Live Bot Details</p>
-                    {!llmAnalyticsData?.recent.length ? (
-                      <EmptyState label="No AI bot data yet" sub="Set up server-side middleware above, or send a test event to see how it looks" />
-                    ) : (
-                      <div className="space-y-2">
-                        {llmAnalyticsData.recent.map((v, i) => (
-                          <div key={i} className="flex items-center gap-3 py-2 border-b border-[var(--line)] last:border-0">
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--line-soft)] text-[var(--ink-soft)] shrink-0">{BOT_NAME_LABELS[v.botName] ?? v.botName}</span>
-                            <span className="text-xs font-mono text-[var(--ink)]/80 flex-1 truncate">{v.path}</span>
-                            <span className="text-[10px] text-[var(--ink-faint)] shrink-0">{timeAgo(v.createdAt)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+            return (
+              <div className="max-w-4xl mx-auto w-full">
+                <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
+                  <div>
+                    <h2 className="text-lg font-semibold text-[var(--ink)]">LLM Analytics</h2>
+                    <p className="text-sm text-[var(--ink-soft)] mt-0.5">AI and bot traffic analytics</p>
                   </div>
-                </>
-              )}
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={llmAnalyticsDays}
+                      onChange={(e) => setLlmAnalyticsDays(Number(e.target.value))}
+                      className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
+                    >
+                      <option value={7}>Last 7 Days</option>
+                      <option value={30}>Last 30 Days</option>
+                      <option value={90}>Last 90 Days</option>
+                    </select>
+                    <button
+                      onClick={() => setWebsiteIdModal("bot")}
+                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
+                    >
+                      Get Website Id
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </button>
+                  </div>
+                </div>
+                {isFreeTier ? <BlurBlock onUnlock={openPaywall}>{llmBody}</BlurBlock> : llmBody}
+              </div>
+            );
+          })()}
+
+          {/* Website ID modal — shared between Web & LLM Analytics */}
+          {websiteIdModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setWebsiteIdModal(null)}>
+              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-base font-semibold text-[var(--ink)]">Website ID</p>
+                  <button onClick={() => setWebsiteIdModal(null)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-4">Copy your website ID for integration</p>
+
+                <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 mb-3 bg-[var(--line-soft)]">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" /></svg>
+                  <span className="truncate">
+                    {(() => {
+                      const domain = websiteIdModal === "web" ? webAnalyticsData?.domain : llmAnalyticsData?.domain;
+                      return domain ? `https://${domain.replace(/^https?:\/\//, "")}/` : "";
+                    })()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 border border-[var(--line)] rounded-lg px-3 py-2 mb-4">
+                  <span className="text-xs text-[var(--ink-soft)]">Website ID: <span className="font-mono font-semibold text-[var(--ink)]">{websiteIdModal === "web" ? webAnalyticsData?.siteKey : llmAnalyticsData?.siteKey}</span></span>
+                  <button
+                    onClick={() => {
+                      const siteKey = (websiteIdModal === "web" ? webAnalyticsData?.siteKey : llmAnalyticsData?.siteKey) ?? "";
+                      navigator.clipboard.writeText(siteKey);
+                      setCopiedWebsiteId(true);
+                      setTimeout(() => setCopiedWebsiteId(false), 2000);
+                    }}
+                    className="w-7 h-7 rounded-md border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors shrink-0"
+                  >
+                    {copiedWebsiteId ? (
+                      <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="11" height="11" rx="1.5" /><path d="M5 15V5a2 2 0 012-2h10" /></svg>
+                    )}
+                  </button>
+                </div>
+
+                <a
+                  href={websiteIdModal === "web" ? "/docs/web-analytics" : "/docs/llm-analytics"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold border border-[var(--line)] px-3 py-2 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                  Learn to Setup Analytics →
+                </a>
+              </div>
             </div>
           )}
 

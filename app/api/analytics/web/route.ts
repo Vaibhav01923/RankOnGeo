@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
+const ALLOWED_DAYS = [7, 30, 90];
 
 export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -12,10 +13,19 @@ export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
-  const { data: brand } = await db.from("brands").select("id, site_key").eq("id", brandId).eq("user_id", user.id).single();
+  const daysParam = Number(req.nextUrl.searchParams.get("days"));
+  const days = ALLOWED_DAYS.includes(daysParam) ? daysParam : 30;
+
+  const { data: brand } = await db.from("brands").select("id, domain, site_key").eq("id", brandId).eq("user_id", user.id).single();
   if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const since = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
+  // Web/LLM Analytics is a paid-plan perk — ingestion is already blocked
+  // server-side for free-tier brands, so there's nothing to hide here, just
+  // an isFree flag so the dashboard can overlay the upgrade prompt.
+  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  const isFree = !userPlan?.dodo_subscription_id;
+
+  const since = new Date(Date.now() - days * DAY_MS).toISOString();
   const { data: rows } = await db
     .from("web_visits")
     .select("visitor_id, session_id, path, referrer, created_at")
@@ -25,8 +35,9 @@ export async function GET(req: NextRequest) {
 
   const visits = rows ?? [];
   const liveCutoff = Date.now() - LIVE_WINDOW_MS;
+  const liveVisits = visits.filter((v) => new Date(v.created_at).getTime() >= liveCutoff);
 
-  const liveVisitors = new Set(visits.filter((v) => new Date(v.created_at).getTime() >= liveCutoff).map((v) => v.visitor_id)).size;
+  const liveVisitors = new Set(liveVisits.map((v) => v.visitor_id)).size;
   const visitors = new Set(visits.map((v) => v.visitor_id)).size;
   const pageviews = visits.length;
 
@@ -43,9 +54,28 @@ export async function GET(req: NextRequest) {
     ? Math.round(sessions.reduce((sum, s) => sum + (s.max - s.min) / 1000, 0) / sessions.length)
     : 0;
 
+  // "Live" breakdown — pages/referrers active in the last 5 minutes, matching
+  // the "Live Visitor Details" framing (not an all-time top-pages list).
+  const pageCounts = new Map<string, number>();
+  const referrerCounts = new Map<string, number>();
+  for (const v of liveVisits) {
+    pageCounts.set(v.path, (pageCounts.get(v.path) ?? 0) + 1);
+    const host = referrerHost(v.referrer);
+    referrerCounts.set(host, (referrerCounts.get(host) ?? 0) + 1);
+  }
+  const toSortedList = (m: Map<string, number>) =>
+    [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+
   return NextResponse.json({
+    domain: brand.domain,
     siteKey: brand.site_key,
+    isFree,
     stats: { liveVisitors, visitors, pageviews, avgDurationSeconds, bounceRate },
-    recent: visits.slice(0, 20).map((v) => ({ path: v.path, referrer: v.referrer, createdAt: v.created_at })),
+    live: { pages: toSortedList(pageCounts), referrers: toSortedList(referrerCounts) },
   });
+}
+
+function referrerHost(referrer: string | null): string {
+  if (!referrer) return "Direct";
+  try { return new URL(referrer).hostname; } catch { return "Direct"; }
 }
