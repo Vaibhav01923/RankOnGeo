@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import Link from "next/link";
+import { DomainForm } from "../_components/DomainForm";
 import { PricingCards } from "../_components/PricingCards";
 import { SiteNav } from "../_components/SiteNav";
 
@@ -76,10 +77,6 @@ export default function EarlyAccessPage() {
 
       <main className="px-6 pb-24 pt-36">
         <header className="mx-auto max-w-2xl text-center">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--olive-wash)] px-4 py-1.5 text-xs font-semibold text-[var(--olive)]">
-            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--olive)]" aria-hidden="true" />
-            Early access is open
-          </p>
           <h1
             className="font-signal-serif text-4xl font-[350] leading-tight tracking-tight sm:text-6xl"
             style={{ textWrap: "balance" } as React.CSSProperties}
@@ -114,13 +111,12 @@ export default function EarlyAccessPage() {
         </section>
 
         <section className="mx-auto mt-20 max-w-xl text-center" aria-label="Try before you buy">
-          <p className="text-sm text-[var(--ink-soft)]">
-            Not sure yet? Run a{" "}
-            <Link href="/audit" className="font-semibold text-[var(--rust)] underline underline-offset-2 hover:text-[var(--rust-deep)]">
-              free visibility audit
-            </Link>{" "}
-            first and see what AI engines currently say about your brand — then come back for the discount.
+          <h2 className="font-signal-serif mb-3 text-3xl font-[350] tracking-tight">Not sure yet?</h2>
+          <p className="mb-6 text-sm text-[var(--ink-soft)]">
+            Enter your website and see what AI engines currently say about your brand — free, no sign-up.
+            Then come back for the discount.
           </p>
+          <DomainForm variant="cta" />
         </section>
       </main>
 
