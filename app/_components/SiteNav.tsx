@@ -32,17 +32,18 @@ export function SiteNav() {
     >
       <div className="relative mx-auto flex max-w-6xl items-center gap-9 px-6 py-4">
         <a
-          href="#top"
+          href="/#top"
           className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] rounded"
         >
           <LogoMark />
           RankOnGeo
         </a>
         <div className="hidden flex-1 items-center gap-7 text-sm text-[var(--ink-soft)] md:flex">
-          <a href="#platform" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">Platform</a>
-          <a href="#loop" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">How it works</a>
-          <a href="#pricing" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">Pricing</a>
-          <a href="#faq" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">FAQ</a>
+          <a href="/#platform" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">Platform</a>
+          <a href="/#loop" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">How it works</a>
+          <a href="/#pricing" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">Pricing</a>
+          <a href="/#faq" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">FAQ</a>
+          <a href="/blog" className="rounded py-2 transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">Blog</a>
         </div>
         <div className="ml-auto flex items-center gap-4">
           <a

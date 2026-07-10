@@ -17,9 +17,42 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "RankOnGeo — Track Your Brand in AI Search",
+  metadataBase: new URL("https://rankongeo.com"),
+  title: {
+    default: "RankOnGeo — Track Your Brand in AI Search",
+    template: "%s — RankOnGeo",
+  },
   description:
     "See how ChatGPT, Claude, Gemini, Perplexity, Grok and AI Overviews respond about your brand. Close the gap with research, articles, and publishing.",
+  applicationName: "RankOnGeo",
+  keywords: [
+    "AI search visibility",
+    "generative engine optimization",
+    "GEO",
+    "AI SEO",
+    "brand tracking",
+    "ChatGPT visibility",
+    "AI Overviews",
+    "LLM search ranking",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: "RankOnGeo",
+    url: "https://rankongeo.com",
+    title: "RankOnGeo — Track Your Brand in AI Search",
+    description:
+      "See how ChatGPT, Claude, Gemini, Perplexity, Grok and AI Overviews respond about your brand. Close the gap with research, articles, and publishing.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RankOnGeo — Track Your Brand in AI Search",
+    description:
+      "See how ChatGPT, Claude, Gemini, Perplexity, Grok and AI Overviews respond about your brand.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

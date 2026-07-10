@@ -2,10 +2,11 @@
 import { useState } from "react";
 
 const LINKS = [
-  { label: "Platform", href: "#platform" },
-  { label: "How it works", href: "#loop" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Platform", href: "/#platform" },
+  { label: "How it works", href: "/#loop" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "FAQ", href: "/#faq" },
+  { label: "Blog", href: "/blog" },
 ];
 
 export function MobileNav() {

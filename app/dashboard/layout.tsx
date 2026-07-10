@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  robots: { index: false, follow: false },
+};
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",

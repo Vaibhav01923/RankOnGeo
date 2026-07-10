@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Docs",
+  description:
+    "Guides for setting up RankOnGeo web analytics and AI crawler tracking — see how humans and AI engines find your site.",
+  alternates: { canonical: "/docs" },
+};
 
 export default function DocsIndexPage() {
   return (

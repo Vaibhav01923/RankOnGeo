@@ -32,6 +32,38 @@ export const metadata: Metadata = {
   title: "RankOnGeo — Track Your Brand in AI Search",
   description:
     "See how ChatGPT, Claude, Gemini, Perplexity, Grok and AI Overviews respond about your brand. Close the gap with research, articles, and publishing.",
+  alternates: { canonical: "/" },
+};
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://rankongeo.com/#organization",
+      name: "RankOnGeo",
+      url: "https://rankongeo.com",
+      description:
+        "AI search visibility platform — track how ChatGPT, Claude, Gemini, Perplexity, Grok and AI Overviews talk about your brand.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://rankongeo.com/#website",
+      name: "RankOnGeo",
+      url: "https://rankongeo.com",
+      publisher: { "@id": "https://rankongeo.com/#organization" },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "RankOnGeo",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: "https://rankongeo.com",
+      description:
+        "Track where AI engines rank your brand and close the gaps with research, generated articles, and publishing.",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free visibility audit" },
+    },
+  ],
 };
 
 function LogoMark({ size = 26 }: { size?: number }) {
@@ -388,6 +420,10 @@ export default function LandingPage() {
       className={`${instrumentSerif.variable} ${workSans.variable} ${ibmPlexMono.variable} min-h-screen bg-[var(--cream)] text-[var(--ink)]`}
       style={{ ...signalVars, fontFamily: "var(--font-work-sans), sans-serif" }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+      />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-[var(--rust)] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[var(--surface)]"
@@ -514,7 +550,7 @@ export default function LandingPage() {
             <div className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-faint)]">Product</div>
             <div className="space-y-2.5">
               {["Visibility", "Research", "Generation", "Publishing", "Pricing", "Blog"].map((l) => (
-                <a key={l} href={l === "Pricing" ? "#pricing" : "#platform"} className="block rounded text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--rust)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">
+                <a key={l} href={l === "Pricing" ? "#pricing" : l === "Blog" ? "/blog" : "#platform"} className="block rounded text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--rust)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">
                   {l}
                 </a>
               ))}
