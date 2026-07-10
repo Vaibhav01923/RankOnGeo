@@ -14,8 +14,12 @@ const PLAN_PRODUCTS: Record<string, string | undefined> = {
   enterprise: process.env.DODO_ENTERPRISE_PRODUCT_ID,
 };
 
+// Discount code applied to purchases made through /early. Created in Dodo
+// (percentage, 5000 basis points = 50%); override via env if renamed.
+const EARLY_DISCOUNT_CODE = process.env.DODO_EARLY_DISCOUNT_CODE ?? "EARLY50";
+
 export async function POST(req: NextRequest) {
-  const { plan, cancelPath } = await req.json();
+  const { plan, cancelPath, early } = await req.json();
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
@@ -40,9 +44,15 @@ export async function POST(req: NextRequest) {
 
   const session = await getDodo().checkoutSessions.create({
     product_cart: [{ product_id: productId, quantity: 1 }],
-    return_url: `${origin}/dashboard?subscription=success`,
+    return_url: `${origin}/dashboard?subscription=success${early ? "&early=1" : ""}`,
     cancel_url: `${origin}${safeCancelPath}`,
-    metadata: { userId: user.id, plan, ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}) },
+    ...(early ? { discount_codes: [EARLY_DISCOUNT_CODE] } : {}),
+    metadata: {
+      userId: user.id,
+      plan,
+      ...(early ? { early: "true" } : {}),
+      ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}),
+    },
     customer: { email: user.email! },
   });
 

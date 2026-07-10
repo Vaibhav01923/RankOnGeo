@@ -3,6 +3,7 @@ import DodoPayments from "dodopayments";
 import type { WebhookPayload } from "dodopayments/resources/webhook-events";
 import { serverClient } from "@/lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { earlyWaitlistEmailHtml, sendEmail } from "@/lib/email";
 
 const getDodo = () =>
   new DodoPayments({
@@ -66,6 +67,55 @@ async function upsertPlanFromSubscription(db: SupabaseClient<any, any, any>, sub
   }
 }
 
+// Purchases made through /early (metadata.early === "true") also join the
+// early-access waitlist and get a one-time congrats email. Idempotent:
+// subscription.active can fire more than once, so the row is keyed on email
+// and the email only goes out while emailed_at is still null.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleEarlyWaitlist(db: SupabaseClient<any, any, any>, sub: WebhookPayload.Subscription) {
+  if (sub.metadata?.early !== "true") return;
+  const email = sub.customer?.email;
+  if (!email) return;
+
+  const plan = PRODUCT_ID_TO_PLAN[sub.product_id] ?? sub.metadata?.plan ?? "starter";
+
+  const { data: existing } = await db
+    .from("early_waitlist")
+    .select("id, emailed_at")
+    .eq("email", email)
+    .maybeSingle();
+
+  let rowId = existing?.id;
+  if (!existing) {
+    const { data: inserted, error } = await db
+      .from("early_waitlist")
+      .insert({
+        user_id: sub.metadata?.userId || null,
+        email,
+        plan,
+        dodo_subscription_id: sub.subscription_id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[dodo webhook] early_waitlist insert failed", { email, error: error.message });
+      return;
+    }
+    rowId = inserted.id;
+  }
+
+  if (!existing?.emailed_at && rowId) {
+    const { sent } = await sendEmail({
+      to: email,
+      subject: "Congrats — you're on the RankOnGeo early list 🌱",
+      html: earlyWaitlistEmailHtml(plan),
+    });
+    if (sent) {
+      await db.from("early_waitlist").update({ emailed_at: new Date().toISOString() }).eq("id", rowId);
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
 
@@ -85,7 +135,9 @@ export async function POST(req: NextRequest) {
   const db = serverClient();
 
   if (event.type === "subscription.active") {
-    await upsertPlanFromSubscription(db, event.data as WebhookPayload.Subscription, event.type);
+    const sub = event.data as WebhookPayload.Subscription;
+    await upsertPlanFromSubscription(db, sub, event.type);
+    await handleEarlyWaitlist(db, sub);
   }
 
   // Fires when an existing subscription's plan/product changes — including

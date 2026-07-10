@@ -64,7 +64,7 @@ export const PRICING = [
   },
 ];
 
-export function PricingCards({ compact = false }: { compact?: boolean }) {
+export function PricingCards({ compact = false, early = false }: { compact?: boolean; early?: boolean }) {
   const router = useRouter();
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
@@ -75,13 +75,13 @@ export function PricingCards({ compact = false }: { compact?: boolean }) {
       const res = await fetch("/api/dodo/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, cancelPath: window.location.pathname }),
+        body: JSON.stringify({ plan, cancelPath: window.location.pathname, ...(early ? { early: true } : {}) }),
       });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else if (res.status === 401) {
-        router.push("/auth?redirect=/dashboard");
+        router.push(`/auth?redirect=${encodeURIComponent(early ? "/early" : "/dashboard")}`);
       } else {
         alert(data.error ?? "Checkout failed. Try again.");
       }
@@ -92,7 +92,7 @@ export function PricingCards({ compact = false }: { compact?: boolean }) {
 
   return (
     <div>
-      <div className="mb-6 flex justify-center">
+      <div className={`mb-6 flex justify-center ${early ? "hidden" : ""}`}>
         <div
           className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-1"
           role="group"
@@ -121,7 +121,8 @@ export function PricingCards({ compact = false }: { compact?: boolean }) {
 
       <div className={`grid grid-cols-1 items-stretch gap-6 md:grid-cols-3`}>
         {PRICING.map((plan) => {
-          const price = billing === "annual" ? Math.round(plan.price * 0.83) : plan.price;
+          const base = billing === "annual" && !early ? Math.round(plan.price * 0.83) : plan.price;
+          const price = early ? Math.round(plan.price / 2) : base;
           return (
             <div
               key={plan.name}
@@ -143,7 +144,12 @@ export function PricingCards({ compact = false }: { compact?: boolean }) {
               >
                 {plan.name}
               </h3>
-              <div className="mb-1 mt-5 flex items-baseline gap-1.5">
+              <div className="mb-1 mt-5 flex items-baseline gap-2">
+                {early && (
+                  <span className="font-signal-mono text-2xl text-[var(--ink-faint)] line-through decoration-[var(--rust)]/60">
+                    ${plan.price}
+                  </span>
+                )}
                 <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">${price}</span>
                 <span className="text-sm text-[var(--ink-faint)]">/ month</span>
               </div>
@@ -167,7 +173,7 @@ export function PricingCards({ compact = false }: { compact?: boolean }) {
                     : "bg-[var(--line-soft)] text-[var(--ink)] hover:bg-[var(--line)]"
                 }`}
               >
-                {checkingOut === plan.planKey ? "Redirecting…" : "Get started"}
+                {checkingOut === plan.planKey ? "Redirecting…" : early ? "Claim 50% off" : "Get started"}
               </button>
             </div>
           );
