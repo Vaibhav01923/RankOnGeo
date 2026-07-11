@@ -391,7 +391,45 @@ function NavItem({ label, active, onClick, badge }: { label: string; active: boo
    handler passed down from the dashboard root — clicking anywhere on a
    blurred area opens the pricing modal instead of whatever it would
    normally do (pointer-events-none on the blurred content itself is what
-   suppresses the real nested buttons/links). */
+   suppresses the real nested buttons/links).
+
+   IMPORTANT: children must be DECOY content, never real values. The CSS blur
+   is cosmetic — anyone can strip the filter in devtools and read the DOM
+   underneath. Use decoyPct/decoyPick for stable fake values, or
+   LockedSkeleton for whole sections. */
+function decoyHash(seed: string | number): number {
+  const s = String(seed);
+  let h = 7;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+const decoyPct = (seed: string | number) => 35 + (decoyHash(seed) % 48);
+function decoyPick<T>(seed: string | number, options: readonly T[]): T {
+  return options[decoyHash(seed) % options.length];
+}
+const DECOY_COMPETITORS = ["acmecorp.com", "northstar.io", "brightpath.co", "orbitlabs.dev"] as const;
+
+function LockedSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="h-8 rounded-lg bg-[var(--line-soft)]" style={{ width: `${88 - (i % 3) * 14}%` }} />
+      ))}
+    </div>
+  );
+}
+
+/* Full-width locked list row — used where a real table/list row would leak. */
+function BlurRow({ onUnlock }: { onUnlock: () => void }) {
+  return (
+    <div className="relative cursor-pointer" onClick={onUnlock}>
+      <div className="pointer-events-none select-none blur-[5px] px-6 py-2.5">
+        <div className="h-6 rounded-lg bg-[var(--line-soft)]" />
+      </div>
+    </div>
+  );
+}
+
 function BlurInline({ children, onUnlock }: { children: React.ReactNode; onUnlock: () => void }) {
   return (
     <div className="relative inline-block cursor-pointer align-middle" onClick={onUnlock}>
@@ -1983,7 +2021,7 @@ function DashboardPage() {
                       <h1 className="font-signal-serif text-[40px] leading-none text-[var(--ink)]">AI Visibility</h1>
                       {overallScore !== null && (
                         <p className="text-[15px] text-[var(--ink-soft)]">
-                          Visibility up to {isFreeTier ? <BlurInline onUnlock={openPaywall}>{overallScore}%</BlurInline> : `${overallScore}%`} composite, across {scores.map((s) => ENGINE_LABELS[s.engine]).join(", ")}.
+                          Visibility up to {isFreeTier ? <BlurInline onUnlock={openPaywall}>{decoyPct(brand.id ?? brand.name)}%</BlurInline> : `${overallScore}%`} composite, across {scores.map((s) => ENGINE_LABELS[s.engine]).join(", ")}.
                         </p>
                       )}
                     </div>
@@ -1991,17 +2029,18 @@ function DashboardPage() {
 
                   <div className="flex flex-col items-center gap-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] p-7">
                     {(() => {
+                      const shownScore = isFreeTier ? decoyPct(brand.id ?? brand.name) : overallScore ?? 0;
                       const ring = (
                         <div className="relative w-[164px] h-[164px]">
                           <svg width="164" height="164" viewBox="0 0 180 180" style={{ transform: "rotate(-90deg)" }}>
                             <circle cx="90" cy="90" r="78" fill="none" stroke="var(--line)" strokeWidth="14" />
                             <circle
                               cx="90" cy="90" r="78" fill="none" stroke="var(--rust)" strokeWidth="14" strokeLinecap="round"
-                              strokeDasharray={`${((overallScore ?? 0) / 100) * (2 * Math.PI * 78)} ${2 * Math.PI * 78}`}
+                              strokeDasharray={`${(shownScore / 100) * (2 * Math.PI * 78)} ${2 * Math.PI * 78}`}
                             />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                            <span className="font-signal-serif text-[44px] leading-none text-[var(--ink)]">{overallScore ?? 0}%</span>
+                            <span className="font-signal-serif text-[44px] leading-none text-[var(--ink)]">{shownScore}%</span>
                             <span className="text-[10px] font-semibold tracking-wider uppercase text-[var(--ink-faint)]">Composite</span>
                           </div>
                         </div>
@@ -2018,14 +2057,14 @@ function DashboardPage() {
                         <span className="text-[13px] font-semibold text-[var(--ink)]">{ENGINE_LABELS[s.engine]}</span>
                         {isFreeTier ? (
                           <BlurInline onUnlock={openPaywall}>
-                            <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{s.score}%</span>
+                            <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{decoyPct(s.engine)}%</span>
                           </BlurInline>
                         ) : (
                           <span className="font-signal-mono text-[34px] font-semibold text-[var(--ink)]">{s.score}%</span>
                         )}
                         {isFreeTier ? (
                           <BlurInline onUnlock={openPaywall}>
-                            <span className="text-[12.5px] text-[var(--ink-faint)]">{s.mentionCount}/{s.totalPrompts} prompts{s.avgRank ? ` · avg #${s.avgRank.toFixed(1)}` : ""}</span>
+                            <span className="text-[12.5px] text-[var(--ink-faint)]">{decoyHash(s.engine) % (s.totalPrompts + 1)}/{s.totalPrompts} prompts · avg #{(1 + (decoyHash(s.engine) % 30) / 10).toFixed(1)}</span>
                           </BlurInline>
                         ) : (
                           <span className="text-[12.5px] text-[var(--ink-faint)]">{s.mentionCount}/{s.totalPrompts} prompts{s.avgRank ? ` · avg #${s.avgRank.toFixed(1)}` : ""}</span>
@@ -2053,9 +2092,10 @@ function DashboardPage() {
                             <span className="flex-1 text-sm font-medium text-[var(--ink)] truncate">{p.text}</span>
                             {scores.map((s) => {
                               const r = promptResults.find((res) => res.engine === s.engine);
-                              const display = r?.brandMentioned ? (r.brandRank ? `#${r.brandRank}` : "✓") : "—";
-                              const color = r?.brandMentioned ? "var(--rust)" : "var(--ink-faint)";
-                              const mark = <span className="font-signal-mono text-[11.5px] font-bold" style={{ color }}>{display}</span>;
+                              const realDisplay = r?.brandMentioned ? (r.brandRank ? `#${r.brandRank}` : "✓") : "—";
+                              const display = isFreeTier ? decoyPick(p.id + s.engine, ["#1", "#2", "✓", "—"] as const) : realDisplay;
+                              const mentionedShown = isFreeTier ? display !== "—" : !!r?.brandMentioned;
+                              const mark = <span className="font-signal-mono text-[11.5px] font-bold" style={{ color: mentionedShown ? "var(--rust)" : "var(--ink-faint)" }}>{display}</span>;
                               return (
                                 <div key={s.engine} className="flex items-center gap-1.5 w-16 shrink-0">
                                   <EngineIcon engine={s.engine} size={14} />
@@ -2065,7 +2105,7 @@ function DashboardPage() {
                             })}
                             {isFreeTier ? (
                               <BlurInline onUnlock={openPaywall}>
-                                <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0 inline-block">{visibilityPct}%</span>
+                                <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0 inline-block">{decoyPct(p.id)}%</span>
                               </BlurInline>
                             ) : (
                               <span className="font-signal-mono text-[13px] font-semibold text-[var(--ink)] w-10 text-right shrink-0">{visibilityPct}%</span>
@@ -2232,7 +2272,7 @@ function DashboardPage() {
                   </div>
                   </>
                     );
-                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{engineBody}</BlurBlock> : engineBody;
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={5} /></BlurBlock> : engineBody;
                   })()}
                 </>
               )}
@@ -2687,12 +2727,12 @@ function DashboardPage() {
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                         <StatCard label="Prompts" value={allPrompts.length} sub="tracked" />
                         {isFreeTier ? (
-                          <BlurInline onUnlock={openPaywall}><StatCard label="With gaps" value={gaps.length} sub="need articles" /></BlurInline>
+                          <BlurInline onUnlock={openPaywall}><StatCard label="With gaps" value={2 + (decoyHash(brand.id ?? brand.name) % 9)} sub="need articles" /></BlurInline>
                         ) : (
                           <StatCard label="With gaps" value={gaps.length} sub="need articles" />
                         )}
                         {isFreeTier ? (
-                          <BlurInline onUnlock={openPaywall}><StatCard label="Avg visibility" value={overallScore !== null ? `${overallScore}%` : "—"} sub="across engines" /></BlurInline>
+                          <BlurInline onUnlock={openPaywall}><StatCard label="Avg visibility" value={`${decoyPct(brand.id ?? brand.name)}%`} sub="across engines" /></BlurInline>
                         ) : (
                           <StatCard label="Avg visibility" value={overallScore !== null ? `${overallScore}%` : "—"} sub="across engines" />
                         )}
@@ -2778,15 +2818,18 @@ function DashboardPage() {
                                       </svg>
                                       <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">New</span>
                                     </div>
-                                  ) : (
-                                    <div className="relative w-11 h-11 shrink-0">
-                                      <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
-                                        <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(48,40,33,0.1)" strokeWidth="3"/>
-                                        <circle cx="22" cy="22" r="18" fill="none" stroke={vis >= 80 ? "#22c55e" : vis >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="3" strokeDasharray={`${vis * 1.131} 113.1`} strokeLinecap="round"/>
-                                      </svg>
-                                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[var(--ink)]/80">{vis}%</span>
-                                    </div>
-                                  );
+                                  ) : (() => {
+                                    const shownVis = isFreeTier ? decoyPct(p.id) : vis;
+                                    return (
+                                      <div className="relative w-11 h-11 shrink-0">
+                                        <svg viewBox="0 0 44 44" className="w-11 h-11 -rotate-90">
+                                          <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(48,40,33,0.1)" strokeWidth="3"/>
+                                          <circle cx="22" cy="22" r="18" fill="none" stroke={shownVis >= 80 ? "#22c55e" : shownVis >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="3" strokeDasharray={`${shownVis * 1.131} 113.1`} strokeLinecap="round"/>
+                                        </svg>
+                                        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[var(--ink)]/80">{shownVis}%</span>
+                                      </div>
+                                    );
+                                  })();
                                   return isFreeTier ? <BlurInline onUnlock={openPaywall}>{ring}</BlurInline> : ring;
                                 })()}
                                 <span className="text-sm text-[var(--ink)]/90 font-medium leading-snug line-clamp-2">{p.text}</span>
@@ -2800,15 +2843,15 @@ function DashboardPage() {
                                   <div className="flex items-center gap-2">
                                     {selectedEngines.map((eng) => {
                                       const r = pr.find((x) => x.engine === eng);
-                                      const mentioned = r?.brandMentioned ?? false;
-                                      const hasData = !!r;
+                                      const mentioned = isFreeTier ? decoyHash(p.id + eng) % 2 === 0 : r?.brandMentioned ?? false;
+                                      const hasData = isFreeTier ? true : !!r;
                                       return (
                                         <div key={eng} className={`flex items-center gap-1 ${!hasData || !mentioned ? "opacity-35 grayscale" : ""}`} title={`${eng}: ${!hasData ? "no data" : mentioned ? "mentioned" : "not mentioned"}`}>
                                           <EngineIcon engine={eng} size={14} />
                                         </div>
                                       );
                                     })}
-                                    {hasGap && (
+                                    {(isFreeTier ? decoyHash(p.id) % 3 === 0 : hasGap) && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -2828,13 +2871,13 @@ function DashboardPage() {
                               })()}
                               {/* Competing with */}
                               {isFreeTier ? (
-                                <BlurInline onUnlock={openPaywall}><div className="text-xs text-[var(--ink-soft)] truncate">{topCompetitor ?? "—"}</div></BlurInline>
+                                <BlurInline onUnlock={openPaywall}><div className="text-xs text-[var(--ink-soft)] truncate">{decoyPick(p.id, DECOY_COMPETITORS)}</div></BlurInline>
                               ) : (
                                 <div className="text-xs text-[var(--ink-soft)] truncate">{topCompetitor ?? "—"}</div>
                               )}
                               {/* Type dot */}
                               {isFreeTier ? (
-                                <BlurInline onUnlock={openPaywall}><div className="flex justify-center"><div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} /></div></BlurInline>
+                                <BlurInline onUnlock={openPaywall}><div className="flex justify-center"><div className={`w-2.5 h-2.5 rounded-full ${decoyPick(p.id + "type", ["bg-blue-500", "bg-[var(--rust)]", "bg-purple-500"] as const)}`} /></div></BlurInline>
                               ) : (
                                 <div className="flex justify-center">
                                   <div className={`w-2.5 h-2.5 rounded-full ${typeDot}`} />
@@ -3407,7 +3450,7 @@ function DashboardPage() {
                         </div>
                       </div>
                     );
-                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{chartBody}</BlurBlock> : chartBody;
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={6} /></BlurBlock> : chartBody;
                   })()}
 
                   {/* Search + filter bar */}
@@ -3552,14 +3595,14 @@ function DashboardPage() {
                                             )}
                                           </div>
                                         );
-                                        return instanceLocked ? <BlurInline key={i} onUnlock={openPaywall}>{instanceRow}</BlurInline> : instanceRow;
+                                        return instanceLocked ? <BlurRow key={i} onUnlock={openPaywall} /> : instanceRow;
                                       })
                                     )}
                                   </div>
                                 )}
                               </div>
                             );
-                            return rowLocked ? <BlurInline key={domain} onUnlock={openPaywall}>{row}</BlurInline> : row;
+                            return rowLocked ? <BlurRow key={domain} onUnlock={openPaywall} /> : row;
                           })}
                          </div>
                          </div>
@@ -3769,7 +3812,7 @@ function DashboardPage() {
                         )}
                       </div>
                     );
-                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}>{sovBody}</BlurBlock> : sovBody;
+                    return isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={5} /></BlurBlock> : sovBody;
                   })()}
                 </div>
               )}
@@ -3926,7 +3969,7 @@ function DashboardPage() {
                     </button>
                   </div>
                 </div>
-                {isFreeTier ? <BlurBlock onUnlock={openPaywall}>{webBody}</BlurBlock> : webBody}
+                {isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock> : webBody}
               </div>
             );
           })()}
@@ -4091,7 +4134,7 @@ function DashboardPage() {
                     </button>
                   </div>
                 </div>
-                {isFreeTier ? <BlurBlock onUnlock={openPaywall}>{llmBody}</BlurBlock> : llmBody}
+                {isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock> : llmBody}
               </div>
             );
           })()}
@@ -4253,7 +4296,7 @@ function DashboardPage() {
                   <div className="mb-5">
                     <h2 className="text-xl font-bold text-[var(--ink)]">Research</h2>
                     <p className="text-sm text-[var(--ink-faint)] mt-0.5">
-                      {isFreeTier ? <BlurInline onUnlock={openPaywall}>{gaps.length} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
+                      {isFreeTier ? <BlurInline onUnlock={openPaywall}>{2 + (decoyHash(brand.id ?? brand.name) % 9)} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
                     </p>
                   </div>
                   <div className="space-y-3">
@@ -4261,13 +4304,15 @@ function DashboardPage() {
                       <div key={i} className="panel rounded-xl p-4">
                         <p className="text-sm font-medium text-[var(--ink)]/90 mb-2">{gap.promptText}</p>
                         {(() => {
+                          const shownEngines = isFreeTier ? [decoyPick(gap.promptText, selectedEngines.length ? selectedEngines : (["chatgpt"] as const))] : gap.engines;
+                          const shownCompetitor = isFreeTier ? decoyPick(gap.promptText, DECOY_COMPETITORS) : gap.topCompetitor;
                           const badges = (
                             <div className="flex items-center gap-2 mb-3 flex-wrap">
-                              {gap.engines.map((e) => (
+                              {shownEngines.map((e) => (
                                 <span key={e} className="text-xs bg-red-500/10 text-red-700 px-2 py-0.5 rounded-full">Not in {ENGINE_LABELS[e as AIEngine]}</span>
                               ))}
-                              {gap.topCompetitor && (
-                                <span className="text-xs text-[var(--ink-faint)]">· <span className="font-medium text-[var(--ink-soft)]">{gap.topCompetitor}</span> appears instead</span>
+                              {shownCompetitor && (
+                                <span className="text-xs text-[var(--ink-faint)]">· <span className="font-medium text-[var(--ink-soft)]">{shownCompetitor}</span> appears instead</span>
                               )}
                             </div>
                           );

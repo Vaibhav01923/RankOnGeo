@@ -176,6 +176,12 @@ export function PricingCards({ compact = false, early = false }: { compact?: boo
               >
                 {checkingOut === plan.planKey ? "Redirecting…" : early ? "Claim 50% off" : "Get started"}
               </button>
+              <button
+                onClick={() => router.push("/audit")}
+                className="mt-2.5 w-full rounded-full border border-[var(--line)] py-3 text-center text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)]"
+              >
+                Try for free
+              </button>
             </div>
           );
         })}

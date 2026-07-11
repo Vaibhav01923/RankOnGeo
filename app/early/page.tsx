@@ -91,9 +91,6 @@ export default function EarlyAccessPage() {
 
         <section className="mx-auto mt-16 max-w-6xl" aria-label="Early access pricing">
           <PricingCards early />
-          <p className="mt-6 text-center text-xs text-[var(--ink-faint)]">
-            Discount applied automatically at checkout. You'll get a confirmation email once you're on the list.
-          </p>
         </section>
 
         <section className="mx-auto mt-20 max-w-4xl" aria-label="What you get">
