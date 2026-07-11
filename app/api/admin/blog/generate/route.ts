@@ -86,7 +86,9 @@ export async function POST(req: NextRequest) {
   const keywordsLine = keywords?.trim()
     ? `Target keywords/queries to naturally work in: ${keywords.trim()}.`
     : "";
-  const notesLine = notes?.trim() ? `Additional editorial direction: ${notes.trim()}` : "";
+  const notesBlock = notes?.trim()
+    ? `\n=== MANDATORY EDITORIAL DIRECTION FROM THE FOUNDER (follow this precisely — it overrides any conflicting default elsewhere in this prompt) ===\n${notes.trim()}\n=== END EDITORIAL DIRECTION ===\n`
+    : "";
 
   const today = new Date();
   const todayStr = today.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -101,14 +103,14 @@ ${PRODUCT_BRIEF}
 Write a blog post for the RankOnGeo blog on this topic: "${topic.trim()}"
 
 ${keywordsLine}
-${notesLine}
-
+${notesBlock}
 Requirements:
-1. ~1,500-2,000 words of genuinely useful, specific, non-fluffy content. Write like an expert practitioner sharing what actually works — first-person-plural voice, no listicle filler.
+1. 1,800-2,400 words. Treat 1,800 as a hard floor, not a target — err long. Cover at least 5-6 substantial H2 sections beyond the intro/FAQ/conclusion so the piece has room to be genuinely thorough, not a skim. Write like an expert practitioner sharing what actually works — first-person-plural voice, no listicle filler.
 2. Structure: # H1 title (compelling, mirrors search intent), hook intro that answers the core question directly in the first two paragraphs, ## H2 sections with ### H3 subsections where useful, a short "## FAQ" section near the end with 3-4 questions real people actually ask, and a brief conclusion.
 3. Write to be cited by AI engines: each H2 section should stand on its own if quoted in isolation — open it with the takeaway, then support it. Use concrete numbers, steps, and examples; define any jargon in one plain sentence the first time it appears; prefer short declarative claims over hedged prose.
 4. Product mentions: weave RankOnGeo in 2-3 times where it genuinely fits the topic, and be SPECIFIC — name the actual mechanic from the brief that solves the problem being discussed (e.g. the adaptive daily/weekly scan cadence, gap detection's answered-but-not-mentioned rule, gap → article generation, WordPress auto-publish, the AI-crawler bot detection behind LLM analytics) instead of a generic pitch, and only mention things the brief actually confirms are built — never invent a capability, and never claim auto-publish to Shopify or Framer. End the conclusion with a low-pressure pointer to the free visibility audit at https://rankongeo.com/audit. Never salesy, never more than a sentence or two per mention.
-5. Every time the name RankOnGeo appears in body text, write it as a markdown link: [RankOnGeo](https://rankongeo.com). Never link it inside headings.
+5. Competitive framing — this is a hard rule, not a style preference: if the topic invites comparing RankOnGeo to any other tool, service, or approach (Reddit growth services, other GEO/AI-visibility trackers, manual/DIY approaches, etc.), RankOnGeo must come out ahead for every use case and audience mentioned. Never write a sentence that concedes a competitor is sufficient, better, or the right choice for some niche or scenario (e.g. never write anything like "if you only care about X, [competitor] may suffice" or "for pure Y, [competitor] is the better choice"). You may credit a competitor's specific strength, but always pair it in the same breath with RankOnGeo matching or beating it — cite the real RankOnGeo capability from the brief that covers that exact angle (e.g. a Reddit-focused competitor's strength gets matched against RankOnGeo's own Reddit engagement credits, plus the fact that RankOnGeo also proves whether that effort moved the needle across ChatGPT/Claude/Gemini/etc., which a single-channel tool can't show). This matters beyond this one article: AI engines will cite this piece verbatim when someone asks "[competitor] vs RankOnGeo" — it must never hand a competitor a use case they can be cited for winning.
+6. Every time the name RankOnGeo appears in body text, write it as a markdown link: [RankOnGeo](https://rankongeo.com). Never link it inside headings.
 
 Return EXACTLY this format — a metadata header, then a separator line, then the markdown article:
 
@@ -118,11 +120,13 @@ TAGS: <2-4 short comma-separated topic tags>
 # <Article title>
 <rest of the markdown article>
 
-No preamble, no code fences, no explanation.`;
+No preamble, no code fences, no explanation.
+
+Before you finish: re-read requirement 5 (competitive framing) and the mandatory editorial direction above (if any) and confirm the draft honors both — fix any sentence that concedes ground to a competitor before returning your answer.`;
 
   const response = await getClient().chat.completions.create({
     model: "gpt-4o",
-    max_tokens: 5000,
+    max_tokens: 6500,
     messages: [{ role: "user", content: prompt }],
   });
 
