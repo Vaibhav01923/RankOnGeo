@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdmin } from "@/lib/admin";
+import { parseArticleMeta } from "@/lib/article-meta";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -36,11 +37,7 @@ No preamble, no code fences, no explanation.`;
   });
 
   const raw = (response.choices[0]?.message?.content ?? "").trim();
-  const description = raw.match(/^DESCRIPTION:\s*(.+)$/m)?.[1]?.trim() ?? "";
-  const tags = (raw.match(/^TAGS:\s*(.+)$/m)?.[1] ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const { description, tags } = parseArticleMeta(raw);
 
   if (!description) return NextResponse.json({ error: "Model returned no description — try again" }, { status: 502 });
 

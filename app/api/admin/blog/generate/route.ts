@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdmin } from "@/lib/admin";
+import { parseArticleMeta } from "@/lib/article-meta";
 import { slugify } from "@/lib/blog";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -51,15 +52,7 @@ No preamble, no code fences, no explanation.`;
     .replace(/\n?```$/i, "")
     .trim();
 
-  const separatorIndex = raw.indexOf("\n---\n");
-  const header = separatorIndex >= 0 ? raw.slice(0, separatorIndex) : "";
-  const content = (separatorIndex >= 0 ? raw.slice(separatorIndex + 5) : raw).trim();
-
-  const description = header.match(/^DESCRIPTION:\s*(.+)$/m)?.[1]?.trim() ?? "";
-  const tags = (header.match(/^TAGS:\s*(.+)$/m)?.[1] ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const { description, tags, content } = parseArticleMeta(raw);
 
   const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? topic.trim();
   const wordCount = content.split(/\s+/).filter(Boolean).length;
