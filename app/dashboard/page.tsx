@@ -597,6 +597,19 @@ function DashboardPage() {
       .finally(() => setDeletingBrand(false));
   };
 
+  const deleteAllPrompts = () => {
+    if (!brand) return;
+    setDeletingAllPrompts(true);
+    fetch(`/api/prompts?brandId=${brand.id}`, { method: "DELETE" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.ok) return;
+        setBrand((b) => b ? { ...b, trackedPrompts: [] } : b);
+        setDeleteAllPromptsConfirm(false);
+      })
+      .finally(() => setDeletingAllPrompts(false));
+  };
+
   const buyCredits = () => {
     setBuyCreditsSubmitting(true);
     fetch("/api/dodo/credits-checkout", {
@@ -698,6 +711,8 @@ function DashboardPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [addingPrompt, setAddingPrompt] = useState(false);
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null);
+  const [deleteAllPromptsConfirm, setDeleteAllPromptsConfirm] = useState(false);
+  const [deletingAllPrompts, setDeletingAllPrompts] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const agentEndRef = useRef<HTMLDivElement>(null);
   const agentMessagesRef = useRef<AgentMessage[]>([]);
@@ -2784,9 +2799,19 @@ function DashboardPage() {
                       </div>
 
                       {/* Search */}
-                      <div className="flex items-center gap-2 panel rounded-xl px-3 py-2 mb-4">
-                        <svg className="w-4 h-4 text-[var(--ink-faint)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-[var(--ink)]/90 placeholder:text-[var(--ink-faint)]" />
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 panel rounded-xl px-3 py-2 flex-1">
+                          <svg className="w-4 h-4 text-[var(--ink-faint)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                          <input value={promptSearch} onChange={(e) => setPromptSearch(e.target.value)} placeholder="Search prompts" className="text-sm flex-1 outline-none bg-transparent text-[var(--ink)]/90 placeholder:text-[var(--ink-faint)]" />
+                        </div>
+                        {allPrompts.length > 0 && (
+                          <button
+                            onClick={() => setDeleteAllPromptsConfirm(true)}
+                            className="shrink-0 text-xs font-medium text-[var(--ink-faint)] hover:text-red-700 border border-[var(--line)] hover:border-red-500/30 hover:bg-red-500/5 px-3 py-2.5 rounded-xl transition-colors"
+                          >
+                            Delete all
+                          </button>
+                        )}
                       </div>
 
                       {/* Table — scrolls horizontally on narrow screens */}
@@ -4259,6 +4284,38 @@ function DashboardPage() {
                     className="flex-1 text-sm font-semibold bg-red-600 text-white px-3 py-2.5 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {deletingBrand ? "Deleting…" : "Delete brand"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete all prompts modal */}
+          {deleteAllPromptsConfirm && brand && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !deletingAllPrompts && setDeleteAllPromptsConfirm(false)}>
+              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-base font-semibold text-red-600">Delete all {brand.trackedPrompts.length} prompts?</p>
+                  <button onClick={() => setDeleteAllPromptsConfirm(false)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-4">
+                  This removes every tracked prompt — active and paused — for <span className="font-medium text-[var(--ink-soft)]">{brand.domain}</span>. Scan history, articles, and citations already gathered are unaffected. This cannot be undone.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDeleteAllPromptsConfirm(false)}
+                    className="flex-1 text-sm font-semibold border border-[var(--line)] px-3 py-2.5 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={deleteAllPrompts}
+                    disabled={deletingAllPrompts}
+                    className="flex-1 text-sm font-semibold bg-red-600 text-white px-3 py-2.5 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingAllPrompts ? "Deleting…" : "Delete all"}
                   </button>
                 </div>
               </div>
