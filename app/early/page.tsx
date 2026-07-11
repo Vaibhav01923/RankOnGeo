@@ -114,6 +114,17 @@ export default function EarlyAccessPage() {
             Then come back for the discount.
           </p>
           <DomainForm variant="cta" />
+          <p className="mt-5 text-sm text-[var(--ink-faint)]">
+            Prefer to talk it through first?{" "}
+            <a
+              href="https://cal.com/deveshpaliwal/15min"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[var(--rust)] underline underline-offset-2 transition-colors hover:text-[var(--rust-deep)]"
+            >
+              Book a 15-min demo →
+            </a>
+          </p>
         </section>
       </main>
 

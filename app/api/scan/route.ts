@@ -18,10 +18,30 @@ export async function POST(req: NextRequest) {
     .from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
   if (!brandRow) return new Response(JSON.stringify({ error: "Brand not found" }), { status: 404 });
 
+  // Cap manual re-scans at 2/day per brand — each one burns real AI-provider
+  // credits across every tracked prompt × engine, so repeated clicking (or a
+  // script hammering this endpoint) needs a hard server-side stop, not just a
+  // disabled button. Scoped to trigger='manual' so it never counts the daily
+  // cron scan (scan_runs rows it writes default to trigger='cron').
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const { count: manualScansToday } = await db
+    .from("scan_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandId)
+    .eq("trigger", "manual")
+    .gte("created_at", startOfToday.toISOString());
+  if ((manualScansToday ?? 0) >= 2) {
+    return new Response(
+      JSON.stringify({ error: "You've used both re-scans for today on this brand — try again tomorrow." }),
+      { status: 429 }
+    );
+  }
+
   // Create scan_run row so the client has an ID to poll immediately
   const { data: runRow, error: runError } = await db
     .from("scan_runs")
-    .insert({ brand_id: brandId, engines, overall_score: 0 })
+    .insert({ brand_id: brandId, engines, overall_score: 0, trigger: "manual" })
     .select("id")
     .single();
 

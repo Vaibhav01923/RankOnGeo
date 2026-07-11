@@ -66,16 +66,35 @@ export async function GET(req: NextRequest) {
   const toSortedList = (m: Map<string, number>) =>
     [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
 
+  // Top referrers across the whole selected window (not just the live 5-min
+  // slice above) — this is what answers "how much traffic is my X/ad
+  // campaign actually sending", which the live view is too narrow to show.
+  const topReferrerCounts = new Map<string, number>();
+  for (const v of visits) {
+    const host = referrerHost(v.referrer);
+    topReferrerCounts.set(host, (topReferrerCounts.get(host) ?? 0) + 1);
+  }
+
   return NextResponse.json({
     domain: brand.domain,
     siteKey: brand.site_key,
     isFree,
     stats: { liveVisitors, visitors, pageviews, avgDurationSeconds, bounceRate },
     live: { pages: toSortedList(pageCounts), referrers: toSortedList(referrerCounts) },
+    topReferrers: toSortedList(topReferrerCounts).slice(0, 10),
   });
 }
 
 function referrerHost(referrer: string | null): string {
   if (!referrer) return "Direct";
-  try { return new URL(referrer).hostname; } catch { return "Direct"; }
+  try {
+    let host = new URL(referrer).hostname.replace(/^www\./, "");
+    // t.co (Twitter/X's link shortener, what ad clicks actually arrive
+    // through) and the legacy twitter.com domain are the same traffic
+    // source as x.com — merge them so campaign counts aren't split three ways.
+    if (host === "t.co" || host === "twitter.com") host = "x.com";
+    return host;
+  } catch {
+    return "Direct";
+  }
 }

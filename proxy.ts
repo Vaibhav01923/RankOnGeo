@@ -1,7 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function proxy(request: NextRequest) {
+// Our own site's Web/LLM Analytics site key (brands.site_key for the
+// RankOnGeo brand, rankongeo.com) — see app/docs/llm-analytics.
+const SITE_KEY = "6469ac374959";
+
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -41,9 +45,35 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/setup", request.url));
   }
 
+  // Track AI crawler/bot traffic against our own site — GPTBot, ClaudeBot,
+  // PerplexityBot etc. crawl the public marketing/blog/docs pages, not
+  // /dashboard, which is why the matcher below covers the whole site rather
+  // than just the auth-gated paths above. Fire-and-forget via waitUntil so
+  // it never adds latency to the real response; the endpoint silently
+  // no-ops for non-bot user agents, so this is safe to call unconditionally.
+  const userAgent = request.headers.get("user-agent");
+  if (userAgent) {
+    event.waitUntil(
+      fetch(`${request.nextUrl.origin}/api/track/bot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteKey: SITE_KEY,
+          path: pathname,
+          userAgent,
+          referrer: request.headers.get("referer") ?? "",
+        }),
+      }).catch(() => {})
+    );
+  }
+
   return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/article", "/article/:path*", "/setup", "/setup/:path*", "/auth", "/admin", "/admin/:path*"],
+  matcher: [
+    // Everything except static assets, images, and API routes (those handle
+    // their own auth internally, and don't need bot-tracking on themselves).
+    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|txt|xml|json|woff|woff2)$).*)",
+  ],
 };

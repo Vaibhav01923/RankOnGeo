@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
+import { PricingCards } from "../_components/PricingCards";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -100,30 +101,7 @@ function AuditContent() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Analysis | null>(null);
   const [showPricing, setShowPricing] = useState(false);
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
-  const [checkingOut, setCheckingOut] = useState(false);
   const pricingRef = useRef<HTMLDivElement>(null);
-
-  async function startCheckout(plan: string) {
-    setCheckingOut(true);
-    try {
-      const res = await fetch("/api/dodo/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, cancelPath: window.location.pathname + window.location.search }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else if (res.status === 401) {
-        router.push(`/auth?redirect=/audit?domain=${domain}`);
-      } else {
-        alert(data.error ?? "Checkout failed. Make sure Stripe is configured.");
-      }
-    } finally {
-      setCheckingOut(false);
-    }
-  }
 
   useEffect(() => {
     if (domainParam) {
@@ -579,44 +557,7 @@ function AuditContent() {
                 <span className="font-semibold text-[var(--ink)]">{result.keywords.length} keyword opportunities</span> found for {cleanDomain}. Every plan ships measurement, research, generation, and publishing.
               </p>
             </div>
-            <div className="flex items-center gap-2 mb-10">
-              <button onClick={() => setBilling("monthly")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${billing === "monthly" ? "bg-[var(--rust)] text-[var(--surface)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>Monthly</button>
-              <button onClick={() => setBilling("annual")} className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${billing === "annual" ? "bg-[var(--rust)] text-[var(--surface)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>
-                Annual <span className="text-xs bg-[var(--rust-wash)] text-[var(--rust-deep)] px-1.5 py-0.5 rounded font-semibold">−17%</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-              {[
-                { name: "Free", desc: "Get started, no card needed.", price: "0", cta: "Start free →", action: () => router.push(`/setup?domain=${domain}`), highlight: false, features: ["1 website", "10 tracked prompts", "3 AI engines", "Manual refresh", "Basic visibility score"] },
-                { name: "Pro", desc: "For solopreneurs & small sites.", price: billing === "annual" ? "41" : "49", cta: "Get started →", action: () => startCheckout("starter"), highlight: false, features: ["50 credits for Reddit upvotes", "1 website", "50 tracked prompts", "4,000 AI responses/mo", "3 AI engines", "Weekly refresh", "CMS publishing"] },
-                { name: "Business", desc: "For growing brands.", price: billing === "annual" ? "82" : "99", cta: "Get started →", action: () => startCheckout("growth"), highlight: true, features: ["100 credits for Reddit upvotes", "3 websites", "150 tracked prompts", "6,000 AI responses/mo", "6 AI engines", "Daily updates", "Gap detection", "7 competitors", "Auto-publish"] },
-                { name: "Scale", desc: "For teams — full autopilot.", price: billing === "annual" ? "124" : "149", cta: "Get started →", action: () => startCheckout("enterprise"), highlight: false, features: ["150 credits for Reddit upvotes", "10 websites", "400 tracked prompts", "15,000 AI responses/mo", "All 7 AI engines", "Unlimited seats", "Full autopilot"] },
-              ].map((plan) => (
-                <div key={plan.name} className={`rounded-2xl p-6 bg-[var(--surface)] ${plan.highlight ? "border-2 border-[var(--rust)]/30" : "border border-[var(--line)]"}`}>
-                  {plan.highlight && <span className="inline-block text-xs bg-[var(--rust)] text-[var(--surface)] font-semibold px-3 py-1 rounded-full mb-3">Most picked</span>}
-                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? "text-[var(--rust)]" : "text-[var(--ink)]"}`}>{plan.name}</p>
-                  <p className="text-xs mb-5 text-[var(--ink-faint)]">{plan.desc}</p>
-                  <div className="flex items-end gap-1 mb-6">
-                    <span className="font-signal-mono text-4xl font-semibold text-[var(--ink)]">${plan.price}</span>
-                    <span className="text-[var(--ink-faint)] text-sm mb-1">/ month</span>
-                  </div>
-                  <button
-                    onClick={plan.action}
-                    disabled={checkingOut}
-                    className={`w-full text-sm font-medium py-2.5 rounded-lg transition-colors mb-6 disabled:opacity-50 ${plan.highlight ? "bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)]" : "border border-[var(--line)] hover:border-[var(--rust)]/30 text-[var(--ink)]"}`}
-                  >
-                    {plan.cta}
-                  </button>
-                  <ul className="space-y-2">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-xs text-[var(--ink-soft)]">
-                        <span className="text-[var(--ink-faint)]/70">—</span>{f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            <PricingCards />
             <p className="text-xs text-[var(--ink-faint)] mt-6 text-center">Cancel anytime. Your data for <span className="font-medium">{cleanDomain}</span> transfers to your account automatically.</p>
           </div>
         )}

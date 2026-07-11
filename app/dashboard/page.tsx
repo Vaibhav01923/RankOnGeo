@@ -163,6 +163,7 @@ type WebAnalyticsData = {
   isFree: boolean;
   stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number };
   live: { pages: NamedCount[]; referrers: NamedCount[] };
+  topReferrers: NamedCount[];
 };
 type LlmAnalyticsData = {
   domain: string;
@@ -3878,6 +3879,24 @@ function DashboardPage() {
                     </div>
                   )}
                 </div>
+
+                {!!webAnalyticsData?.topReferrers.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Top Referrers</p>
+                    <p className="text-xs text-[var(--ink-faint)] mb-3">Where visitors came from over this period — useful for checking ad/campaign traffic (e.g. x.com).</p>
+                    <div className="space-y-2">
+                      {webAnalyticsData.topReferrers.map((r) => (
+                        <div key={r.label} className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--ink)]/80 font-medium w-28 shrink-0 truncate">{r.label}</span>
+                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((r.count / webAnalyticsData.topReferrers[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {webAnalyticsData?.stats.pageviews === 0 && (
                   <div className="flex flex-col items-center text-center py-10 mb-2">

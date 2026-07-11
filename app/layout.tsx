@@ -73,6 +73,12 @@ export default function RootLayout({
         data-domain="rankongeo.com"
         strategy="afterInteractive"
       />
+      <Script
+        id="rankongeo-web-analytics"
+        src="https://www.rankongeo.com/track.js"
+        data-site="6469ac374959"
+        strategy="afterInteractive"
+      />
     </html>
   );
 }
