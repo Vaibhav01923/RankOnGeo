@@ -125,7 +125,7 @@ No preamble, no code fences, no explanation.
 Before you finish: re-read requirement 5 (competitive framing) and the mandatory editorial direction above (if any) and confirm the draft honors both — fix any sentence that concedes ground to a competitor before returning your answer.`;
 
   const response = await getClient().chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.4-nano-2026-03-17",
     max_tokens: 6500,
     messages: [{ role: "user", content: prompt }],
   });
