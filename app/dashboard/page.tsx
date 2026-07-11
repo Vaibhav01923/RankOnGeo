@@ -1671,6 +1671,15 @@ function DashboardPage() {
     return acc;
   }, {});
 
+  // Same "engagement opportunity" definition as the Citations tab's per-row
+  // Engage button: a Reddit citation URL that hasn't already got a task.
+  const engagementOpportunityCount = new Set(
+    Object.values(citationInstances)
+      .flat()
+      .filter((item) => getEngagePlatform(item.url) === "reddit" && !engagedUrls.has(item.url))
+      .map((item) => item.url)
+  ).size;
+
   // Keywords derived from prompts + gaps
   const keywordRows = brand.trackedPrompts.map((p) => {
     const gap = gaps.find((g) => g.promptText === p.text);
@@ -1822,7 +1831,7 @@ function DashboardPage() {
               <NavItem label="Overview" active={activeTab === "overview"} onClick={() => navTo("overview")} />
               <NavItem label="Engines" active={activeTab === "history"} onClick={() => navTo("history")} />
               <NavItem label="Prompts" active={activeTab === "results"} onClick={() => navTo("results")} />
-              <NavItem label="Citations" active={activeTab === "citations"} onClick={() => navTo("citations")} />
+              <NavItem label="Citations" active={activeTab === "citations"} onClick={() => navTo("citations")} badge={engagementOpportunityCount || undefined} />
               <NavItem label="Competitors" active={activeTab === "competitors"} onClick={() => navTo("competitors")} />
               <NavItem label="Web Analytics" active={activeTab === "webAnalytics"} onClick={() => navTo("webAnalytics")} />
               <NavItem label="LLM Analytics" active={activeTab === "llmAnalytics"} onClick={() => navTo("llmAnalytics")} />
