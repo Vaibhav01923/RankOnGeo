@@ -182,6 +182,25 @@ export default function AdminBlogPage() {
     }
   };
 
+  const autofill = async () => {
+    if (!editor?.content.trim()) return;
+    setBusy("autofill");
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/blog/autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editor.title, content: editor.content }),
+      });
+      if (!res.ok) return fail(res);
+      const { description, tags } = await res.json();
+      setEditor((e) => (e ? { ...e, description, tags: (tags as string[]).join(", ") } : e));
+      flash("Meta description & tags filled from the article");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const generate = async () => {
     if (!genTopic.trim()) return;
     setBusy("generate");
@@ -342,12 +361,21 @@ export default function AdminBlogPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className={labelCls} htmlFor="post-desc">
-                Meta description{" "}
-                <span className={editor.description.length > 160 ? "text-red-600" : "text-[var(--ink-faint)]"}>
-                  ({editor.description.length}/155)
-                </span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className={labelCls} htmlFor="post-desc">
+                  Meta description{" "}
+                  <span className={editor.description.length > 160 ? "text-red-600" : "text-[var(--ink-faint)]"}>
+                    ({editor.description.length}/155)
+                  </span>
+                </label>
+                <button
+                  onClick={autofill}
+                  disabled={busy === "autofill" || !editor.content.trim()}
+                  className="mb-1.5 text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)] disabled:opacity-50"
+                >
+                  {busy === "autofill" ? "Autofilling…" : "✨ Autofill description & tags"}
+                </button>
+              </div>
               <input id="post-desc" className={inputCls} value={editor.description} onChange={(e) => setField("description", e.target.value)} />
             </div>
             <div>
