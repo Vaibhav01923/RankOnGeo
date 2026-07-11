@@ -5908,14 +5908,30 @@ function DashboardPage() {
                   >
                     {engageCopied ? "Copied!" : "Copy text"}
                   </button>
-                  <a
-                    href={engageItem.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} transition-colors`}
-                  >
-                    Open {platformMeta.label} →
-                  </a>
+                  {engagePlatform === "reddit" ? (
+                    <button
+                      onClick={() => {
+                        setRedditOrderUrl(engageItem.url);
+                        setRedditOrderService("custom_comments");
+                        setRedditOrderComment(engageDraft);
+                        setEngageItem(null);
+                        navTo("tasks");
+                      }}
+                      disabled={!engageDraft.trim()}
+                      className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} disabled:opacity-40 transition-colors`}
+                    >
+                      Post comment →
+                    </button>
+                  ) : (
+                    <a
+                      href={engageItem.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex-1 text-sm font-medium ${platformMeta.bg} text-white text-center py-2.5 rounded-lg ${platformMeta.hoverBg} transition-colors`}
+                    >
+                      Open {platformMeta.label} →
+                    </a>
+                  )}
                 </div>
                 <button
                   onClick={async () => {
