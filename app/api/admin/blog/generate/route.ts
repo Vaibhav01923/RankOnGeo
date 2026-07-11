@@ -60,6 +60,17 @@ function linkifyBrand(md: string): string {
     .join("\n");
 }
 
+// The model sometimes ignores "never link it inside headings" for the H1
+// title line itself. That title is later extracted as a plain string and
+// used as-is (page <h1>, <title> tag, OpenGraph, blog index cards) — none of
+// which render markdown, so a raw [text](url) there leaks out unrendered as
+// literal brackets next to a dead-looking URL. Strip any markdown link
+// syntax from the H1 line specifically (H2/H3 links render fine as real
+// links, so they're left alone).
+function stripTitleLinks(md: string): string {
+  return md.replace(/^(#\s+.+)$/m, (line) => line.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"));
+}
+
 export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if (!admin) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
@@ -72,7 +83,13 @@ export async function POST(req: NextRequest) {
     : "";
   const notesLine = notes?.trim() ? `Additional editorial direction: ${notes.trim()}` : "";
 
+  const today = new Date();
+  const todayStr = today.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const currentYear = today.getFullYear();
+
   const prompt = `You are the content lead at RankOnGeo, writing for founders, marketers, and SEO leads who want their brand recommended by AI.
+
+Today's date is ${todayStr}. Write as someone living in ${currentYear} — your training data skews older, so don't default to it. Any year, trend, or "current state of AI/SEO" claim must reflect ${currentYear}, not ${currentYear - 3} or ${currentYear - 2}. If an example needs a year, use ${currentYear} (or leave it year-agnostic).
 
 ${PRODUCT_BRIEF}
 
@@ -110,7 +127,7 @@ No preamble, no code fences, no explanation.`;
     .trim();
 
   const { description, tags, content: parsed } = parseArticleMeta(raw);
-  const content = linkifyBrand(normalizeBrandSpelling(parsed));
+  const content = stripTitleLinks(linkifyBrand(normalizeBrandSpelling(parsed)));
 
   const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? topic.trim();
   const wordCount = content.split(/\s+/).filter(Boolean).length;
