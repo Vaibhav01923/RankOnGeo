@@ -34,6 +34,14 @@ Free: the visibility audit at https://rankongeo.com/audit — no sign-up, no cre
 
 === END PRODUCT BRIEF ===`;
 
+// The model occasionally mangles the brand's spelling/casing (observed:
+// "RanOnGeo", dropping the "k"). Normalize common variants back to the
+// canonical form before linking. Bails out before "rankongeo.com" URLs and
+// hyphenated words (e.g. "geo-fenced") so it can't mangle unrelated text.
+function normalizeBrandSpelling(md: string): string {
+  return md.replace(/\bRan[k]?\s*[Oo]n\s*[Gg]eo\b(?![\w.-])/g, "RankOnGeo");
+}
+
 // Safety net: the prompt asks the model to link brand mentions, but if any
 // bare "RankOnGeo" slips through in body text, link it here. Skips headings,
 // code fences, and mentions already inside a markdown link.
@@ -102,7 +110,7 @@ No preamble, no code fences, no explanation.`;
     .trim();
 
   const { description, tags, content: parsed } = parseArticleMeta(raw);
-  const content = linkifyBrand(parsed);
+  const content = linkifyBrand(normalizeBrandSpelling(parsed));
 
   const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? topic.trim();
   const wordCount = content.split(/\s+/).filter(Boolean).length;
