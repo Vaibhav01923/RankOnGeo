@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdmin } from "@/lib/admin";
-import { parseArticleMeta } from "@/lib/article-meta";
+import { parseArticleMeta, stripMarkdownLinkSyntax } from "@/lib/article-meta";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -25,8 +25,8 @@ ${excerpt}
 
 Return EXACTLY this format:
 
-DESCRIPTION: <SEO meta description, 140-155 characters, active voice, mirrors the search intent of the article>
-TAGS: <2-4 short comma-separated topic tags>
+DESCRIPTION: <SEO meta description, 140-155 characters, active voice, mirrors the search intent of the article, PLAIN TEXT ONLY — no markdown, no links, no brackets>
+TAGS: <2-4 short comma-separated topic tags, plain text>
 
 No preamble, no code fences, no explanation.`;
 
@@ -37,7 +37,9 @@ No preamble, no code fences, no explanation.`;
   });
 
   const raw = (response.choices[0]?.message?.content ?? "").trim();
-  const { description, tags } = parseArticleMeta(raw);
+  const { description: parsedDescription, tags: parsedTags } = parseArticleMeta(raw);
+  const description = stripMarkdownLinkSyntax(parsedDescription);
+  const tags = parsedTags.map(stripMarkdownLinkSyntax);
 
   if (!description) return NextResponse.json({ error: "Model returned no description — try again" }, { status: 502 });
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdmin } from "@/lib/admin";
-import { parseArticleMeta } from "@/lib/article-meta";
+import { parseArticleMeta, stripMarkdownLinkSyntax } from "@/lib/article-meta";
 import { slugify } from "@/lib/blog";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -73,7 +73,7 @@ function linkifyBrand(md: string): string {
 // syntax from the H1 line specifically (H2/H3 links render fine as real
 // links, so they're left alone).
 function stripTitleLinks(md: string): string {
-  return md.replace(/^(#\s+.+)$/m, (line) => line.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"));
+  return md.replace(/^(#\s+.+)$/m, (line) => stripMarkdownLinkSyntax(line));
 }
 
 export async function POST(req: NextRequest) {
@@ -114,8 +114,8 @@ Requirements:
 
 Return EXACTLY this format — a metadata header, then a separator line, then the markdown article:
 
-DESCRIPTION: <SEO meta description, 140-155 characters, active voice>
-TAGS: <2-4 short comma-separated topic tags>
+DESCRIPTION: <SEO meta description, 140-155 characters, active voice, PLAIN TEXT ONLY — no markdown, no links, no brackets>
+TAGS: <2-4 short comma-separated topic tags, plain text>
 ---
 # <Article title>
 <rest of the markdown article>
@@ -135,8 +135,10 @@ Before you finish: re-read requirement 5 (competitive framing) and the mandatory
     .replace(/\n?```$/i, "")
     .trim();
 
-  const { description, tags, content: parsed } = parseArticleMeta(raw);
+  const { description: parsedDescription, tags: parsedTags, content: parsed } = parseArticleMeta(raw);
   const content = stripTitleLinks(linkifyBrand(normalizeBrandSpelling(parsed)));
+  const description = stripMarkdownLinkSyntax(parsedDescription);
+  const tags = parsedTags.map(stripMarkdownLinkSyntax);
 
   const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? topic.trim();
   const wordCount = content.split(/\s+/).filter(Boolean).length;

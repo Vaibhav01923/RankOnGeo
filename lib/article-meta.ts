@@ -30,3 +30,12 @@ export function parseArticleMeta(raw: string): { description: string; tags: stri
 
   return { description, tags, content };
 }
+
+// Converts "[text](url)" -> "text". DESCRIPTION and TAGS are supposed to be
+// plain text (they render as-is in <meta> tags and page subtitles, never
+// through a markdown renderer), but the model occasionally slips a markdown
+// link into them anyway — most often when it over-applies a "link the brand
+// name" instruction meant for the article body.
+export function stripMarkdownLinkSyntax(s: string): string {
+  return s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+}
