@@ -219,8 +219,48 @@ function AuditContent() {
 
         {/* Empty state */}
         {!loading && !error && !result && (
-          <div className="text-center py-32">
-            <p className="text-[var(--ink-faint)] text-sm">Enter a domain above to run a free audit.</p>
+          <div className="max-w-lg mx-auto text-center py-24">
+            <LogoIcon size={36} />
+            <h1 className="font-signal-serif text-3xl leading-tight mt-5 mb-2 text-[var(--ink)]" style={{ letterSpacing: "-0.02em" }}>
+              Free AI visibility audit
+            </h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-8">
+              We&apos;ll crawl your site, find your keyword opportunities, and draft an article — in about a minute.
+            </p>
+            <form onSubmit={handleSubmit} className="flex items-center gap-2 mb-6">
+              <div className="flex-1 flex items-center gap-2 bg-[var(--surface)] border border-[var(--line)] rounded-xl px-4 py-3 focus-within:border-[var(--rust)]/40 transition-colors">
+                <svg className="w-4 h-4 text-[var(--ink-faint)] shrink-0" fill="none" viewBox="0 0 16 16">
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M8 5v3l1.5 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="text"
+                  value={inputDomain}
+                  onChange={(e) => setInputDomain(e.target.value)}
+                  placeholder="yoursite.com"
+                  className="flex-1 text-sm text-[var(--ink)] bg-transparent outline-none placeholder:text-[var(--ink-faint)]"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading || !inputDomain.trim()}
+                className="bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] text-sm font-medium px-5 py-3 rounded-xl transition-colors"
+              >
+                Analyze
+              </button>
+            </form>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <span className="text-xs text-[var(--ink-faint)]">Try:</span>
+              {["stripe.com", "notion.so", "linear.app"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => { setInputDomain(d); runAnalysis(d); }}
+                  className="text-xs bg-[var(--line-soft)] hover:bg-[var(--line)] text-[var(--ink-soft)] px-2.5 py-1 rounded-full transition-colors"
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -502,7 +542,7 @@ function AuditContent() {
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between pt-5 border-t border-[var(--line)]">
+                <div className="flex items-center justify-between pt-5 border-t border-[var(--line)] flex-wrap gap-3">
                   <div className="flex items-center gap-4 text-[var(--ink-faint)] text-xs">
                     <span className="flex items-center gap-1">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
@@ -517,18 +557,12 @@ function AuditContent() {
                   </div>
                   <button
                     onClick={() => {
-                      const params = new URLSearchParams({
-                        title: result.article.title,
-                        keyword: result.article.targetKeyword,
-                        brand: result.brand.name,
-                        niche: result.brand.niche,
-                        sections: encodeURIComponent(JSON.stringify(result.article.sections)),
-                      });
-                      router.push(`/article?${params}`);
+                      const p = new URLSearchParams({ domain });
+                      router.push(`/setup?${p}`);
                     }}
                     className="text-xs font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] flex items-center gap-1 transition-colors"
                   >
-                    Preview article →
+                    Sign up to generate & publish this article →
                   </button>
                 </div>
               </div>

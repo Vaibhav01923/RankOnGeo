@@ -1746,7 +1746,7 @@ function DashboardPage() {
           </button>
 
           {showBrandDropdown && (() => {
-            const brandLimit = credits?.plan ? BRAND_LIMITS[credits.plan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
+            const brandLimit = isAdmin ? Infinity : credits?.plan ? BRAND_LIMITS[credits.plan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
             const atLimit = allBrands.length >= brandLimit;
             return (
             <>

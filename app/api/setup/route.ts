@@ -85,7 +85,16 @@ export async function POST(req: NextRequest) {
     if (planRow?.dodo_subscription_id) activePlan = planRow.plan;
   }
   const promptCount = activePlan ? PLAN_PROMPT_LIMITS[activePlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
-  const brandLimit = activePlan ? BRAND_LIMITS[activePlan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
+
+  // Admins get an unlimited website count for their own testing — they still
+  // pay for and are capped at their real plan's prompt/credit allowances per
+  // brand, this only lifts the "how many sites can I track" ceiling.
+  let isAdmin = false;
+  if (user?.email) {
+    const { data: adminRow } = await db.from("admins").select("email").eq("email", user.email).maybeSingle();
+    isAdmin = !!adminRow;
+  }
+  const brandLimit = isAdmin ? Infinity : activePlan ? BRAND_LIMITS[activePlan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
 
   // Check the plan-based website limit before crawling/analyzing (expensive) —
   // re-running setup on an already-tracked domain is always allowed, it's only

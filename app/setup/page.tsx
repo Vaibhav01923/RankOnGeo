@@ -136,6 +136,14 @@ function SetupContent() {
     });
   }
 
+  function deselectAllPrompts() {
+    setDeselectedIds(new Set(prompts.map((p) => p.id)));
+  }
+
+  function selectAllPrompts() {
+    setDeselectedIds(new Set());
+  }
+
   function addPrompt() {
     const trimmed = newPrompt.trim();
     const customCount = prompts.filter((p) => p.category === "custom").length;
@@ -330,12 +338,21 @@ function SetupContent() {
                   );
                 })()}
               </div>
-              <button
-                onClick={handleBrandNext}
-                className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
-              >
-                Continue to prompts
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("url")}
+                  className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleBrandNext}
+                  className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Continue to prompts
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -349,10 +366,20 @@ function SetupContent() {
             </p>
             {(() => {
               const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
+              const allSelected = selectedCount === prompts.length;
               return (
-                <p className="text-sm font-semibold text-[var(--olive)] mb-7">
-                  {selectedCount}/{prompts.length} prompts selected
-                </p>
+                <div className="flex items-center justify-between mb-7">
+                  <p className="text-sm font-semibold text-[var(--olive)]">
+                    {selectedCount}/{prompts.length} prompts selected
+                  </p>
+                  <button
+                    type="button"
+                    onClick={allSelected ? deselectAllPrompts : selectAllPrompts}
+                    className="text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)]"
+                  >
+                    {allSelected ? "Deselect all — I'll write my own" : "Select all"}
+                  </button>
+                </div>
               );
             })()}
 
@@ -413,13 +440,23 @@ function SetupContent() {
               ) : null;
             })()}
 
-            <button
-              onClick={handleStart}
-              disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
-              className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
-            >
-              {saving ? "Saving…" : "Generate report"}
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("brand")}
+                disabled={saving}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleStart}
+                disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+              >
+                {saving ? "Saving…" : "Generate report"}
+              </button>
+            </div>
           </div>
         )}
       </main>
