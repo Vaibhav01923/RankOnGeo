@@ -1,0 +1,24 @@
+# RankOnGeo
+
+> Generative Engine Optimization (GEO) platform: tracks how ChatGPT, Claude, Gemini, Perplexity, Grok, and Google AI Overviews answer questions about a brand, then helps close the visibility gaps.
+
+RankOnGeo measures brand visibility across 6 AI answer surfaces (ChatGPT, Claude, Gemini, Perplexity, and Grok via their own APIs, plus Google's AI Overview via live SERP scraping), finds the real buyer questions where a brand is missing from AI answers ("gap detection"), turns any gap into a citation-optimized article in one click ("gap → article"), and auto-publishes to WordPress (Discord and generic webhooks also auto-publish; other CMSs are copy-paste today). Web and LLM analytics separately track human visitors and real AI-crawler traffic (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and others) hitting a site.
+
+## Product
+
+- [Homepage](https://www.rankongeo.com/): The measure → research → write → publish → re-measure loop, pricing, and FAQ.
+- [Free visibility audit](https://www.rankongeo.com/audit): No-signup scan of a domain's current AI visibility and keyword gaps, results in ~60 seconds.
+- [Early access](https://www.rankongeo.com/early): Flat 50% off every plan for early backers.
+
+## Docs
+
+- [Web Analytics setup](https://www.rankongeo.com/docs/web-analytics): Installing the tracking snippet and what each metric means.
+- [LLM Analytics setup](https://www.rankongeo.com/docs/llm-analytics): Detecting and logging real AI-crawler traffic server-side.
+
+## Blog
+
+- [Blog index](https://www.rankongeo.com/blog): Articles on GEO, AI search visibility, and brand citation strategy.
+
+## Optional
+
+- [Sitemap](https://www.rankongeo.com/sitemap.xml)
