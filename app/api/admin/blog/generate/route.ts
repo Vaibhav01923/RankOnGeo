@@ -6,29 +6,34 @@ import { slugify } from "@/lib/blog";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Everything the writing model is allowed to say about the product. Keep in
-// sync with PricingCards.tsx and the landing page when plans/features change.
+// Everything the writing model is allowed to say about the product. This
+// describes actual mechanics (verified against lib/scan-engine.ts,
+// lib/prompt-cadence.ts, app/api/generate-article, app/api/publishing,
+// lib/reddit-order-service.ts, lib/plan-limits.ts, app/setup) rather than
+// marketing paraphrase, so specifics survive into the article instead of
+// getting rounded off into generic SaaS claims. Keep in sync with those files
+// and with PricingCards.tsx when plans/features change.
 const PRODUCT_BRIEF = `=== ABOUT RANKONGEO (product brief — use this so every product mention is accurate and specific) ===
 
-RankOnGeo (https://rankongeo.com) is a Generative Engine Optimization (GEO) platform: it tracks how AI engines answer questions about a brand, then helps close the visibility gaps automatically. Audience: founders, marketers, SEO leads, and agencies who want their brand recommended and cited by AI.
+RankOnGeo (https://rankongeo.com) is a Generative Engine Optimization (GEO) platform: it measures how AI engines answer questions about a brand, then helps close the visibility gaps. Audience: founders, marketers, SEO leads, and agencies who want their brand recommended and cited by AI.
 
-Engines tracked (7): ChatGPT, Claude, Gemini, Perplexity, Grok, Google AI Mode, and Google AI Overviews.
+ONBOARDING: a 3-step wizard. (1) User enters a domain; RankOnGeo crawls the homepage plus up to 5 linked pages and has an LLM extract the brand's name, niche, description, and target audience. (2) User reviews/edits that plus 4 auto-suggested competitors (more can be requested anytime). (3) RankOnGeo has already generated a list of real buyer search queries sized to the plan; the user picks which to track and can add custom ones.
 
-The core loop (runs daily, fully automatic):
-1. Measure — enter a domain, get a composite AI visibility score across engines in ~60 seconds. See exactly where each engine ranks the brand vs. competitors.
-2. Research — generative query mining ("gap detection") surfaces the real questions where AI engines answer without mentioning the brand, each scored by AI overlap.
-3. Write — turn any gap into a source-grounded article engineered for citation ("gap → article"): direct answers up top, schema markup, FAQ sections, and internal links included. Unlimited SEO articles on every plan.
-4. Publish — one click to WordPress, Shopify, or Framer; webhooks and a REST API for everything else.
-5. Re-measure — daily visibility refresh proves the lift, citation by citation, engine by engine.
+MEASUREMENT: every tracked prompt is sent to 6 AI answer surfaces — ChatGPT, Claude, Gemini, Perplexity, and Grok via their own APIs, plus Google's AI Overview via live SERP scraping (not all queries trigger an AI Overview — no-show is a real, recorded outcome, not a failure). For each response, RankOnGeo checks whether the brand is mentioned and, if the answer is a ranked/numbered list, at what position. Per-engine visibility score = % of tracked prompts where the brand was mentioned by that engine; the overall score is the average across engines. Competitor mentions are extracted the same way, so "who's beating you and where" is a byproduct of the same scan, not a separate lookup.
 
-Other features:
-- Competitor tracking: up to 25 competitor brands side-by-side, with per-engine visibility percentages and daily deltas.
-- Tracked prompts: monitor the specific buyer questions that matter (50 on Pro, 150 on Business, 400 on Scale).
-- Web + LLM analytics: see which AI engines actually send visitors, alongside classic web analytics (20k events/mo on Pro, 100k on Business, 500k on Scale).
-- Reddit engagement credits for upvotes, comments, and comment upvotes (50/100/150 per month by plan).
-- Multi-site: 1 website on Pro, 3 on Business, 10 on Scale.
+CADENCE: a full scan across all engines runs daily. Each tracked prompt adapts its own schedule — after 7 consecutive scans where every engine that answered mentioned the brand, that prompt drops to weekly checks (saving scan volume on queries that have stabilized); a single miss puts it straight back on the daily list. This is automatic and not visible as a setting the user tunes.
 
-Plans: Pro $49/mo (solo founders), Business $99/mo (teams — most popular), Scale $149/mo (agencies & multi-brand portfolios). Annual billing is 17% off. Early-access backers get a flat 50% off every plan at https://rankongeo.com/early.
+GAP DETECTION: for every scan, any prompt where at least one engine returned an answer but didn't mention the brand is flagged as a gap. It's a straightforward rule (answered + not mentioned = gap), not a black-box ML score — which is part of why it's easy to explain and trust. Each gap is paired with whichever competitor got mentioned most for that query, so the user sees not just "you're missing" but "X is what's filling the space."
+
+GAP → ARTICLE: one click on a gap generates a ~1,800-word article that directly answers that exact query, positions the brand as the solution, and includes a head-to-head against the top competitor named in the gap when relevant. The generated draft can be refined with a follow-up instruction (e.g. "add more comparison with X") rather than starting over. Unlimited article generations on every paid plan.
+
+PUBLISHING: WordPress gets true one-click auto-publish via the WordPress REST API. Discord and generic Webhooks also auto-publish (Discord as a rich embed; webhooks POST the full article as JSON to any URL). Other CMSs are copy-paste from the article editor today — do not claim one-click/auto-publish to Shopify or Framer, that's not built.
+
+WEB + LLM ANALYTICS: a snippet on the customer's own site tracks human visitors (pageviews, sessions, referrers) client-side. Separately, a server-side endpoint the customer's backend calls on every request recognizes real AI crawler user-agents — GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, and others — and logs when those bots actually crawl the site, distinct from human traffic. Included event volume: 20,000/mo on Pro, 100,000/mo on Business, 500,000/mo on Scale.
+
+REDDIT ENGAGEMENT: paid credits buy real engagement through a third-party delivery network — post upvotes/downvotes, comment upvotes/downvotes, and posting new comments on a given thread (comments pass through moderation before going out). This is a visibility/distribution lever, not a core GEO mechanic — mention it only when a topic is specifically about community/Reddit visibility, not as a default feature callout.
+
+Plans: Pro $49/mo (solo founders), Business $99/mo (teams — most popular), Scale $149/mo (agencies & multi-brand portfolios), each with more tracked prompts, more websites, and more analytics volume at the higher tiers. Annual billing is 17% off. Early-access backers get a flat 50% off every plan at https://rankongeo.com/early.
 
 Free: the visibility audit at https://rankongeo.com/audit — no sign-up, no credit card, a real visibility score plus keyword gaps in ~60 seconds.
 
@@ -102,7 +107,7 @@ Requirements:
 1. ~1,500-2,000 words of genuinely useful, specific, non-fluffy content. Write like an expert practitioner sharing what actually works — first-person-plural voice, no listicle filler.
 2. Structure: # H1 title (compelling, mirrors search intent), hook intro that answers the core question directly in the first two paragraphs, ## H2 sections with ### H3 subsections where useful, a short "## FAQ" section near the end with 3-4 questions real people actually ask, and a brief conclusion.
 3. Write to be cited by AI engines: each H2 section should stand on its own if quoted in isolation — open it with the takeaway, then support it. Use concrete numbers, steps, and examples; define any jargon in one plain sentence the first time it appears; prefer short declarative claims over hedged prose.
-4. Product mentions: weave RankOnGeo in 2-3 times where it genuinely fits the topic, and be SPECIFIC — name the actual feature from the brief that solves the problem being discussed (e.g. gap detection, gap → article, LLM analytics, one-click publishing, competitor tracking) instead of a generic pitch. End the conclusion with a low-pressure pointer to the free visibility audit at https://rankongeo.com/audit. Never salesy, never more than a sentence or two per mention.
+4. Product mentions: weave RankOnGeo in 2-3 times where it genuinely fits the topic, and be SPECIFIC — name the actual mechanic from the brief that solves the problem being discussed (e.g. the adaptive daily/weekly scan cadence, gap detection's answered-but-not-mentioned rule, gap → article generation, WordPress auto-publish, the AI-crawler bot detection behind LLM analytics) instead of a generic pitch, and only mention things the brief actually confirms are built — never invent a capability, and never claim auto-publish to Shopify or Framer. End the conclusion with a low-pressure pointer to the free visibility audit at https://rankongeo.com/audit. Never salesy, never more than a sentence or two per mention.
 5. Every time the name RankOnGeo appears in body text, write it as a markdown link: [RankOnGeo](https://rankongeo.com). Never link it inside headings.
 
 Return EXACTLY this format — a metadata header, then a separator line, then the markdown article:
