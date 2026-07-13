@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin";
 import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
 import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
 
@@ -89,11 +90,10 @@ export async function POST(req: NextRequest) {
   // Admins get an unlimited website count for their own testing — they still
   // pay for and are capped at their real plan's prompt/credit allowances per
   // brand, this only lifts the "how many sites can I track" ceiling.
-  let isAdmin = false;
-  if (user?.email) {
-    const { data: adminRow } = await db.from("admins").select("email").eq("email", user.email).maybeSingle();
-    isAdmin = !!adminRow;
-  }
+  // Uses requireAdmin (service-role client) rather than the RLS-bound `db`
+  // client above — the `admins` table has no SELECT policy for authenticated
+  // users, so querying it through `db` silently returns zero rows for everyone.
+  const isAdmin = !!(await requireAdmin(req));
   const brandLimit = isAdmin ? Infinity : activePlan ? BRAND_LIMITS[activePlan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
 
   // Check the plan-based website limit before crawling/analyzing (expensive) —
