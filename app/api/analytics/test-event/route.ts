@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { clientFromRequest, serverClient } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 // Inserts one synthetic row so the dashboard can show non-zero data before a
 // user has actually installed the script/middleware — clearly a test event,
@@ -17,10 +18,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "brandId and type ('web'|'bot') required" }, { status: 400 });
   }
 
-  const { data: brand } = await db.from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
   if (!userPlan?.dodo_subscription_id) {
     return NextResponse.json({ error: "Subscribe to a plan to use Web/LLM Analytics" }, { status: 402 });
   }

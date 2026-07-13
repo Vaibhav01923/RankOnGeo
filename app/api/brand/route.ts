@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function PUT(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -9,11 +10,13 @@ export async function PUT(req: NextRequest) {
   const { id, name, niche, competitors, targetAudience, prompts } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  const access = await requireBrandAccess(db, user.id, id);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+
   const { error: brandErr } = await db
     .from("brands")
     .update({ name, niche, competitors, target_audience: targetAudience })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (brandErr) return NextResponse.json({ error: brandErr.message }, { status: 500 });
 
@@ -69,15 +72,11 @@ export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
 
   const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand, error } = await db
-    .from("brands")
-    .select("*")
-    .eq("id", brandId)
-    .eq("user_id", user?.id)
-    .single();
-
-  if (error || !brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId, "*");
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const brand = access.brand as Record<string, string>;
 
   const { data: prompts } = await db
     .from("tracked_prompts")
@@ -92,6 +91,8 @@ export async function GET(req: NextRequest) {
     description: brand.description,
     targetAudience: brand.target_audience,
     competitors: brand.competitors,
+    role: access.role,
+    ownerId: access.ownerId,
     trackedPrompts: (prompts ?? []).map((p) => ({ id: p.id, text: p.text, category: p.category, status: p.status, cadence: p.cadence })),
   });
 }

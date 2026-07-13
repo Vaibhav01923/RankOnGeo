@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { placeRedditOrder } from "@/lib/reddit-order-service";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -10,11 +11,14 @@ export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return new Response(JSON.stringify({ error: "brandId required" }), { status: 400 });
 
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return new Response(JSON.stringify({ error: "Brand not found" }), { status: 404 });
+
+  // Whole-workspace view: teammates see each other's orders for this brand.
   const { data, error } = await db
     .from("engage_tasks")
     .select("*")
     .eq("brand_id", brandId)
-    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -30,12 +34,16 @@ export async function POST(req: NextRequest) {
   const { brandId, url, promptText, engine, replyText, upvotesOrdered, deliverySpeed } = body;
   if (!brandId || !url) return new Response(JSON.stringify({ error: "brandId and url required" }), { status: 400 });
 
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return new Response(JSON.stringify({ error: "Brand not found" }), { status: 404 });
+
   const upvotes = upvotesOrdered ?? 0;
 
   if (upvotes > 0) {
     const result = await placeRedditOrder({
       db,
       userId: user.id,
+      billingUserId: access.ownerId,
       brandId,
       url,
       serviceType: "post_upvote",

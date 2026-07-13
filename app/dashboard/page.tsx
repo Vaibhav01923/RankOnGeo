@@ -132,7 +132,7 @@ type Tab =
   | "webAnalytics" | "llmAnalytics"
   | "gaps" | "articles" | "tasks"
   | "publishing"
-  | "alerts"
+  | "alerts" | "team"
   | "agent" | "admin" | "feedback";
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -150,6 +150,7 @@ const TAB_LABELS: Record<Tab, string> = {
   publishing: "Publishing",
 
   alerts: "Alerts",
+  team: "Team",
   agent: "Agent",
   admin: "Admin",
   feedback: "Feedback",
@@ -507,7 +508,7 @@ function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [brand, setBrand] = useState<BrandData | null>(null);
-  const [allBrands, setAllBrands] = useState<{ id: string; name: string; domain: string }[]>([]);
+  const [allBrands, setAllBrands] = useState<{ id: string; name: string; domain: string; role?: "owner" | "member" }[]>([]);
   const [loadingBrand, setLoadingBrand] = useState(true);
   const [loadingResults, setLoadingResults] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -561,7 +562,7 @@ function DashboardPage() {
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [taskSubmitted, setTaskSubmitted] = useState(false);
   const [engageTasks, setEngageTasks] = useState<EngageTask[]>([]);
-  const [credits, setCredits] = useState<{ plan: string | null; balance: number } | null>(null);
+  const [credits, setCredits] = useState<{ plan: string | null; balance: number; canPurchase: boolean } | null>(null);
   // Default true (fail-safe: blur first) so free-tier data never flashes unblurred
   // before the /api/credits fetch resolves.
   const [isFreeTier, setIsFreeTier] = useState(true);
@@ -575,6 +576,52 @@ function DashboardPage() {
   const [deleteBrandTarget, setDeleteBrandTarget] = useState<{ id: string; name: string; domain: string } | null>(null);
   const [deleteBrandConfirmText, setDeleteBrandConfirmText] = useState("");
   const [deletingBrand, setDeletingBrand] = useState(false);
+
+  // Team state
+  const [teamData, setTeamData] = useState<{
+    isPaid: boolean;
+    members: { id: string; email: string; createdAt: string }[];
+    invites: { id: string; email: string; status: string; createdAt: string; expiresAt: string }[];
+    memberships: { id: string; ownerEmail: string }[];
+  } | null>(null);
+  const [teamLoaded, setTeamLoaded] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+
+  const loadTeam = () =>
+    fetch("/api/team")
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setTeamData(d); })
+      .finally(() => setTeamLoaded(true));
+
+  const inviteTeammate = (email: string) => {
+    setInviteSubmitting(true);
+    setInviteError("");
+    return fetch("/api/team/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) { setInviteError(d.error ?? "Failed to send invite"); return false; }
+        // Surface the accept link so the owner can share it directly even if
+        // the invite email didn't go out (e.g. Resend not configured).
+        setInviteLink(d.acceptUrl ?? "");
+        loadTeam();
+        return true;
+      })
+      .finally(() => setInviteSubmitting(false));
+  };
+
+  const revokeInvite = (id: string) =>
+    fetch(`/api/team/invites?id=${id}`, { method: "DELETE" }).then(() => loadTeam());
+
+  const removeMember = (id: string) =>
+    fetch(`/api/team?memberId=${id}`, { method: "DELETE" }).then(() => loadTeam());
 
   const deleteBrand = () => {
     if (!deleteBrandTarget) return;
@@ -804,7 +851,7 @@ function DashboardPage() {
 
     const fetchCredits = () =>
       fetch("/api/credits").then((r) => r.json()).then((d) => {
-        if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance });
+        if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance, canPurchase: d.canPurchase !== false });
         setIsFreeTier(!!d.isFree);
         return d;
       });
@@ -848,8 +895,6 @@ function DashboardPage() {
 
     const brandId = searchParams.get("brandId");
 
-    fetch("/api/brands").then((r) => r.json()).then((d) => setAllBrands(d.brands ?? []));
-
     const loadBrand = (id: string) => {
       fetch(`/api/brand?id=${id}`)
         .then((r) => r.json())
@@ -857,6 +902,15 @@ function DashboardPage() {
           if (data.error) { router.push("/setup"); return; }
           if (!searchParams.get("brandId")) router.replace(`/dashboard?brandId=${id}`);
           setBrand(data);
+          // On a shared brand, credits/plan gating must reflect the WORKSPACE
+          // owner's subscription, not the acting member's (a free member on a
+          // paid workspace sees real data; the buy button goes read-only).
+          if (data.role === "member") {
+            fetch(`/api/credits?brandId=${id}`).then((r) => r.json()).then((d) => {
+              if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance, canPurchase: d.canPurchase !== false });
+              setIsFreeTier(!!d.isFree);
+            });
+          }
           fetch(`/api/history?brandId=${id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
           fetch(`/api/scan/results?brandId=${id}`).then((r) => r.json()).then((d) => {
             if (d.results?.length) {
@@ -877,18 +931,20 @@ function DashboardPage() {
         .finally(() => setLoadingBrand(false));
     };
 
-    if (!brandId) {
-      fetch("/api/brands")
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.brands?.length) { loadBrand(data.brands[0].id); }
-          else { router.push("/setup"); }
-        })
-        .catch(() => router.push("/setup"));
-      return;
-    }
-
-    loadBrand(brandId);
+    // Claim any pending invites addressed to this (verified) email BEFORE
+    // fetching brands, so a fresh invitee's shared workspace shows up on
+    // their very first dashboard load instead of bouncing them to /setup.
+    fetch("/api/team/accept", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .catch(() => null)
+      .then(() => fetch("/api/brands"))
+      .then((r) => r.json())
+      .then((data) => {
+        setAllBrands(data.brands ?? []);
+        if (brandId) { loadBrand(brandId); return; }
+        if (data.brands?.length) { loadBrand(data.brands[0].id); }
+        else { router.push("/setup"); }
+      })
+      .catch(() => { if (!brandId) router.push("/setup"); else loadBrand(brandId); });
   }, []);
 
   // Realtime: runs after brand loads regardless of whether brandId was in the URL
@@ -1001,6 +1057,12 @@ function DashboardPage() {
       .then((d) => setFeedbackSubmissions(d.submissions ?? []))
       .finally(() => setFeedbackLoaded(true));
   }, [activeTab, feedbackLoaded]);
+
+  // Load the team roster when the Team tab opens
+  useEffect(() => {
+    if (activeTab !== "team" || teamLoaded) return;
+    loadTeam();
+  }, [activeTab, teamLoaded]);
 
   // Load persisted discovery-prompt suggestions when the Prompts tab opens —
   // a pure DB read after the first-ever visit, no LLM call.
@@ -1772,7 +1834,8 @@ function DashboardPage() {
 
           {showBrandDropdown && (() => {
             const brandLimit = isAdmin ? Infinity : credits?.plan ? BRAND_LIMITS[credits.plan] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
-            const atLimit = allBrands.length >= brandLimit;
+            // Shared workspaces don't count against the user's own brand cap.
+            const atLimit = allBrands.filter((b) => b.role !== "member").length >= brandLimit;
             return (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowBrandDropdown(false)} />
@@ -1793,11 +1856,17 @@ function DashboardPage() {
                       >
                         <div className="w-7 h-7 rounded-lg bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">{b.name[0]?.toUpperCase() ?? "B"}</div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-[var(--ink)] truncate">{b.name}</p>
+                          <p className="text-xs font-semibold text-[var(--ink)] truncate flex items-center gap-1.5">
+                            <span className="truncate">{b.name}</span>
+                            {b.role === "member" && (
+                              <span className="text-[8px] font-semibold uppercase tracking-wide bg-[var(--olive-wash)] text-[var(--olive)] px-1.5 py-0.5 rounded shrink-0">Shared</span>
+                            )}
+                          </p>
                           <p className="text-[9px] text-[var(--ink-faint)] truncate">{isCurrent ? "Current brand" : b.domain}</p>
                         </div>
                       </button>
                       {isCurrent && <div className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] shrink-0" />}
+                      {b.role !== "member" && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1811,6 +1880,7 @@ function DashboardPage() {
                           <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
                         </svg>
                       </button>
+                      )}
                     </div>
                   );
                 })}
@@ -1874,6 +1944,7 @@ function DashboardPage() {
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">On Page</p>
             <div className="space-y-0.5">
               <NavItem label="Alerts" active={activeTab === "alerts"} onClick={() => navTo("alerts")} />
+              <NavItem label="Team" active={activeTab === "team"} onClick={() => navTo("team")} />
               <NavItem label="Feedback" active={activeTab === "feedback"} onClick={() => navTo("feedback")} />
             </div>
           </div>
@@ -1890,7 +1961,7 @@ function DashboardPage() {
         </nav>
 
         <div className="mx-1 mb-3 mt-3 shrink-0 pt-3 border-t border-[var(--line)]">
-          {credits && (
+          {credits && (credits.canPurchase ? (
             <button
               onClick={() => setShowBuyCreditsModal(true)}
               className="mb-2 w-full flex items-center justify-between rounded-[10px] bg-[var(--rust-wash)] px-3 py-2 hover:bg-[var(--rust-wash)]/70 transition-colors"
@@ -1902,7 +1973,17 @@ function DashboardPage() {
                 <svg className="w-3 h-3 text-[var(--rust-deep)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               </span>
             </button>
-          )}
+          ) : (
+            // Shared workspace: members see the owner's balance read-only —
+            // only the owner can buy credits for it.
+            <div
+              className="mb-2 w-full flex items-center justify-between rounded-[10px] bg-[var(--rust-wash)] px-3 py-2"
+              title="Only the workspace owner can buy credits"
+            >
+              <span className="text-xs font-medium text-[var(--rust-deep)]">Workspace credits</span>
+              <span className="font-signal-mono text-xs font-bold text-[var(--rust-deep)]">{credits.balance}</span>
+            </div>
+          ))}
           <div className="rounded-[10px] px-2 py-2 flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] flex items-center justify-center text-xs font-bold shrink-0">
               {userEmail[0]?.toUpperCase() ?? "U"}
@@ -4927,6 +5008,153 @@ function DashboardPage() {
             </>
           )}
 
+          {/* TEAM TAB */}
+          {activeTab === "team" && (() => {
+            const seatLimit = 15;
+            const seatsUsed = (teamData?.members.length ?? 0) + (teamData?.invites.filter((i) => i.status === "pending").length ?? 0);
+            return (
+            <>
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-[var(--ink)]">Team</h2>
+                  <p className="text-sm text-[var(--ink-faint)] mt-0.5">Invite teammates to work in your workspace — they get all your brands, you keep billing and deletes</p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!teamData?.isPaid) { openPaywall(); return; }
+                    setInviteEmail(""); setInviteError(""); setInviteLink("");
+                    setShowInviteModal(true);
+                  }}
+                  className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
+                >
+                  + Invite teammate
+                </button>
+              </div>
+
+              {!teamLoaded ? (
+                <p className="text-sm text-[var(--ink-faint)] py-8 text-center">Loading team…</p>
+              ) : (
+              <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <StatCard label="Members" value={teamData?.members.length ?? 0} sub="in your workspace" />
+                <StatCard label="Pending invites" value={teamData?.invites.filter((i) => i.status === "pending").length ?? 0} sub="awaiting accept" />
+                <StatCard label="Seats left" value={Math.max(0, seatLimit - seatsUsed)} sub={`of ${seatLimit}`} />
+                <StatCard label="Shared with you" value={teamData?.memberships.length ?? 0} sub="workspaces joined" />
+              </div>
+
+              {!teamData?.isPaid && (
+                <div className="mb-5 rounded-xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-[var(--rust-deep)]">Team invites are a paid feature — subscribe to a plan to bring your teammates in.</p>
+                  <button onClick={openPaywall} className="text-xs font-semibold text-[var(--surface)] bg-[var(--rust)] hover:bg-[var(--rust-deep)] px-3 py-1.5 rounded-lg shrink-0 transition-colors">See plans</button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="panel rounded-xl overflow-hidden">
+                  <div className="px-5 py-4 border-b border-[var(--line)]">
+                    <p className="text-sm font-semibold text-[var(--ink)]">Members · {teamData?.members.length ?? 0}</p>
+                  </div>
+                  {!teamData?.members.length ? (
+                    <div className="p-8 text-center">
+                      <p className="text-sm text-[var(--ink-faint)] mb-3">No teammates yet</p>
+                      <button
+                        onClick={() => {
+                          if (!teamData?.isPaid) { openPaywall(); return; }
+                          setInviteEmail(""); setInviteError(""); setInviteLink("");
+                          setShowInviteModal(true);
+                        }}
+                        className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
+                      >
+                        Invite your first teammate →
+                      </button>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-[var(--line)]">
+                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Teammate</th>
+                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Role</th>
+                          <th className="px-5 py-3 text-right text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Joined</th>
+                          <th className="px-5 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {teamData.members.map((m) => (
+                          <tr key={m.id} className="hover:bg-[var(--line-soft)]">
+                            <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/90">{m.email}</td>
+                            <td className="px-5 py-3">
+                              <span className="text-[10px] font-medium bg-[var(--line)] text-[var(--ink-soft)] px-2 py-0.5 rounded">member</span>
+                            </td>
+                            <td className="px-5 py-3 text-right text-[10px] text-[var(--ink-faint)]">{timeAgo(m.createdAt)} ago</td>
+                            <td className="px-5 py-3 text-right">
+                              <button onClick={() => removeMember(m.id)} className="text-[10px] text-red-700/80 hover:text-red-700">Remove</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="panel rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[var(--line)]">
+                      <p className="text-sm font-semibold text-[var(--ink)]">Pending invites · {teamData?.invites.filter((i) => i.status === "pending").length ?? 0}</p>
+                    </div>
+                    {!teamData?.invites.filter((i) => i.status === "pending").length ? (
+                      <p className="text-xs text-[var(--ink-faint)] p-6 text-center">No pending invites</p>
+                    ) : (
+                      <table className="w-full">
+                        <tbody className="divide-y divide-line">
+                          {teamData.invites.filter((i) => i.status === "pending").map((inv) => (
+                            <tr key={inv.id} className="hover:bg-[var(--line-soft)]">
+                              <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/90">{inv.email}</td>
+                              <td className="px-5 py-3 text-right text-[10px] text-[var(--ink-faint)]">expires {new Date(inv.expiresAt).toLocaleDateString()}</td>
+                              <td className="px-5 py-3 text-right whitespace-nowrap">
+                                <button onClick={() => inviteTeammate(inv.email)} className="text-[10px] text-[var(--rust)] hover:text-[var(--rust-deep)] mr-3">Resend</button>
+                                <button onClick={() => revokeInvite(inv.id)} className="text-[10px] text-red-700/80 hover:text-red-700">Revoke</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  <div className="panel rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[var(--line)]">
+                      <p className="text-sm font-semibold text-[var(--ink)]">Workspaces you belong to · {teamData?.memberships.length ?? 0}</p>
+                    </div>
+                    {!teamData?.memberships.length ? (
+                      <p className="text-xs text-[var(--ink-faint)] p-6 text-center">You haven&apos;t joined anyone else&apos;s workspace</p>
+                    ) : (
+                      <table className="w-full">
+                        <tbody className="divide-y divide-line">
+                          {teamData.memberships.map((ms) => (
+                            <tr key={ms.id} className="hover:bg-[var(--line-soft)]">
+                              <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/90">{ms.ownerEmail}</td>
+                              <td className="px-5 py-3 text-right">
+                                <button
+                                  onClick={() => removeMember(ms.id).then(() => { window.location.href = "/dashboard"; })}
+                                  className="text-[10px] text-red-700/80 hover:text-red-700"
+                                >
+                                  Leave
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+              </>
+              )}
+            </>
+            );
+          })()}
+
           {/* FEEDBACK TAB */}
           {activeTab === "feedback" && (
             <div className="max-w-3xl mx-auto w-full">
@@ -5588,6 +5816,86 @@ function DashboardPage() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Teammate Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowInviteModal(false)}>
+          <div className="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-[var(--ink)]">Invite a teammate</h3>
+                  <p className="text-xs text-[var(--ink-faint)] mt-0.5">They&apos;ll get access to all your brands — scans, articles, analytics and Reddit engagement. Billing stays with you.</p>
+                </div>
+                <button onClick={() => setShowInviteModal(false)} className="text-[var(--ink-faint)]/70 hover:text-[var(--ink-soft)] text-xl leading-none ml-4 shrink-0">×</button>
+              </div>
+
+              {inviteLink ? (
+                <div className="space-y-4">
+                  <div className="bg-[var(--olive-wash)] border border-[var(--olive)]/25 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-[var(--olive)] mb-1">Invite sent to {inviteEmail}</p>
+                    <p className="text-xs text-[var(--ink-soft)]">You can also share this link directly — it expires in 7 days and only works for that email.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={inviteLink}
+                      onFocus={(e) => e.target.select()}
+                      className="flex-1 border border-[var(--line)] rounded-xl px-3 py-2 text-[11px] font-mono text-[var(--ink-soft)] bg-[var(--cream)] outline-none"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard.writeText(inviteLink)}
+                      className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => { setInviteEmail(""); setInviteLink(""); setInviteError(""); }}
+                    className="w-full text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)] py-1"
+                  >
+                    Invite someone else
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!inviteEmail.trim() || inviteSubmitting) return;
+                    inviteTeammate(inviteEmail.trim());
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="text-xs font-semibold text-[var(--ink-soft)] block mb-1.5">Teammate&apos;s email</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="teammate@company.com"
+                      required
+                      autoFocus
+                      className="w-full border border-[var(--line)] rounded-xl px-4 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-faint)] outline-none focus:ring-2 focus:ring-[var(--rust)]/40 focus:border-[var(--rust)]/50 transition-colors"
+                    />
+                  </div>
+
+                  {inviteError && (
+                    <p className="text-xs text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">{inviteError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={inviteSubmitting || !inviteEmail.trim()}
+                    className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                  >
+                    {inviteSubmitting ? "Sending…" : "Send invite"}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>

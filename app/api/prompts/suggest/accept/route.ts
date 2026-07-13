@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { generatePromptSuggestions } from "@/lib/prompt-suggestions";
 import { assertUnderPromptLimit } from "@/lib/plan-limits";
+import { requireBrandAccess } from "@/lib/team";
 
 // Moves one suggestion into tracked_prompts, then backfills the pool with a
 // single fresh replacement — so the suggestion list stays at a steady size
@@ -16,15 +17,11 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand } = await db
-    .from("brands")
-    .select("name, domain, niche, description, competitors")
-    .eq("id", brandId)
-    .eq("user_id", user.id)
-    .single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId, "name, domain, niche, description, competitors");
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const brand = access.brand as unknown as { name: string; domain: string; niche: string; description: string; competitors: string[] };
 
-  const limitCheck = await assertUnderPromptLimit(db, user.id, brandId);
+  const limitCheck = await assertUnderPromptLimit(db, access.ownerId, brandId);
   if (!limitCheck.ok) {
     return NextResponse.json({ error: `Your plan tracks up to ${limitCheck.limit} active prompts. Upgrade to track more.` }, { status: 402 });
   }

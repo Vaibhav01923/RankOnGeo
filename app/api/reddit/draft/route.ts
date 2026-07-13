@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -10,13 +11,15 @@ export async function POST(req: NextRequest) {
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const [{ data: thread }, { data: brand }] = await Promise.all([
+  const [{ data: thread }, access] = await Promise.all([
     db.from("reddit_threads").select("*").eq("id", threadId).single(),
-    db.from("brands").select("name, niche, description").eq("id", brandId).eq("user_id", user?.id).single(),
+    requireBrandAccess(db, user.id, brandId, "name, niche, description"),
   ]);
 
-  if (!thread || !brand) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!thread || !access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const brand = access.brand as unknown as { name: string; niche: string; description: string | null };
 
   const prompt = `You are a helpful Reddit user who works at ${brand.name}. Draft a genuine, helpful reply to this Reddit post that naturally mentions ${brand.name} only where it truly fits.
 

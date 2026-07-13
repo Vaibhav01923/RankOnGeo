@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 async function searchReddit(keyword: string): Promise<Array<Record<string, unknown>>> {
   // Reddit requires OAuth since mid-2023 for reliable API access.
@@ -50,21 +51,17 @@ export async function POST(req: NextRequest) {
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand } = await db
-    .from("brands")
-    .select("id, name")
-    .eq("id", brandId)
-    .eq("user_id", user?.id)
-    .single();
+  const access = await requireBrandAccess(db, user.id, brandId, "id, user_id, name");
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
-
+  // Keywords are shared across the workspace — sync with the whole brand set,
+  // not just the acting user's.
   const { data: keywords } = await db
     .from("social_keywords")
     .select("keyword")
-    .eq("brand_id", brandId)
-    .eq("user_id", user?.id);
+    .eq("brand_id", brandId);
 
   if (!keywords?.length) return NextResponse.json({ synced: 0, message: "No keywords added yet" });
 

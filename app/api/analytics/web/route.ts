@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -16,13 +17,15 @@ export async function GET(req: NextRequest) {
   const daysParam = Number(req.nextUrl.searchParams.get("days"));
   const days = ALLOWED_DAYS.includes(daysParam) ? daysParam : 30;
 
-  const { data: brand } = await db.from("brands").select("id, domain, site_key").eq("id", brandId).eq("user_id", user.id).single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId, "id, user_id, domain, site_key");
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const brand = access.brand as unknown as { id: string; domain: string; site_key: string };
 
   // Web/LLM Analytics is a paid-plan perk — ingestion is already blocked
   // server-side for free-tier brands, so there's nothing to hide here, just
-  // an isFree flag so the dashboard can overlay the upgrade prompt.
-  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  // an isFree flag so the dashboard can overlay the upgrade prompt. The flag
+  // reflects the workspace owner's plan, not the acting member's.
+  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
   const isFree = !userPlan?.dodo_subscription_id;
 
   const since = new Date(Date.now() - days * DAY_MS).toISOString();

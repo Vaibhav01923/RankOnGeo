@@ -36,6 +36,30 @@ export async function sendEmail({
   }
 }
 
+export function teamInviteEmailHtml(inviterEmail: string, acceptUrl: string): string {
+  return `
+<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Georgia,serif;color:#302821;background:#f6f2e9;">
+  <div style="font-size:22px;font-weight:700;margin-bottom:24px;">RankOnGeo</div>
+  <h1 style="font-size:28px;font-weight:400;line-height:1.25;margin:0 0 16px;">You've been invited. 🤝</h1>
+  <p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 14px;">
+    <strong>${inviterEmail}</strong> invited you to join their RankOnGeo workspace —
+    you'll get access to their brands, AI visibility scans, articles, and analytics.
+  </p>
+  <p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 14px;">
+    Accept the invite with the button below. If you don't have an account yet, sign up
+    with this email address and the invite will be waiting for you.
+  </p>
+  <a href="${acceptUrl}"
+     style="display:inline-block;margin:10px 0 22px;padding:12px 26px;background:#b1552e;color:#fffdf8;border-radius:999px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;text-decoration:none;">
+    Accept invite
+  </a>
+  <p style="font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6f6257;margin:0;">
+    This invite expires in 7 days. If you weren't expecting it, you can ignore this email.
+    <br/>— The RankOnGeo team
+  </p>
+</div>`;
+}
+
 export function earlyWaitlistEmailHtml(plan: string): string {
   const planNames: Record<string, string> = { starter: "Pro", growth: "Business", enterprise: "Scale" };
   const planName = planNames[plan] ?? plan;

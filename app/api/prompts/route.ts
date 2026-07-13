@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { assertUnderPromptLimit } from "@/lib/plan-limits";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function POST(req: NextRequest) {
   const { brandId, text, category } = await req.json();
@@ -10,10 +11,11 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand } = await db.from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const limitCheck = await assertUnderPromptLimit(db, user.id, brandId);
+  // Quota counts against the workspace owner's plan, not the acting member's.
+  const limitCheck = await assertUnderPromptLimit(db, access.ownerId, brandId);
   if (!limitCheck.ok) {
     return NextResponse.json({ error: `Your plan tracks up to ${limitCheck.limit} active prompts. Upgrade to track more.` }, { status: 402 });
   }
@@ -36,8 +38,8 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand } = await db.from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const { error } = await db.from("tracked_prompts").delete().eq("brand_id", brandId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

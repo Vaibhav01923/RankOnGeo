@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -8,6 +9,9 @@ export async function GET(req: NextRequest) {
 
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
+
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const { data, error } = await db
     .from("publishing_log")

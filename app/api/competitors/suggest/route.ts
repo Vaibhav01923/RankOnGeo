@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -12,14 +13,9 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: brand } = await db
-    .from("brands")
-    .select("name, domain, niche, competitors")
-    .eq("id", brandId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId, "name, domain, niche, competitors");
+  if (!access) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+  const brand = access.brand as unknown as { name: string; domain: string; niche: string; competitors: string[] };
 
   const existing = (brand.competitors ?? []).join(", ");
 

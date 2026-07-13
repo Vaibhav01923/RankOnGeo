@@ -7,6 +7,9 @@ export type BrandData = {
   targetAudience: string[];
   competitors: string[];
   trackedPrompts: TrackedPrompt[];
+  // Team mode: how the current user relates to this brand's workspace
+  role?: "owner" | "member";
+  ownerId?: string;
 };
 
 export type TrackedPrompt = {

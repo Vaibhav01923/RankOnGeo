@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
+
+// Chats stay personal per user (user_id scoping below) — the brand check
+// only confirms the requester may use this brand's workspace at all.
 
 // GET /api/agent/chats?brandId=xxx — list chats for a brand
 export async function GET(req: NextRequest) {
@@ -30,6 +34,9 @@ export async function POST(req: NextRequest) {
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const { data, error } = await db
     .from("agent_chats")

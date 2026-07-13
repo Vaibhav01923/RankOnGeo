@@ -66,6 +66,9 @@ export type PlaceRedditOrderParams = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: SupabaseClient<any, any, any>;
   userId: string;
+  // Whose Dodo credits pay for the order — the workspace owner when a team
+  // member places it. Defaults to userId (solo case).
+  billingUserId?: string;
   brandId: string;
   url: string;
   serviceType: RedditServiceType;
@@ -82,6 +85,7 @@ export type PlaceRedditOrderResult =
 
 export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<PlaceRedditOrderResult> {
   const { db, userId, brandId, url, serviceType, quantity, commentText, speed, promptText, engine } = params;
+  const billingUserId = params.billingUserId ?? userId;
 
   if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(url)) {
     return { ok: false, status: 400, error: "Must be a reddit.com link" };
@@ -123,17 +127,23 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     const { data } = await db
       .from("user_plans")
       .select("dodo_customer_id")
-      .eq("user_id", userId)
+      .eq("user_id", billingUserId)
       .single();
     userPlan = data;
   } catch (e) {
-    console.error("[reddit-order] user_plans lookup failed", { userId, error: e instanceof Error ? e.message : e });
+    console.error("[reddit-order] user_plans lookup failed", { billingUserId, error: e instanceof Error ? e.message : e });
     return { ok: false, status: 500, error: "Failed to look up your plan — try again" };
   }
 
   const customerId: string | null = userPlan?.dodo_customer_id ?? null;
   if (!customerId) {
-    return { ok: false, status: 402, error: "Subscribe to a plan to order Reddit engagement" };
+    return {
+      ok: false,
+      status: 402,
+      error: billingUserId === userId
+        ? "Subscribe to a plan to order Reddit engagement"
+        : "This workspace has no active plan",
+    };
   }
 
   const taskId = randomUUID();

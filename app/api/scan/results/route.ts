@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -10,6 +11,9 @@ export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   // Resolve which scan_run to read
   let resolvedRunId: string;

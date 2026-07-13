@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { generatePromptSuggestions } from "@/lib/prompt-suggestions";
+import { requireBrandAccess } from "@/lib/team";
 
 const SUGGEST_COUNT = 10;
 
@@ -8,15 +9,10 @@ async function loadBrandAndOwner(db: ReturnType<typeof clientFromRequest>, brand
   const { data: { user } } = await db.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) } as const;
 
-  const { data: brand } = await db
-    .from("brands")
-    .select("name, domain, niche, description, competitors")
-    .eq("id", brandId)
-    .eq("user_id", user.id)
-    .single();
-  if (!brand) return { error: NextResponse.json({ error: "Brand not found" }, { status: 404 }) } as const;
+  const access = await requireBrandAccess(db, user.id, brandId, "name, domain, niche, description, competitors");
+  if (!access) return { error: NextResponse.json({ error: "Brand not found" }, { status: 404 }) } as const;
 
-  return { brand } as const;
+  return { brand: access.brand as unknown as { name: string; domain: string; niche: string; description: string; competitors: string[] } } as const;
 }
 
 // Persisted suggestions are shown as-is — no LLM call on every tab visit.

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { placeRedditOrder } from "@/lib/reddit-order-service";
+import { requireBrandAccess } from "@/lib/team";
 import type { RedditServiceType } from "@/lib/types";
 
 const SERVICE_TYPES: RedditServiceType[] = ["post_upvote", "post_downvote", "comment_upvote", "comment_downvote", "custom_comments"];
@@ -24,9 +25,13 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Invalid service type" }), { status: 400 });
   }
 
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return new Response(JSON.stringify({ error: "Brand not found" }), { status: 404 });
+
   const result = await placeRedditOrder({
     db,
     userId: user.id,
+    billingUserId: access.ownerId,
     brandId,
     url,
     serviceType,

@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
+
+// Authorize through the article's brand so teammates can edit each other's
+// team articles, not just rows they created themselves.
+async function requireArticleAccess(db: ReturnType<typeof clientFromRequest>, userId: string, articleId: string) {
+  const { data: article } = await db.from("articles").select("id, brand_id").eq("id", articleId).maybeSingle();
+  if (!article) return null;
+  return requireBrandAccess(db, userId, article.brand_id);
+}
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const db = clientFromRequest(req);
@@ -7,6 +16,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  const access = await requireArticleAccess(db, user.id, id);
+  if (!access) return NextResponse.json({ error: "Article not found" }, { status: 404 });
+
   const body = await req.json();
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -22,7 +35,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .from("articles")
     .update(updates)
     .eq("id", id)
-    .eq("user_id", user.id)
     .select()
     .single();
 
@@ -36,7 +48,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const { error } = await db.from("articles").delete().eq("id", id).eq("user_id", user.id);
+
+  const access = await requireArticleAccess(db, user.id, id);
+  if (!access) return NextResponse.json({ error: "Article not found" }, { status: 404 });
+
+  const { error } = await db.from("articles").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

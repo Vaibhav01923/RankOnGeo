@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { requireBrandAccess } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -7,16 +8,11 @@ export async function GET(req: NextRequest) {
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // Verify brand ownership
-  const { data: brand } = await db
-    .from("brands")
-    .select("id")
-    .eq("id", brandId)
-    .eq("user_id", user?.id)
-    .single();
-
-  if (!brand) return NextResponse.json({ threads: [] });
+  // Verify brand ownership or team membership
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ threads: [] });
 
   const { data: threads } = await db
     .from("reddit_threads")

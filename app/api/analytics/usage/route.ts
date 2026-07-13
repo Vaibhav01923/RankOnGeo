@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { analyticsEventQuotaForPlan } from "@/lib/plan-limits";
 import { currentBillingPeriod, billingPeriodStart } from "@/lib/analytics-billing";
+import { requireBrandAccess } from "@/lib/team";
 
 // Combined Web+LLM Analytics usage for the current billing period, for the
 // usage widget shown on both analytics tabs. Read-only — actual metering and
@@ -14,10 +15,11 @@ export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
-  const { data: brand } = await db.from("brands").select("id").eq("id", brandId).eq("user_id", user.id).single();
-  if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const access = await requireBrandAccess(db, user.id, brandId);
+  if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const { data: userPlan } = await db.from("user_plans").select("plan, dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  // Quota reflects the workspace owner's plan, not the acting member's.
+  const { data: userPlan } = await db.from("user_plans").select("plan, dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
   const quota = analyticsEventQuotaForPlan(userPlan?.dodo_subscription_id ? userPlan.plan : null);
 
   const period = currentBillingPeriod();
