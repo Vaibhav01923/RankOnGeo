@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PricingCards } from "@/app/_components/PricingCards";
-import { promptLimitForPlan } from "@/lib/plan-limits";
+import { promptLimitForPlan, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
   chatgpt: "ChatGPT",
@@ -32,9 +32,6 @@ const REDDIT_TARGET_SERVICES: Record<"post" | "comment", RedditServiceType[]> = 
   post: ["post_upvote", "post_downvote", "custom_comments"],
   comment: ["comment_upvote", "comment_downvote"],
 };
-
-const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
-const FREE_BRAND_LIMIT = 1;
 
 const TASK_STATUS_BADGE: Record<string, { label: string; className: string; dotClassName: string }> = {
   queued: { label: "Queued — high demand", className: "bg-[var(--rust-wash)]/10 text-[var(--rust-deep)] border-[var(--rust)]/25", dotClassName: "bg-[var(--rust-wash)]/100 animate-pulse" },

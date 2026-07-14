@@ -7,9 +7,13 @@ import { AIEngine, BrandData, ScanResult } from "@/lib/types";
 
 const SCAN_ENGINES: AIEngine[] = ["chatgpt", "gemini", "google", "claude", "perplexity"];
 
-// Triggered daily at 8am UTC — fans out one scan job per brand
+// Triggered every 3 days at 8am UTC — fans out one scan job per brand.
+// Engine answers take a few days to reflect real index/ranking changes
+// anyway, so a 3-day cadence tracks the same signal at a third of the cost
+// of a daily run. "Daily"-cadence prompts (see lib/prompt-cadence.ts) still
+// scan on every firing of this cron — i.e. every 3 days, not literally daily.
 export const scheduledScanAll = inngest.createFunction(
-  { id: "scheduled-scan-all", triggers: [{ cron: "0 8 * * *" }] },
+  { id: "scheduled-scan-all", triggers: [{ cron: "0 8 */3 * *" }] },
   async ({ step }) => {
     const db = serverClient();
 

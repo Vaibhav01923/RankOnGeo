@@ -27,6 +27,41 @@ const BLOCKED_DOMAINS = [
   "t.co", "bit.ly", "tinyurl.com", "goo.gl",
 ];
 
+// Negation cues that, when they share a sentence with a name, mean the model
+// doesn't actually know/recommend it — "I'm not sure about XYZ" or "couldn't
+// find its domain" would otherwise count the same as a genuine mention and
+// inflate the score on exactly the answers that should hurt it most.
+const NEGATION_PHRASES = [
+  "not sure about", "not familiar with", "unfamiliar with", "not aware of",
+  "don't know", "do not know", "doesn't know", "does not know",
+  "couldn't find", "could not find", "unable to find", "not able to find",
+  "no information about", "no information on", "haven't heard of", "have not heard of",
+  "never heard of", "doesn't exist", "does not exist", "no results for",
+  "no record of", "not a real", "isn't a real", "is not a real",
+  "not confident", "unclear if", "unclear whether", "can't confirm", "cannot confirm",
+];
+
+// Bullet/numbered list items often have no trailing period, so a line break
+// counts as a sentence boundary too, not just . ! ?
+function splitSentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+}
+
+// A name only counts as mentioned if at least one sentence containing it is
+// free of a negation cue — being named in a sentence that denies knowing it
+// isn't a mention.
+function isGenuineMention(nameLower: string, sentences: string[]): boolean {
+  return sentences.some((s) => {
+    const sLower = s.toLowerCase();
+    if (!sLower.includes(nameLower)) return false;
+    return !NEGATION_PHRASES.some((p) => sLower.includes(p));
+  });
+}
+
+function isGenuineListLine(text: string): boolean {
+  return !NEGATION_PHRASES.some((p) => text.includes(p));
+}
+
 export function extractMentions(
   response: string,
   brandName: string,
@@ -34,24 +69,24 @@ export function extractMentions(
   competitors: string[],
   extraCitations?: string[]
 ): { brandMentioned: boolean; brandRank: number | null; competitorMentions: { name: string; rank: number | null }[]; citations: string[] } {
-  const lower = response.toLowerCase();
   const brandLower = brandName.toLowerCase();
+  const sentences = splitSentences(response);
 
   const listItems = response.match(/\d+[\.\)]\s+([^\n]+)/g) ?? [];
   const rankedItems = listItems.map((item, idx) => ({ rank: idx + 1, text: item.toLowerCase() }));
 
-  const brandMentioned = lower.includes(brandLower);
+  const brandMentioned = isGenuineMention(brandLower, sentences);
   let brandRank: number | null = null;
   if (brandMentioned) {
-    const ranked = rankedItems.find((r) => r.text.includes(brandLower));
+    const ranked = rankedItems.find((r) => r.text.includes(brandLower) && isGenuineListLine(r.text));
     brandRank = ranked ? ranked.rank : null;
   }
 
   const competitorMentions = competitors
     .map((c) => {
       const cLower = c.toLowerCase();
-      if (!lower.includes(cLower)) return null;
-      const ranked = rankedItems.find((r) => r.text.includes(cLower));
+      if (!isGenuineMention(cLower, sentences)) return null;
+      const ranked = rankedItems.find((r) => r.text.includes(cLower) && isGenuineListLine(r.text));
       return { name: c, rank: ranked ? ranked.rank : null };
     })
     .filter(Boolean) as { name: string; rank: number | null }[];
@@ -97,11 +132,20 @@ const DATAFORSEO_LLM_MODELS = {
   perplexity: "sonar",
 } as const;
 
+// web_search:true makes an engine answer like its consumer UI does: grounded
+// in live search results with cited sources. Perplexity's whole product is
+// search-grounded, so it stays on. Claude's web_search is off — Anthropic
+// bills it separately ($10/1000 searches) on top of Sonnet-tier tokens, which
+// made Claude ~4x Perplexity's per-query cost and the single largest line
+// item in a scan; Claude still answers (just without live citations), and
+// Perplexity already covers the "grounded, cited AI answer" case cheaply.
+const DATAFORSEO_WEB_SEARCH: Record<keyof typeof DATAFORSEO_LLM_MODELS, boolean> = {
+  claude: false,
+  perplexity: true,
+};
+
 // DataForSEO AI Optimization — LLM Responses live endpoint. One vendor for
-// Claude + Perplexity (no Anthropic/Perplexity accounts needed), and
-// web_search:true makes both answer like their consumer UIs do: grounded in
-// live search results with cited sources, which is exactly what the
-// Citations tab measures.
+// Claude + Perplexity (no Anthropic/Perplexity accounts needed).
 async function queryDataForSEOLLM(llmType: keyof typeof DATAFORSEO_LLM_MODELS, prompt: string): Promise<EngineAnswer> {
   const res = await fetch(`https://api.dataforseo.com/v3/ai_optimization/${llmType}/llm_responses/live`, {
     method: "POST",
@@ -109,7 +153,7 @@ async function queryDataForSEOLLM(llmType: keyof typeof DATAFORSEO_LLM_MODELS, p
     body: JSON.stringify([{
       user_prompt: prompt.slice(0, 500), // API caps user_prompt at 500 chars
       model_name: DATAFORSEO_LLM_MODELS[llmType],
-      web_search: true,
+      web_search: DATAFORSEO_WEB_SEARCH[llmType],
     }]),
     signal: AbortSignal.timeout(60000),
   });

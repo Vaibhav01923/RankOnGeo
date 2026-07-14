@@ -5,7 +5,7 @@ import { BrandData, TrackedPrompt } from "@/lib/types";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
 import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
-import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
+import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -74,8 +74,6 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   const userId = user?.id;
 
-  const BRAND_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 10 };
-  const FREE_BRAND_LIMIT = 1;
   let activePlan: string | null = null;
   if (userId) {
     const { data: planRow } = await db
