@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
+import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -24,12 +25,6 @@ const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
-
-// Remainder of each plan's tracked-prompt allowance after PLAN_AUTO_GENERATED_PROMPTS
-// (lib/plan-limits.ts) is used to AI-generate prompts — left for the user to
-// fill in themselves here in the onboarding wizard.
-const PLAN_CUSTOM_LIMITS: Record<string, number> = { starter: 0, growth: 5, enterprise: 10 };
-const FREE_CUSTOM_LIMIT = 0;
 
 type Step = "url" | "brand" | "prompts";
 
@@ -158,9 +153,13 @@ function SetupContent() {
 
   function addPrompt() {
     const trimmed = newPrompt.trim();
-    const customCount = prompts.filter((p) => p.category === "custom").length;
-    const customLimit = userPlan ? PLAN_CUSTOM_LIMITS[userPlan] ?? FREE_CUSTOM_LIMIT : FREE_CUSTOM_LIMIT;
-    if (!trimmed || customCount >= customLimit) return;
+    if (!trimmed) return;
+    // Gate on the plan's total cap vs. what's currently selected — not a fixed
+    // "custom slots" number — so deselecting an AI-generated prompt always
+    // opens room to write a replacement, on every plan including Pro.
+    const totalCap = userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
+    const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
+    if (selectedCount >= totalCap) return;
     setPrompts([...prompts, { id: `custom-${Date.now()}`, text: trimmed, category: "custom" }]);
     setNewPrompt("");
   }
@@ -424,10 +423,9 @@ function SetupContent() {
             </div>
 
             {(() => {
-              const customCount = prompts.filter((p) => p.category === "custom").length;
-              const customLimit = userPlan ? PLAN_CUSTOM_LIMITS[userPlan] ?? FREE_CUSTOM_LIMIT : FREE_CUSTOM_LIMIT;
-              const remaining = customLimit - customCount;
-              if (customLimit <= 0) return null;
+              const totalCap = userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
+              const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
+              const remaining = totalCap - selectedCount;
               return (
                 <div ref={addPromptRef} className="mb-6">
                   <p className="text-sm font-medium text-[var(--ink)] mb-2">
@@ -440,14 +438,21 @@ function SetupContent() {
                       onChange={(e) => setNewPrompt(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPrompt(); } }}
                       placeholder="Add custom prompt…"
-                      className="flex-1 border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-2.5 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
+                      disabled={remaining <= 0}
+                      className="flex-1 border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-2.5 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent disabled:opacity-50"
                     />
-                    <button onClick={addPrompt} className="px-4 py-2.5 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors">
+                    <button
+                      onClick={addPrompt}
+                      disabled={remaining <= 0}
+                      className="px-4 py-2.5 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] disabled:opacity-50 transition-colors"
+                    >
                       Add
                     </button>
                   </div>
                   {remaining <= 0 && (
-                    <p className="text-xs text-[var(--rust-deep)] font-medium mt-2">Custom limit reached · <a href="/pricing" className="underline">upgrade for more</a></p>
+                    <p className="text-xs text-[var(--rust-deep)] font-medium mt-2">
+                      Limit reached — deselect a prompt above to write your own, or <a href="/pricing" className="underline">upgrade for more</a>
+                    </p>
                   )}
                 </div>
               );
