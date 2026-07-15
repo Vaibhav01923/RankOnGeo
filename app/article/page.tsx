@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import ReactMarkdown from "react-markdown";
@@ -55,6 +55,16 @@ function ArticleContent() {
 
   // AI refine
   const [aiInstruction, setAiInstruction] = useState("");
+  const aiInstructionRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keeps the textarea's height in sync when a quick-edit chip sets the value
+  // directly (bypassing the resize done in the textarea's own onChange).
+  useEffect(() => {
+    const el = aiInstructionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [aiInstruction]);
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState("");
   const [pendingContent, setPendingContent] = useState<{ article: string; title: string; wordCount: number } | null>(null);
@@ -404,15 +414,16 @@ function ArticleContent() {
                   </div>
 
                   {/* Custom instruction */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      ref={aiInstructionRef}
                       value={aiInstruction}
                       onChange={(e) => setAiInstruction(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applyAiEdit(aiInstruction); }}}
                       placeholder="e.g. Add a section comparing us to competitors…"
                       disabled={refining}
-                      className="flex-1 border border-[var(--line)] bg-[var(--cream)] rounded-xl px-4 py-2.5 text-sm outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 focus:border-transparent transition-colors disabled:opacity-50"
+                      rows={1}
+                      className="flex-1 border border-[var(--line)] bg-[var(--cream)] rounded-xl px-4 py-2.5 text-sm outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 focus:border-transparent transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
                     />
                     <button
                       onClick={() => applyAiEdit(aiInstruction)}
