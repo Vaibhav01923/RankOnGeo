@@ -34,6 +34,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
           <span>© 2026 RankOnGeo. Grown under a night sky.</span>
           <div className="flex gap-5">
             <Link href="/" className="rounded transition-colors hover:text-[var(--rust)]">Home</Link>
+            <Link href="/about" className="rounded transition-colors hover:text-[var(--rust)]">About</Link>
             <Link href="/terms" className="rounded transition-colors hover:text-[var(--rust)]">Terms</Link>
             <Link href="/privacy" className="rounded transition-colors hover:text-[var(--rust)]">Privacy</Link>
           </div>

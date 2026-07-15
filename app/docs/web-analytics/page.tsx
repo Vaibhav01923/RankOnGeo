@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WebPageJsonLd } from "../../_components/WebPageJsonLd";
 
 const SNIPPET = `<script src="https://www.rankongeo.com/track.js" data-site="YOUR_SITE_KEY" defer></script>`;
 
@@ -28,6 +29,11 @@ function CodeBlock({ code }: { code: string }) {
 export default function WebAnalyticsDocsPage() {
   return (
     <div className="flex items-start gap-10">
+      <WebPageJsonLd
+        name="Web Analytics Setup Guide"
+        description="Privacy-first analytics for your website — live visitors, pageviews, visit duration, and bounce rate."
+        path="/docs/web-analytics"
+      />
       <div className="max-w-2xl min-w-0">
         <h1 className="text-3xl font-bold text-[var(--ink)] mb-2">Web Analytics</h1>
         <p className="text-[var(--ink-soft)] mb-10">Privacy-first analytics for your website — live visitors, pageviews, visit duration, and bounce rate.</p>

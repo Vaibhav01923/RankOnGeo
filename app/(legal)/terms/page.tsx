@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { MarkdownArticle } from "../../_components/MarkdownArticle";
+import { WebPageJsonLd } from "../../_components/WebPageJsonLd";
+
+const DESCRIPTION = "The terms that govern your use of RankOnGeo.";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "The terms that govern your use of RankOnGeo.",
+  description: DESCRIPTION,
 };
 
 const LAST_UPDATED = "July 14, 2026";
@@ -90,6 +93,7 @@ Questions about these Terms? Contact us at **support@rankongeo.com**.
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl">
+      <WebPageJsonLd name="Terms of Service" description={DESCRIPTION} path="/terms" />
       <header className="mb-10">
         <p className="mb-3 text-xs text-[var(--ink-faint)]">Last updated: {LAST_UPDATED}</p>
         <h1 className="font-signal-serif text-4xl font-[350] leading-tight tracking-tight text-[var(--ink)] sm:text-5xl">

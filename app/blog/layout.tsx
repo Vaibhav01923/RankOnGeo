@@ -34,6 +34,7 @@ export default function BlogLayout({ children }: { children: React.ReactNode }) 
           <span>© 2026 RankOnGeo. Grown under a night sky.</span>
           <div className="flex gap-5">
             <Link href="/" className="rounded transition-colors hover:text-[var(--rust)]">Home</Link>
+            <Link href="/about" className="rounded transition-colors hover:text-[var(--rust)]">About</Link>
             <Link href="/blog" className="rounded transition-colors hover:text-[var(--rust)]">Blog</Link>
             <Link href="/audit" className="rounded transition-colors hover:text-[var(--rust)]">Free visibility audit</Link>
           </div>

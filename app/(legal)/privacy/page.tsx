@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { MarkdownArticle } from "../../_components/MarkdownArticle";
+import { WebPageJsonLd } from "../../_components/WebPageJsonLd";
+
+const DESCRIPTION = "How RankOnGeo collects, uses, and protects your information.";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How RankOnGeo collects, uses, and protects your information.",
+  description: DESCRIPTION,
 };
 
 const LAST_UPDATED = "July 14, 2026";
@@ -97,6 +100,7 @@ Questions about this Privacy Policy? Contact us at **support@rankongeo.com**.
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-3xl">
+      <WebPageJsonLd name="Privacy Policy" description={DESCRIPTION} path="/privacy" />
       <header className="mb-10">
         <p className="mb-3 text-xs text-[var(--ink-faint)]">Last updated: {LAST_UPDATED}</p>
         <h1 className="font-signal-serif text-4xl font-[350] leading-tight tracking-tight text-[var(--ink)] sm:text-5xl">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WebPageJsonLd } from "../../_components/WebPageJsonLd";
 
 const CURL_SNIPPET = `curl -X POST https://www.rankongeo.com/api/track/bot \\
   -H "Content-Type: application/json" \\
@@ -54,6 +55,11 @@ export default function LlmAnalyticsDocsPage() {
 
   return (
     <div className="flex items-start gap-10">
+      <WebPageJsonLd
+        name="AI Search, Crawler, Bot Analytics Setup Guide"
+        description="Track AI search engines, crawlers, and bots visiting your website. Get insights into traffic from AI platforms like ChatGPT, Claude, and Perplexity."
+        path="/docs/llm-analytics"
+      />
       <div className="max-w-2xl min-w-0">
         <h1 className="text-3xl font-bold text-[var(--ink)] mb-2">AI Search, Crawler, Bot Analytics</h1>
         <p className="text-[var(--ink-soft)] mb-10">Track AI search engines, crawlers, and bots visiting your website. Get insights into traffic from AI platforms like ChatGPT, Claude, and Perplexity.</p>

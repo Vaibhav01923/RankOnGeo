@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { PricingCards } from "../_components/PricingCards";
+import { WebPageJsonLd } from "../_components/WebPageJsonLd";
 import { DEMO_CALL_URL } from "@/lib/links";
 
 const instrumentSerif = Instrument_Serif({
@@ -144,6 +145,11 @@ function AuditContent() {
 
   return (
     <div className="min-h-screen bg-[var(--cream)] text-[var(--ink)]" style={{ fontFamily: "var(--font-work-sans), sans-serif" }}>
+      <WebPageJsonLd
+        name="Free AI Visibility Audit"
+        description="Free instant audit of how ChatGPT, Claude, Gemini, Perplexity, and Google AI talk about your brand."
+        path="/audit"
+      />
       {/* Nav */}
       <nav className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-4 bg-[var(--surface)] border-b border-[var(--line)]">
         <a href="/" className="flex items-center gap-2">

@@ -44,8 +44,12 @@ const structuredData = {
       "@id": "https://www.rankongeo.com/#organization",
       name: "RankOnGeo",
       url: "https://www.rankongeo.com",
+      logo: "https://www.rankongeo.com/logo.png",
       description:
         "AI search visibility platform — track how ChatGPT, Claude, Gemini, Perplexity and Google AI talk about your brand.",
+      // sameAs (social profile URLs) intentionally omitted until real X/LinkedIn/
+      // GitHub profiles exist — add them here once created, using the exact
+      // handle "RankOnGeo".
     },
     {
       "@type": "WebSite",
@@ -606,6 +610,7 @@ export default function LandingPage() {
           <span>© 2026 RankOnGeo. Grown under a night sky.</span>
           <div className="flex gap-4">
             {[
+              { label: "About", href: "/about" },
               { label: "Privacy", href: "/privacy" },
               { label: "Terms", href: "/terms" },
               { label: "DPA", href: "#" },
