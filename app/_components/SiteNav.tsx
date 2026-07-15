@@ -58,12 +58,14 @@ export function SiteNav() {
           </a>
           <a
             href="/auth?mode=signin"
+            rel="nofollow"
             className="hidden rounded text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] md:block"
           >
             Login
           </a>
           <a
             href="/dashboard"
+            rel="nofollow"
             className="rounded-full bg-[var(--rust)] px-5 py-2 text-sm font-semibold text-[var(--surface)] shadow-[0_8px_20px_-8px_oklch(0.56_0.15_38_/_55%)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--rust-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)]"
           >
             Dashboard

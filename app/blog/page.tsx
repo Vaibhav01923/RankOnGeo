@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BlogIndex, type BlogCard } from "../_components/BlogIndex";
 import { getPublishedPosts, readingTimeMinutes, SITE_URL } from "@/lib/blog";
+import { ORGANIZATION } from "../_components/WebPageJsonLd";
 
 export const revalidate = 3600;
 
@@ -40,7 +41,7 @@ export default async function BlogIndexPage() {
     name: "RankOnGeo Blog",
     url: `${SITE_URL}/blog`,
     description: "Guides and research on AI search visibility and generative engine optimization.",
-    publisher: { "@id": `${SITE_URL}/#organization` },
+    publisher: ORGANIZATION,
     blogPost: posts.map((p) => ({
       "@type": "BlogPosting",
       headline: p.title,
@@ -62,10 +63,10 @@ export default async function BlogIndexPage() {
           className="font-signal-serif text-4xl font-[350] tracking-tight text-[var(--ink)] sm:text-5xl"
           style={{ textWrap: "balance" } as React.CSSProperties}
         >
-          Notes on being <em className="italic text-[var(--rust)]">the answer</em>
+          AI search visibility <em className="italic text-[var(--rust)]">& GEO guides</em>
         </h1>
         <p className="mt-4 text-[16px] leading-relaxed text-[var(--ink-soft)]">
-          Guides and research on AI search visibility, generative engine optimization, and getting your brand
+          Notes on being the answer — research and guides on getting your brand
           recommended by ChatGPT, Claude, Gemini, and Perplexity.
         </p>
       </header>

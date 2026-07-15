@@ -8,6 +8,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: "About",
   description: DESCRIPTION,
+  alternates: { canonical: "/about" },
 };
 
 const CONTENT = `

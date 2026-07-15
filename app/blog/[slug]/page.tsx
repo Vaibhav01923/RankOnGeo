@@ -5,6 +5,7 @@ import { BlogCover } from "../../_components/BlogCover";
 import { MarkdownArticle } from "../../_components/MarkdownArticle";
 import { getPublishedPostBySlug, getPublishedPosts, readingTimeMinutes, SITE_URL } from "@/lib/blog";
 import { DEMO_CALL_URL } from "@/lib/links";
+import { ORGANIZATION } from "../../_components/WebPageJsonLd";
 
 export const revalidate = 3600;
 
@@ -54,19 +55,39 @@ export default async function BlogPostPage({ params }: Props) {
 
   const others = (await getPublishedPosts()).filter((p) => p.id !== post.id).slice(0, 3);
 
+  // Required by Google's Article/BlogPosting guidelines for rich-result
+  // eligibility — fall back to the site's OG image for the one post that
+  // has no cover image uploaded yet, so this is never empty.
+  const postImage = post.cover_image_url || `${SITE_URL}/opengraph-image`;
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: post.title,
     description: post.description,
     url: `${SITE_URL}/blog/${post.slug}`,
+    image: [postImage],
     datePublished: post.published_at ?? post.created_at,
     dateModified: post.updated_at,
-    author: { "@type": "Organization", name: post.author_name, url: SITE_URL },
-    publisher: { "@id": `${SITE_URL}/#organization` },
-    mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
+    // Name normalized to the canonical "RankOnGeo" entity (the page itself
+    // still displays "RankOnGeo Team" as the visible byline) to avoid
+    // entity-name ambiguity for AI/LLM parsers.
+    author: { "@type": "Organization", name: "RankOnGeo", url: SITE_URL },
+    publisher: ORGANIZATION,
+    mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE_URL}/blog/${post.slug}` },
+    isPartOf: { "@type": "Blog", "@id": `${SITE_URL}/blog#blog` },
     keywords: post.tags.join(", "),
     wordCount: post.content.split(/\s+/).filter(Boolean).length,
+  };
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+      { "@type": "ListItem", position: 3, name: post.title, item: `${SITE_URL}/blog/${post.slug}` },
+    ],
   };
 
   return (
@@ -74,6 +95,10 @@ export default async function BlogPostPage({ params }: Props) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c") }}
       />
 
       <nav aria-label="Breadcrumb" className="mb-8 text-xs text-[var(--ink-faint)]">
@@ -87,6 +112,7 @@ export default async function BlogPostPage({ params }: Props) {
         coverImageUrl={post.cover_image_url}
         title={post.title}
         className="mb-10 aspect-[21/9] rounded-2xl border border-[var(--line)]"
+        priority
       />
 
       <header className="mb-10">

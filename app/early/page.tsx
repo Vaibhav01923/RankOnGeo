@@ -5,6 +5,7 @@ import { DomainForm } from "../_components/DomainForm";
 import { PricingCards } from "../_components/PricingCards";
 import { SiteNav } from "../_components/SiteNav";
 import { DEMO_CALL_URL } from "@/lib/links";
+import { WebPageJsonLd } from "../_components/WebPageJsonLd";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -59,6 +60,7 @@ export default function EarlyAccessPage() {
       className={`${instrumentSerif.variable} ${workSans.variable} ${ibmPlexMono.variable} min-h-screen bg-[var(--cream)] text-[var(--ink)]`}
       style={{ fontFamily: "var(--font-work-sans), sans-serif" }}
     >
+      <WebPageJsonLd name="Early Access — 50% Off All Plans" description={metadata.description as string} path="/early" />
       <SiteNav />
 
       <main className="px-6 pb-24 pt-36">

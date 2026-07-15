@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-img-element */
+import Image from "next/image";
 
 // Generated cover art for blog posts without a cover image. Deterministic
 // per slug: all randomness is resolved eagerly inside buildArt() with a
@@ -121,16 +121,30 @@ export function BlogCover({
   coverImageUrl,
   title,
   className = "",
+  priority = false,
 }: {
   slug: string;
   coverImageUrl?: string | null;
   title: string;
   className?: string;
+  /** Set for the single above-the-fold hero use (the post page) — this is
+      the site's worst LCP offender (7.3s) precisely because that image was
+      lazy-loaded and undiscoverable in the initial HTML. Leave false for
+      index-page thumbnails, which are legitimately below the fold. */
+  priority?: boolean;
 }) {
   if (coverImageUrl) {
     return (
-      <div className={`overflow-hidden bg-[oklch(0.16_0.02_55)] ${className}`}>
-        <img src={coverImageUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+      <div className={`relative overflow-hidden bg-[oklch(0.16_0.02_55)] ${className}`}>
+        <Image
+          src={coverImageUrl}
+          alt={title}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover"
+          priority={priority}
+          fetchPriority={priority ? "high" : "auto"}
+        />
       </div>
     );
   }

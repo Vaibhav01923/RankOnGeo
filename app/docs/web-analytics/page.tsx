@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { WebPageJsonLd } from "../../_components/WebPageJsonLd";
+import { WebPageJsonLd, BreadcrumbJsonLd } from "../../_components/WebPageJsonLd";
 
 const SNIPPET = `<script src="https://www.rankongeo.com/track.js" data-site="YOUR_SITE_KEY" defer></script>`;
 
@@ -34,6 +34,7 @@ export default function WebAnalyticsDocsPage() {
         description="Privacy-first analytics for your website — live visitors, pageviews, visit duration, and bounce rate."
         path="/docs/web-analytics"
       />
+      <BreadcrumbJsonLd items={[{ name: "Home", path: "" }, { name: "Docs", path: "/docs" }, { name: "Web Analytics", path: "/docs/web-analytics" }]} />
       <div className="max-w-2xl min-w-0">
         <h1 className="text-3xl font-bold text-[var(--ink)] mb-2">Web Analytics</h1>
         <p className="text-[var(--ink-soft)] mb-10">Privacy-first analytics for your website — live visitors, pageviews, visit duration, and bounce rate.</p>

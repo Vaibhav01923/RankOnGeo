@@ -7,6 +7,7 @@ const DESCRIPTION = "The terms that govern your use of RankOnGeo.";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: DESCRIPTION,
+  alternates: { canonical: "/terms" },
 };
 
 const LAST_UPDATED = "July 14, 2026";

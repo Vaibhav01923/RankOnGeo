@@ -1,66 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PRICING } from "@/lib/pricing";
 
-export const PRICING = [
-  {
-    name: "Pro",
-    planKey: "starter",
-    desc: "For solo founders proving the channel.",
-    price: 49,
-    highlight: false,
-    features: [
-      "50 credits for Reddit upvotes, comments, comment upvotes & more",
-      "10 tracked prompts × 5 AI engines = 50 checks/scan",
-      "1 website",
-      "20,000 web + LLM analytics events / mo",
-      "Unlimited SEO articles",
-      "Gap detection & gap → article",
-      "Daily visibility updates",
-      "Competitor tracking",
-      "Auto-publish to WordPress, Shopify & Framer",
-      "Email support",
-    ],
-  },
-  {
-    name: "Business",
-    planKey: "growth",
-    desc: "For teams that want the loop on autopilot.",
-    price: 99,
-    highlight: true,
-    features: [
-      "100 credits for Reddit upvotes, comments, comment upvotes & more",
-      "20 tracked prompts × 5 AI engines = 100 checks/scan",
-      "2 websites",
-      "100,000 web + LLM analytics events / mo",
-      "Unlimited SEO articles",
-      "Gap detection & gap → article",
-      "Daily visibility updates",
-      "Competitor tracking",
-      "Auto-publish to WordPress, Shopify & Framer",
-      "Email support",
-    ],
-  },
-  {
-    name: "Scale",
-    planKey: "enterprise",
-    desc: "For agencies & multi-brand portfolios.",
-    price: 149,
-    highlight: false,
-    features: [
-      "150 credits for Reddit upvotes, comments, comment upvotes & more",
-      "50 tracked prompts × 5 AI engines = 250 checks/scan",
-      "3 websites",
-      "500,000 web + LLM analytics events / mo",
-      "Unlimited SEO articles",
-      "Gap detection & gap → article",
-      "Daily visibility updates",
-      "Competitor tracking",
-      "Auto-publish to WordPress, Shopify & Framer",
-      "Email support",
-    ],
-  },
-];
+export { PRICING };
 
 export function PricingCards({ compact = false, early = false }: { compact?: boolean; early?: boolean }) {
   const router = useRouter();
@@ -145,10 +88,10 @@ export function PricingCards({ compact = false, early = false }: { compact?: boo
               <div className="mb-1 mt-5 flex items-baseline gap-2">
                 {early && (
                   <span className="font-signal-mono text-2xl text-[var(--ink-faint)] line-through decoration-[var(--rust)]/60">
-                    ${plan.price}
+                    {`$${plan.price}`}
                   </span>
                 )}
-                <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">${price}</span>
+                <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">{`$${price}`}</span>
                 <span className="text-sm text-[var(--ink-faint)]">/ month</span>
               </div>
               <p className="mb-7 text-sm text-[var(--ink-soft)]">{plan.desc}</p>

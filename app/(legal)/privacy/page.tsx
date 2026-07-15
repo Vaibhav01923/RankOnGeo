@@ -7,6 +7,7 @@ const DESCRIPTION = "How RankOnGeo collects, uses, and protects your information
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: DESCRIPTION,
+  alternates: { canonical: "/privacy" },
 };
 
 const LAST_UPDATED = "July 14, 2026";

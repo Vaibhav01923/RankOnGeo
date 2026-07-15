@@ -62,16 +62,23 @@ export function FAQSection() {
                     <span className={`absolute left-1/2 top-1/2 h-3 w-[1.5px] -translate-x-1/2 -translate-y-1/2 ${open ? "bg-[var(--rust)]" : "bg-[var(--ink-soft)]"}`} />
                   </span>
                 </button>
-                {open && (
-                  <div
-                    id={`faq-answer-${i}`}
-                    role="region"
-                    className="max-w-[640px] px-1 pb-7 text-[15px] leading-relaxed text-[var(--ink-soft)]"
-                    style={{ animation: "fadeSlideIn 0.35s ease forwards" }}
-                  >
+                {/* Always rendered (not conditionally mounted) so every answer is
+                    present in server HTML for crawlers/AI engines — only the
+                    visual expand/collapse is CSS-driven via max-height. (A
+                    grid-template-rows 0fr/1fr approach was tried first, but grid
+                    track sizing still reserves space for the item's padding even
+                    at min-height:0 — max-height + overflow:hidden clips it fully.) */}
+                <div
+                  id={`faq-answer-${i}`}
+                  role="region"
+                  aria-hidden={!open}
+                  className="overflow-hidden transition-[max-height] duration-500 ease-out"
+                  style={{ maxHeight: open ? "500px" : "0px" }}
+                >
+                  <div className="max-w-[640px] px-1 pb-7 text-[15px] leading-relaxed text-[var(--ink-soft)]">
                     {faq.a}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

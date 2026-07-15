@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { DomainForm } from "./_components/DomainForm";
 import { PricingSection } from "./_components/PricingSection";
+import { PRICING } from "@/lib/pricing";
 import { FAQSection } from "./_components/FAQSection";
 import { SiteNav } from "./_components/SiteNav";
 import { ScrollReveal } from "./_components/ScrollReveal";
@@ -66,7 +67,17 @@ const structuredData = {
       url: "https://www.rankongeo.com",
       description:
         "Track where AI engines rank your brand and close the gaps with research, generated articles, and publishing.",
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free visibility audit" },
+      offers: [
+        { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free visibility audit" },
+        ...PRICING.map((plan) => ({
+          "@type": "Offer",
+          name: plan.name,
+          price: String(plan.price),
+          priceCurrency: "USD",
+          priceValidUntil: "2026-12-31",
+          description: plan.desc,
+        })),
+      ],
     },
   ],
 };
@@ -459,7 +470,7 @@ export default function LandingPage() {
               className="rise mx-auto mb-6 mt-8 font-signal-serif font-[340] leading-[1.08] tracking-[-0.015em] text-[var(--ink)]"
               style={{ fontSize: "clamp(2.6rem, 6vw, 4.6rem)", textWrap: "balance", "--d": ".18s" } as React.CSSProperties}
             >
-              The internet asks AI first.
+              The internet asks AI first.{" "}
               <br />
               Make sure it answers <em className="italic text-[var(--rust)]">with you.</em>
             </h1>
