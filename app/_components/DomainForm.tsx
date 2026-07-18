@@ -11,7 +11,7 @@ export function DomainForm({ variant = "hero" }: { variant?: "hero" | "cta" }) {
     const d = domain.trim();
     const params = new URLSearchParams();
     if (d) params.set("domain", d);
-    router.push(`/audit${params.size ? `?${params}` : ""}`);
+    router.push(`/setup${params.size ? `?${params}` : ""}`);
   }
 
   const inputId = variant === "hero" ? "domain-hero" : "domain-cta";

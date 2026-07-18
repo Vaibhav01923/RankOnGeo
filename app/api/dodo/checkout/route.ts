@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
   // cancelPath lets the caller send the user back to wherever they started
-  // checkout from (dashboard, landing pricing, the /audit tool) instead of
-  // always dumping them on /audit. Only accept a same-origin relative path.
+  // checkout from (dashboard, landing pricing, /setup) instead of always
+  // dumping them on /dashboard. Only accept a same-origin relative path.
   const safeCancelPath =
     typeof cancelPath === "string" && cancelPath.startsWith("/") && !cancelPath.startsWith("//") && !cancelPath.includes("://")
       ? cancelPath

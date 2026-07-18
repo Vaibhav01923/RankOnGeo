@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
+import { randomBytes } from "crypto";
 import { BrandData, TrackedPrompt } from "@/lib/types";
-import { clientFromRequest } from "@/lib/supabase";
+import { clientFromRequest, serverClient } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
 import { promptStrategy, enforceBrandCap } from "@/lib/prompt-strategy";
 import { PLAN_AUTO_GENERATED_PROMPTS, FREE_PROMPT_LIMIT, BRAND_LIMITS, FREE_BRAND_LIMIT, isLapsedSubscriber } from "@/lib/plan-limits";
@@ -188,8 +189,18 @@ ${content}`;
     return NextResponse.json({ error: "Failed to parse analysis. Try again." }, { status: 500 });
   }
 
+  // Anonymous visitors (no session yet) can't satisfy the brands RLS
+  // policies (`auth.uid() = user_id`), which never pass for a NULL user_id —
+  // route their writes through the service-role client instead, same as the
+  // team_invites/team_members claim flow. A random claim_token is stamped on
+  // the row and handed back as an httpOnly cookie so a later authenticated
+  // request (see /api/brand/claim) can attach this exact row once the
+  // visitor actually signs up.
+  const writeDb = userId ? db : serverClient();
+  const claimToken = userId ? null : randomBytes(32).toString("base64url");
+
   // Upsert brand — conflict on (domain, user_id) so each user can track the same domain independently
-  const { data: brandRow, error: brandErr } = await db
+  const { data: brandRow, error: brandErr } = await writeDb
     .from("brands")
     .upsert(
       {
@@ -200,6 +211,7 @@ ${content}`;
         target_audience: extracted.targetAudience,
         competitors: extracted.competitors,
         user_id: userId,
+        ...(claimToken ? { claim_token: claimToken } : {}),
       },
       { onConflict: "domain,user_id" }
     )
@@ -213,9 +225,9 @@ ${content}`;
   // Never silently wipe an already-onboarded brand's tracked prompts (and
   // orphan their scan history) just because /setup got re-triggered for a
   // domain the user already tracks — this page auto-analyzes on load from a
-  // ?domain= link (e.g. from /audit), with no confirmation step, so revisiting
-  // it for an existing brand must be a safe no-op on prompts, not a reset.
-  const { count: existingPromptCount } = await db
+  // ?domain= link, with no confirmation step, so revisiting it for an
+  // existing brand must be a safe no-op on prompts, not a reset.
+  const { count: existingPromptCount } = await writeDb
     .from("tracked_prompts")
     .select("id", { count: "exact", head: true })
     .eq("brand_id", brandRow.id);
@@ -223,7 +235,7 @@ ${content}`;
   let trackedPrompts: TrackedPrompt[];
 
   if (existingPromptCount && existingPromptCount > 0) {
-    const { data: existing } = await db
+    const { data: existing } = await writeDb
       .from("tracked_prompts")
       .select("id, text, category")
       .eq("brand_id", brandRow.id);
@@ -237,7 +249,7 @@ ${content}`;
       text: p.text,
       category: p.category,
     }));
-    const { data: savedPrompts } = await db
+    const { data: savedPrompts } = await writeDb
       .from("tracked_prompts")
       .insert(promptRows)
       .select();
@@ -250,5 +262,15 @@ ${content}`;
     id: brandRow.id,
     trackedPrompts,
   };
-  return NextResponse.json(brandData);
+  const res = NextResponse.json(brandData);
+  if (claimToken) {
+    res.cookies.set("pending_brand_claim", claimToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24, // 24h — long enough to survive an email-confirmation detour
+    });
+  }
+  return res;
 }

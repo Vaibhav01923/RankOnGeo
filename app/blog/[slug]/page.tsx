@@ -153,7 +153,7 @@ export default async function BlogPostPage({ params }: Props) {
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
           <Link
-            href="/audit"
+            href="/setup"
             className="inline-block rounded-full bg-[var(--rust)] px-5 py-2 text-sm font-semibold text-[var(--surface)] transition-colors hover:bg-[var(--rust-deep)]"
           >
             Get your free audit

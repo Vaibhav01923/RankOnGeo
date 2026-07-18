@@ -32,7 +32,12 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const protectedPaths = ["/dashboard", "/article", "/setup", "/admin"];
+  // /setup is deliberately NOT gated here: it now doubles as the anonymous
+  // preview flow the landing page's domain input sends visitors into (crawl
+  // + brand review + prompts run without an account; the wizard itself
+  // gates account creation at its final step). app/setup/page.tsx and
+  // app/api/setup/route.ts both already handle the anonymous case.
+  const protectedPaths = ["/dashboard", "/article", "/admin"];
 
   if (protectedPaths.some((p) => pathname.startsWith(p)) && !user) {
     const url = request.nextUrl.clone();

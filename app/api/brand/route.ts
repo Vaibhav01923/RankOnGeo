@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { applyBrandEdits } from "@/lib/brand-save";
 
 export async function PUT(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -13,35 +14,8 @@ export async function PUT(req: NextRequest) {
   const access = await requireBrandAccess(db, user.id, id);
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
-  const { error: brandErr } = await db
-    .from("brands")
-    .update({ name, niche, competitors, target_audience: targetAudience })
-    .eq("id", id);
-
-  if (brandErr) return NextResponse.json({ error: brandErr.message }, { status: 500 });
-
-  // Reconcile rather than blindly delete-and-replace: prompts the user is
-  // keeping must keep their real row (and its scan history/cadence state)
-  // instead of being recreated with a new id — otherwise confirming this
-  // screen for an already-tracked brand would silently orphan everything.
-  if (Array.isArray(prompts)) {
-    const incoming = prompts as { id?: string; text: string; category: string }[];
-    const { data: existingRows } = await db.from("tracked_prompts").select("id").eq("brand_id", id);
-    const existingIds = new Set((existingRows ?? []).map((r) => r.id as string));
-
-    const keptIds = new Set(incoming.map((p) => p.id).filter((pid): pid is string => !!pid && existingIds.has(pid)));
-    const toRemove = [...existingIds].filter((eid) => !keptIds.has(eid));
-    if (toRemove.length > 0) {
-      await db.from("tracked_prompts").delete().in("id", toRemove);
-    }
-
-    const toInsert = incoming.filter((p) => !p.id || !existingIds.has(p.id));
-    if (toInsert.length > 0) {
-      await db.from("tracked_prompts").insert(
-        toInsert.map((p) => ({ brand_id: id, text: p.text, category: p.category }))
-      );
-    }
-  }
+  const { error } = await applyBrandEdits(db, id, { name, niche, competitors, targetAudience, prompts });
+  if (error) return NextResponse.json({ error }, { status: 500 });
 
   return NextResponse.json({ success: true });
 }

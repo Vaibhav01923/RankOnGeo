@@ -6,6 +6,8 @@ import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
+import { AuthForm } from "../_components/AuthForm";
+import { stashPendingBrandEdits, claimPendingBrand } from "@/lib/pending-brand";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -52,7 +54,8 @@ function SetupContent() {
     if (d) {
       setDomain(d);
       if (c) setCompetitors(c.split(",").map((s) => s.trim()).filter(Boolean));
-      // Auto-trigger analysis when arriving from audit page
+      // Auto-trigger analysis when arriving with a domain already in hand
+      // (e.g. from the landing page's hero input)
       triggerAnalyze(d, c ? c.split(",").map((s) => s.trim()).filter(Boolean) : []);
     }
   }, []);
@@ -72,6 +75,7 @@ function SetupContent() {
   const [newPrompt, setNewPrompt] = useState("");
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showSignupGate, setShowSignupGate] = useState(false);
   const addPromptRef = useRef<HTMLDivElement>(null);
 
   // Draw attention to the "add your own" slot as soon as the generated
@@ -164,23 +168,48 @@ function SetupContent() {
     setNewPrompt("");
   }
 
+  function currentEdits() {
+    return {
+      name: editedName || brand?.name || "",
+      niche: editedNiche || brand?.niche || "",
+      competitors: editedCompetitors,
+      targetAudience: editedAudience,
+      prompts: prompts.filter((p) => !deselectedIds.has(p.id)).map((p) => ({ id: p.id, text: p.text, category: p.category })),
+    };
+  }
+
   async function handleStart() {
     if (!brand?.id) return;
+    const { data: { user } } = await createSupabaseBrowserClient().auth.getUser();
+
+    if (user) {
+      setSaving(true);
+      await fetch("/api/brand", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: brand.id, ...currentEdits() }),
+      });
+      setSaving(false);
+      router.push(`/dashboard?brandId=${brand.id}`);
+      return;
+    }
+
+    // No account yet — the anonymous brand row created by /api/setup can't
+    // be saved to (RLS blocks it) or read back from a dashboard that
+    // requires auth. Stash the edits and gate on signup right here instead
+    // of navigating away; /api/brand/claim attaches this exact row (via the
+    // pending_brand_claim cookie /api/setup already set) the moment a
+    // session exists.
+    stashPendingBrandEdits(currentEdits());
+    setShowSignupGate(true);
+  }
+
+  async function handleSignedIn() {
     setSaving(true);
-    await fetch("/api/brand", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: brand.id,
-        name: editedName || brand.name,
-        niche: editedNiche || brand.niche,
-        competitors: editedCompetitors,
-        targetAudience: editedAudience,
-        prompts: prompts.filter((p) => !deselectedIds.has(p.id)).map((p) => ({ id: p.id, text: p.text, category: p.category })),
-      }),
-    });
+    const result = await claimPendingBrand();
     setSaving(false);
-    router.push(`/dashboard?brandId=${brand.id}`);
+    const brandId = result.claimed ? result.brandId : result.existingBrandId;
+    router.push(brandId ? `/dashboard?brandId=${brandId}` : "/dashboard");
   }
 
   return (
@@ -458,32 +487,62 @@ function SetupContent() {
               );
             })()}
 
-            <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
-              <p className="text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Prompt Tips</p>
-              <ul className="space-y-1 text-xs text-[var(--ink-faint)]">
-                <li>· Focus on questions your customers actually ask</li>
-                <li>· Include your product category or service type</li>
-                <li>· Avoid overly specific or branded terms</li>
-              </ul>
-            </div>
+            {showSignupGate ? (
+              <div>
+                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-1">Create your account to generate your report</p>
+                  <p className="text-xs text-[var(--ink-soft)]">
+                    Free — no credit card. Your brand snapshot and prompts above are saved and will be there the
+                    moment you&apos;re signed in.
+                  </p>
+                </div>
+                {saving ? (
+                  <div className="flex items-center justify-center py-4 gap-3 text-sm text-[var(--ink-soft)]">
+                    <span className="w-4 h-4 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
+                    Saving your report…
+                  </div>
+                ) : (
+                  <AuthForm mode="signup" onSignedIn={handleSignedIn} />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowSignupGate(false)}
+                  disabled={saving}
+                  className="mt-4 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-50"
+                >
+                  ← Back to prompts
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
+                  <p className="text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Prompt Tips</p>
+                  <ul className="space-y-1 text-xs text-[var(--ink-faint)]">
+                    <li>· Focus on questions your customers actually ask</li>
+                    <li>· Include your product category or service type</li>
+                    <li>· Avoid overly specific or branded terms</li>
+                  </ul>
+                </div>
 
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStep("brand")}
-                disabled={saving}
-                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={handleStart}
-                disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
-                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
-              >
-                {saving ? "Saving…" : "Generate report"}
-              </button>
-            </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep("brand")}
+                    disabled={saving}
+                    className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    onClick={handleStart}
+                    disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
+                    className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {saving ? "Saving…" : "Generate report"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>

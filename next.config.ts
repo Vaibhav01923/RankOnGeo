@@ -35,6 +35,9 @@ const nextConfig: NextConfig = {
     return [
       { source: "/blogs", destination: "/blog", permanent: true },
       { source: "/blogs/:slug", destination: "/blog/:slug", permanent: true },
+      // /audit was a mocked teaser page — the landing page's domain input
+      // now goes straight into the real /setup wizard instead.
+      { source: "/audit", destination: "/", permanent: true },
       {
         source: "/blog/profound-alternatives-that-actually-compete-in-geo-and-how-we-put-rankongeo-1",
         destination: "/blog/profound-alternatives-geo-tools-compared",

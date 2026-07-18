@@ -76,7 +76,7 @@ export default async function BlogIndexPage() {
           <p className="font-signal-serif text-2xl text-[var(--ink)]">First posts are growing.</p>
           <p className="mt-2 text-sm text-[var(--ink-soft)]">
             Check back soon — or get a{" "}
-            <Link href="/audit" className="text-[var(--rust)] underline underline-offset-2">
+            <Link href="/setup" className="text-[var(--rust)] underline underline-offset-2">
               free AI visibility audit
             </Link>{" "}
             in the meantime.

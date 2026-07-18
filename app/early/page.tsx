@@ -161,7 +161,7 @@ export default function EarlyAccessPage() {
           <div className="flex gap-5">
             <Link href="/" className="rounded transition-colors hover:text-[var(--rust)]">Home</Link>
             <Link href="/blog" className="rounded transition-colors hover:text-[var(--rust)]">Blog</Link>
-            <Link href="/audit" className="rounded transition-colors hover:text-[var(--rust)]">Free visibility audit</Link>
+            <Link href="/setup" className="rounded transition-colors hover:text-[var(--rust)]">Free visibility audit</Link>
           </div>
         </div>
       </footer>

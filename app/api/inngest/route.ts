@@ -4,10 +4,11 @@ import { scheduledScanAll, scanBrand, manualScanBrand } from "@/inngest/function
 import { pollRedditOrders } from "@/inngest/functions/reddit-orders";
 import { reconcileDodoSubscriptions } from "@/inngest/functions/reconcile-subscriptions";
 import { meterAnalyticsUsage } from "@/inngest/functions/analytics-billing";
+import { cleanupAbandonedBrandDrafts } from "@/inngest/functions/cleanup";
 
 export const maxDuration = 300;
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scheduledScanAll, scanBrand, manualScanBrand, pollRedditOrders, reconcileDodoSubscriptions, meterAnalyticsUsage],
+  functions: [scheduledScanAll, scanBrand, manualScanBrand, pollRedditOrders, reconcileDodoSubscriptions, meterAnalyticsUsage, cleanupAbandonedBrandDrafts],
 });

@@ -602,7 +602,7 @@ export default function LandingPage() {
             <div className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-faint)]">Resources</div>
             <div className="space-y-2.5">
               {(
-                [["Free visibility audit", "/audit", true], ["Book a 15-min demo", DEMO_CALL_URL, false], ["Methodology", "#", false], ["GEO playbook", "#", false]] as [string, string, boolean][]
+                [["Free visibility audit", "/setup", true], ["Book a 15-min demo", DEMO_CALL_URL, false], ["Methodology", "#", false], ["GEO playbook", "#", false]] as [string, string, boolean][]
               ).map(([l, href, free]) => (
                 <a
                   key={l}

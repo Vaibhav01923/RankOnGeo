@@ -35,7 +35,7 @@ REDDIT ENGAGEMENT: paid credits buy real engagement through a third-party delive
 
 Plans: Pro $49/mo (solo founders), Business $99/mo (teams — most popular), Scale $149/mo (agencies & multi-brand portfolios), each with more tracked prompts, more websites, and more analytics volume at the higher tiers. Annual billing is 17% off. Early-access backers get a flat 50% off every plan at https://www.rankongeo.com/early.
 
-Free: the visibility audit at https://www.rankongeo.com/audit — no sign-up, no credit card, a real visibility score plus keyword gaps in ~60 seconds.
+Free: the visibility scan at https://www.rankongeo.com/setup — no credit card, a real brand snapshot plus keyword gaps in ~60 seconds (a free account is needed to see the live dashboard after).
 
 === END PRODUCT BRIEF ===`;
 
