@@ -888,6 +888,16 @@ function DashboardPage() {
   const [addingChannel, setAddingChannel] = useState(false);
   const [stackDescription, setStackDescription] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
+
+  // newChannel.type defaults to "webhook", so the type card is already
+  // active the first time the modal opens — its own onClick only generates
+  // a secret in response to an actual change, which never fires for the
+  // type that's already selected. Every "open the modal" call site should
+  // use this instead of setShowAddChannel(true) directly.
+  function openAddChannel() {
+    setNewChannel((p) => (p.type === "webhook" && !p.apiKey ? { ...p, apiKey: crypto.randomUUID() } : p));
+    setShowAddChannel(true);
+  }
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishArticleId, setPublishArticleId] = useState("");
   const [publishChannelId, setPublishChannelId] = useState("");
@@ -5060,12 +5070,12 @@ function DashboardPage() {
                 <div className="panel rounded-xl p-5 mb-4">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-sm font-semibold text-[var(--ink)]">Channels · {publishingChannels.length} connected</p>
-                    <button onClick={() => setShowAddChannel(true)} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:border-[var(--line)] transition-colors">+ Add channel</button>
+                    <button onClick={openAddChannel} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:border-[var(--line)] transition-colors">+ Add channel</button>
                   </div>
                   {publishingChannels.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-sm text-[var(--ink-faint)] mb-3">No channels yet</p>
-                      <button onClick={() => setShowAddChannel(true)} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add your first channel →</button>
+                      <button onClick={openAddChannel} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add your first channel →</button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -6102,7 +6112,7 @@ Body: {
                   <div>
                     <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">Channel</label>
                     {publishingChannels.length === 0 ? (
-                      <p className="text-xs text-[var(--ink-faint)]">No channels — <button onClick={() => { setShowPublishModal(false); setShowAddChannel(true); }} className="text-red-700 underline">add one first</button></p>
+                      <p className="text-xs text-[var(--ink-faint)]">No channels — <button onClick={() => { setShowPublishModal(false); openAddChannel(); }} className="text-red-700 underline">add one first</button></p>
                     ) : (
                       <select value={publishChannelId} onChange={(e) => setPublishChannelId(e.target.value)} className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40">
                         <option value="">Select channel…</option>
