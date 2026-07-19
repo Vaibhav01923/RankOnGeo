@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     promptId: r.prompt_id,
     promptText: r.prompt_text,
     engine: r.engine,
-    response: redact ? null : r.response,
+    response: redact ? "" : r.response,
     brandMentioned: redact ? false : r.brand_mentioned,
     brandRank: redact ? null : r.brand_rank,
     competitorMentions: redact ? [] : (r.competitor_mentions ?? []),
