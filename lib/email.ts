@@ -60,6 +60,27 @@ export function teamInviteEmailHtml(inviterEmail: string, acceptUrl: string): st
 </div>`;
 }
 
+export function verificationEmailHtml(verifyUrl: string): string {
+  return `
+<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Georgia,serif;color:#302821;background:#f6f2e9;">
+  <div style="font-size:22px;font-weight:700;margin-bottom:24px;">RankOnGeo</div>
+  <h1 style="font-size:28px;font-weight:400;line-height:1.25;margin:0 0 16px;">Confirm your email</h1>
+  <p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 14px;">
+    Your account is already active — no need to wait on this to start using RankOnGeo.
+    Confirming just lets us know this address is really yours, so you don't miss anything
+    important later (billing receipts, password resets, alerts).
+  </p>
+  <a href="${verifyUrl}"
+     style="display:inline-block;margin:10px 0 22px;padding:12px 26px;background:#b1552e;color:#fffdf8;border-radius:999px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;text-decoration:none;">
+    Confirm my email
+  </a>
+  <p style="font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6f6257;margin:0;">
+    This link expires in 24 hours. If you didn't create a RankOnGeo account, you can ignore this email.
+    <br/>— The RankOnGeo team
+  </p>
+</div>`;
+}
+
 export function earlyWaitlistEmailHtml(plan: string): string {
   const planNames: Record<string, string> = { starter: "Pro", growth: "Business", enterprise: "Scale" };
   const planName = planNames[plan] ?? plan;

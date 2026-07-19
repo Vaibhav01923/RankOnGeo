@@ -666,6 +666,9 @@ function DashboardPage() {
   const [isLapsed, setIsLapsed] = useState(false);
   const [graceDaysLeft, setGraceDaysLeft] = useState<number | null>(null);
   const [creditsLoaded, setCreditsLoaded] = useState(false);
+  const [emailVerifiedAt, setEmailVerifiedAt] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verifyFlash, setVerifyFlash] = useState<"verified" | "expired" | null>(null);
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
@@ -905,6 +908,12 @@ function DashboardPage() {
     setNewChannel((p) => (p.type === "webhook" && !p.apiKey ? { ...p, apiKey: crypto.randomUUID() } : p));
     setShowAddChannel(true);
   }
+
+  async function resendVerificationEmail() {
+    setResendingVerification(true);
+    await fetch("/api/verify-email/send", { method: "POST" }).catch(() => {});
+    setResendingVerification(false);
+  }
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishArticleId, setPublishArticleId] = useState("");
   const [publishChannelId, setPublishChannelId] = useState("");
@@ -967,9 +976,19 @@ function DashboardPage() {
         setIsFreeTier(!!d.isFree);
         setIsLapsed(!!d.isLapsed);
         setGraceDaysLeft(typeof d.graceDaysLeft === "number" ? d.graceDaysLeft : null);
+        setEmailVerifiedAt(d.emailVerifiedAt ?? null);
         setCreditsLoaded(true);
         return d;
       });
+
+    if (searchParams.get("verified") === "1" || searchParams.get("verify_expired") === "1") {
+      setVerifyFlash(searchParams.get("verified") === "1" ? "verified" : "expired");
+      const params = new URLSearchParams(window.location.search);
+      params.delete("verified");
+      params.delete("verify_expired");
+      const qs = params.toString();
+      router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
+    }
 
     fetchCredits().then((d) => {
       // Dodo's webhook that activates the plan has repeatedly failed to arrive
@@ -2187,6 +2206,31 @@ function DashboardPage() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {verifyFlash === "verified" && (
+          <div className="bg-[var(--olive-wash)] border-b border-[var(--olive)]/25 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
+            <span className="text-[var(--olive)] font-medium">Email verified — thanks!</span>
+            <button onClick={() => setVerifyFlash(null)} className="text-[var(--olive)]/70 hover:text-[var(--olive)] shrink-0">×</button>
+          </div>
+        )}
+        {verifyFlash === "expired" && (
+          <div className="bg-[var(--rust-wash)] border-b border-[var(--rust)]/25 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
+            <span className="text-[var(--rust-deep)]">That verification link expired.</span>
+            <div className="flex items-center gap-3 shrink-0">
+              <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--rust-deep)] underline underline-offset-2 disabled:opacity-50">
+                {resendingVerification ? "Sending…" : "Resend"}
+              </button>
+              <button onClick={() => setVerifyFlash(null)} className="text-[var(--rust-deep)]/70 hover:text-[var(--rust-deep)]">×</button>
+            </div>
+          </div>
+        )}
+        {!verifyFlash && !emailVerifiedAt && (
+          <div className="bg-[var(--line-soft)] border-b border-[var(--line)] px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
+            <span className="text-[var(--ink-soft)]">Verify your email — check your inbox for a confirmation link. Everything works in the meantime.</span>
+            <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--ink)]/80 underline underline-offset-2 shrink-0 whitespace-nowrap disabled:opacity-50">
+              {resendingVerification ? "Sending…" : "Resend email"}
+            </button>
+          </div>
+        )}
         {graceDaysLeft !== null && (
           <div className="bg-[var(--rust-wash)] border-b border-[var(--rust)]/25 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
             <span className="text-[var(--rust-deep)]">

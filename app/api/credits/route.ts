@@ -34,6 +34,12 @@ export async function GET(req: NextRequest) {
     .eq("user_id", planUserId)
     .single();
 
+  // Email verification is a per-account identity thing, not a per-workspace
+  // one — always the signed-in user's own status, not the brand owner's
+  // (which planUserId would otherwise resolve to for a team member).
+  const { data: ownPlan } = await db.from("user_plans").select("email_verified_at").eq("user_id", user.id).maybeSingle();
+  const emailVerifiedAt = ownPlan?.email_verified_at ?? null;
+
   // isFree is the one true "actively paying?" signal used for feature gating —
   // a row can exist (and dodo_customer_id can be set) for a cancelled
   // subscriber, but dodo_subscription_id is cleared on cancel/expiry.
@@ -44,16 +50,16 @@ export async function GET(req: NextRequest) {
   const graceDaysLeft = gracePeriodDaysLeft(userPlan);
 
   if (!userPlan?.dodo_customer_id) {
-    return NextResponse.json({ plan: null, balance: 0, isFree, canPurchase, isLapsed, graceDaysLeft });
+    return NextResponse.json({ plan: null, balance: 0, isFree, canPurchase, isLapsed, graceDaysLeft, emailVerifiedAt });
   }
 
   try {
     const balance = await getDodo().creditEntitlements.balances.retrieve(userPlan.dodo_customer_id, {
       credit_entitlement_id: process.env.DODO_CREDIT_ENTITLEMENT_ID!,
     });
-    return NextResponse.json({ plan: userPlan.plan, balance: Number(balance.balance), isFree, canPurchase, isLapsed, graceDaysLeft });
+    return NextResponse.json({ plan: userPlan.plan, balance: Number(balance.balance), isFree, canPurchase, isLapsed, graceDaysLeft, emailVerifiedAt });
   } catch {
     // No balance record yet (e.g. customer hasn't received a grant)
-    return NextResponse.json({ plan: userPlan.plan, balance: 0, isFree, canPurchase, isLapsed, graceDaysLeft });
+    return NextResponse.json({ plan: userPlan.plan, balance: 0, isFree, canPurchase, isLapsed, graceDaysLeft, emailVerifiedAt });
   }
 }

@@ -42,6 +42,10 @@ export function AuthForm({
         setError("An account with this email already exists.");
         onModeChange?.("signin");
       } else if (data.session && data.user) {
+        // Fire-and-forget — a real verification email, decoupled from
+        // Supabase's own confirm-gate (which, disabled, auto-confirms
+        // everyone with no email round-trip at all). Doesn't block signup.
+        fetch("/api/verify-email/send", { method: "POST" }).catch(() => {});
         onSignedIn(data.user);
       } else {
         setMessage("Check your email to confirm your account, then sign in.");
