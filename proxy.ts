@@ -46,8 +46,20 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(url);
   }
 
+  // An already-signed-in visitor hitting /auth (e.g. clicking "Login" out of
+  // habit, or one of the several ?redirect=-carrying links elsewhere in the
+  // app — /settings, /invite, /article, PricingCards) should land wherever
+  // they were headed, not get bounced into onboarding. Mirrors the redirect
+  // app/auth/page.tsx's own client-side effect already computes — that code
+  // never got to run because this unconditional /setup redirect fired first.
   if (pathname === "/auth" && user) {
-    return NextResponse.redirect(new URL("/setup", request.url));
+    const redirectParam = request.nextUrl.searchParams.get("redirect");
+    // Must be a same-origin relative path — a bare "/" prefix only, not
+    // "//evil.com" (protocol-relative) or an absolute URL, either of which
+    // NextResponse.redirect would happily follow off-site since the param
+    // comes straight from the query string.
+    const target = redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : "/dashboard";
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
   // Track AI crawler/bot traffic against our own site — GPTBot, ClaudeBot,

@@ -28,7 +28,11 @@ const ibmPlexMono = IBM_Plex_Mono({
 function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/dashboard";
+  // Must be a same-origin relative path, not "//evil.com" or an absolute
+  // URL — the param comes straight from the query string (mirrors the same
+  // guard in proxy.ts, which handles the already-signed-in case server-side).
+  const redirectParam = searchParams.get("redirect");
+  const redirect = redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : "/dashboard";
 
   const [mode, setMode] = useState<"signin" | "signup">(searchParams.get("mode") === "signin" ? "signin" : "signup");
 

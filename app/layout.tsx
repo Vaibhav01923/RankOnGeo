@@ -3,6 +3,7 @@ import { Fraunces, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { SelfAnalytics } from "./_components/SelfAnalytics";
 import { ClaimPendingBrand } from "./_components/ClaimPendingBrand";
+import { AuthErrorNotice } from "./_components/AuthErrorNotice";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -82,6 +83,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">{children}</body>
       <SelfAnalytics />
       <ClaimPendingBrand />
+      <AuthErrorNotice />
     </html>
   );
 }
