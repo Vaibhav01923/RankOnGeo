@@ -46,6 +46,14 @@ function ArticleContent() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Cover image
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageBusy, setImageBusy] = useState<"upload" | "generate" | null>(null);
+  const [imageError, setImageError] = useState("");
+  const imageFileRef = useRef<HTMLInputElement>(null);
+
   // Edit mode
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState("");
@@ -116,7 +124,7 @@ function ArticleContent() {
           fetch("/api/articles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ brandId, title: data.title, content: data.article, keyword: gapPrompt, status: "draft", wordCount: data.wordCount }),
+            body: JSON.stringify({ brandId, title: data.title, content: data.article, keyword: gapPrompt, status: "draft", wordCount: data.wordCount, description: data.description, tags: data.tags }),
           })
             .then((r) => r.json())
             .then((d) => {
@@ -139,6 +147,58 @@ function ArticleContent() {
     navigator.clipboard.writeText(article);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function persistImage(url: string) {
+    setImageUrl(url);
+    setImageUrlDraft("");
+    if (articleId) {
+      await fetch(`/api/articles/${articleId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: url }),
+      }).catch(() => {});
+    }
+  }
+
+  async function uploadCoverImage(file: File) {
+    if (!brandId) return;
+    setImageBusy("upload");
+    setImageError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("brandId", brandId);
+      const res = await fetch("/api/articles/upload-image", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      await persistImage(data.imageUrl);
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setImageBusy(null);
+    }
+  }
+
+  async function generateCoverImage() {
+    if (!brandId || !title.trim()) return;
+    setImageBusy("generate");
+    setImageError("");
+    try {
+      const res = await fetch("/api/articles/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId, title, prompt: imagePrompt.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Image generation failed");
+      setImagePrompt(data.prompt);
+      await persistImage(data.imageUrl);
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : "Image generation failed");
+    } finally {
+      setImageBusy(null);
+    }
   }
 
   function enterEditMode() {
@@ -310,6 +370,70 @@ function ArticleContent() {
 
         {article && !loading && (
           <div>
+            {!editMode && (
+              <div className="mb-6">
+                {imageUrl ? (
+                  <div className="relative group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageUrl} alt="" className="w-full aspect-[21/9] object-cover rounded-2xl border border-[var(--line)]" />
+                    <button
+                      onClick={() => persistImage("")}
+                      className="absolute top-3 right-3 text-xs font-medium bg-[var(--surface)]/90 border border-[var(--line)] px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600"
+                    >
+                      Remove image
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-[var(--line)] rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-[var(--ink-soft)] mb-3">Add a cover image (optional)</p>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <input
+                        value={imageUrlDraft}
+                        onChange={(e) => setImageUrlDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && imageUrlDraft.trim()) persistImage(imageUrlDraft.trim()); }}
+                        placeholder="Paste an image URL…"
+                        className="flex-1 min-w-[180px] border border-[var(--line)] bg-[var(--surface)] rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rust)]/40"
+                      />
+                      <input
+                        ref={imageFileRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (file) uploadCoverImage(file);
+                        }}
+                      />
+                      <button
+                        onClick={() => imageFileRef.current?.click()}
+                        disabled={imageBusy === "upload"}
+                        className="text-xs font-medium border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--line-soft)] transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        {imageBusy === "upload" ? "Uploading…" : "Upload"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={imagePrompt}
+                        onChange={(e) => setImagePrompt(e.target.value)}
+                        placeholder='AI prompt (blank = "Generate a thumbnail for this blog post: <title>")'
+                        className="flex-1 min-w-[180px] border border-[var(--line)] bg-[var(--surface)] rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rust)]/40"
+                      />
+                      <button
+                        onClick={generateCoverImage}
+                        disabled={imageBusy === "generate"}
+                        className="text-xs font-medium border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--line-soft)] transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        {imageBusy === "generate" ? "Generating…" : "✨ Generate"}
+                      </button>
+                    </div>
+                    {imageError && <p className="text-xs text-red-700 mt-2">{imageError}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mb-8">
               {editMode ? (
                 <input

@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
           title: article.title,
           content: article.content,
           keyword: article.keyword,
+          // Optional — receivers built before these existed can ignore them.
+          description: article.description ?? "",
+          tags: Array.isArray(article.tags) ? article.tags : [],
+          image_url: article.image_url ?? "",
           status: "publish",
           source: "rankongeo",
         }),

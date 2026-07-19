@@ -41,7 +41,17 @@ export async function POST(req: NextRequest) {
   if (!title || !content) {
     return NextResponse.json({ error: "title and content are required" }, { status: 400 });
   }
-  const keyword = typeof body?.keyword === "string" ? body.keyword.trim() : "";
+
+  // tags/description/image_url are optional fields added after this route's
+  // first version, which fell back to using the raw gap-query `keyword` as a
+  // "tag" — for gap articles that's the same text as the title, so it showed
+  // up as a nonsensical full-sentence tag on the blog. Real tags (or nothing)
+  // beat that; never fall back to keyword here again.
+  const tags = Array.isArray(body?.tags) ? body.tags.filter((t: unknown) => typeof t === "string" && t.trim()) : [];
+  const description = typeof body?.description === "string" && body.description.trim()
+    ? body.description.trim()
+    : excerptFromMarkdown(content);
+  const imageUrl = typeof body?.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null;
 
   const baseSlug = slugify(title);
   if (!baseSlug) return NextResponse.json({ error: "slug could not be derived from title" }, { status: 400 });
@@ -53,9 +63,10 @@ export async function POST(req: NextRequest) {
       .insert({
         title,
         slug,
-        description: excerptFromMarkdown(content),
+        description,
         content,
-        tags: keyword ? [keyword] : [],
+        tags,
+        cover_image_url: imageUrl,
         author_name: "RankOnGeo Team",
         status: "published",
         published_at: new Date().toISOString(),

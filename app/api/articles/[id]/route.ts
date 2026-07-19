@@ -30,6 +30,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.content !== undefined) updates.content = body.content;
   if (body.title !== undefined) updates.title = body.title;
   if (body.seoScore !== undefined) updates.seo_score = body.seoScore;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
+  if (body.imageUrl !== undefined) updates.image_url = body.imageUrl;
 
   const { data, error } = await db
     .from("articles")

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { brandId, title, content, keyword, status, seoScore, wordCount } = await req.json();
+  const { brandId, title, content, keyword, status, seoScore, wordCount, description, tags, imageUrl } = await req.json();
   if (!brandId || !title) return NextResponse.json({ error: "brandId and title required" }, { status: 400 });
 
   const access = await requireBrandAccess(db, user.id, brandId);
@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
       status: status ?? "draft",
       seo_score: seoScore ?? 0,
       word_count: wordCount ?? 0,
+      description: description ?? null,
+      tags: Array.isArray(tags) ? tags : [],
+      image_url: imageUrl ?? null,
     })
     .select()
     .single();

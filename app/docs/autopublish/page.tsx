@@ -14,6 +14,9 @@ RankOnGeo will POST to an endpoint I create whenever a new article is ready. Ple
      "title": string,       // article headline
      "content": string,     // full article body, as Markdown
      "keyword": string,     // the target SEO keyword this article targets
+     "description": string, // optional — SEO meta description, may be empty
+     "tags": string[],      // optional — topic tags, may be empty
+     "image_url": string,   // optional — cover image URL, may be empty
      "status": "publish",
      "source": "rankongeo"
    }
@@ -43,6 +46,9 @@ Content-Type: application/json
   "title": "string — article headline",
   "content": "string — full article body, as Markdown",
   "keyword": "string — the target SEO keyword",
+  "description": "string — optional, may be empty",
+  "tags": "string[] — optional, may be empty",
+  "image_url": "string — optional, may be empty",
   "status": "publish",
   "source": "rankongeo"
 }`;

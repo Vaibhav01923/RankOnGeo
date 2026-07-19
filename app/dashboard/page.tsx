@@ -532,6 +532,9 @@ RankOnGeo will POST to an endpoint I create whenever a new article is ready. Ple
      "title": string,       // article headline
      "content": string,     // full article body, as Markdown
      "keyword": string,     // the target SEO keyword this article targets
+     "description": string, // optional — SEO meta description, may be empty
+     "tags": string[],      // optional — topic tags, may be empty
+     "image_url": string,   // optional — cover image URL, may be empty
      "status": "publish",
      "source": "rankongeo"
    }
@@ -6030,8 +6033,11 @@ function DashboardPage() {
 Header: X-RankOnGeo-Secret: ${newChannel.apiKey || "<secret>"}
 Body: {
   "title": string,
-  "content": string,   // Markdown
+  "content": string,     // Markdown
   "keyword": string,
+  "description": string, // optional
+  "tags": string[],      // optional
+  "image_url": string,   // optional
   "status": "publish",
   "source": "rankongeo"
 }`}</pre>
