@@ -36,11 +36,26 @@ export function AuthForm({
 
     if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
+      // Supabase signals "this email already has an account" two different
+      // ways depending on project config: a direct error, or (when leaked-
+      // password/enumeration protection is on) a 200 with an empty
+      // identities array. Either way, the common case is a returning user
+      // who hit "Create account" by habit — try signing them in with
+      // exactly what they just typed before ever bothering them with an
+      // error, instead of making them retype it after a mode switch.
+      const alreadyRegistered =
+        error?.message === "User already registered" ||
+        (data?.user && data.user.identities && data.user.identities.length === 0);
+      if (alreadyRegistered) {
+        const { data: signInData } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInData.user) {
+          onSignedIn(signInData.user);
+        } else {
+          setError("An account with this email already exists.");
+          onModeChange?.("signin");
+        }
+      } else if (error) {
         setError(error.message);
-      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError("An account with this email already exists.");
-        onModeChange?.("signin");
       } else if (data.session && data.user) {
         // Fire-and-forget — a real verification email, decoupled from
         // Supabase's own confirm-gate (which, disabled, auto-confirms
