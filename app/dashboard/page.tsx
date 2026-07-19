@@ -163,6 +163,12 @@ const TAB_LABELS: Record<Tab, string> = {
   feedback: "Feedback",
 };
 
+const EXPLORE_CHECKLIST_ITEMS: { tab: Tab; label: string; desc: string }[] = [
+  { tab: "citations", label: "Citations", desc: "Which sites AI engines quote instead of you" },
+  { tab: "gaps", label: "Research", desc: "Exact queries where you're invisible right now" },
+  { tab: "tasks", label: "Tasks", desc: "Turn a gap into engagement, one click at a time" },
+];
+
 type BotBreakdown = { botName: string; count: number };
 type NamedCount = { label: string; count: number };
 type WebAnalyticsData = {
@@ -668,6 +674,7 @@ function DashboardPage() {
   const [creditsLoaded, setCreditsLoaded] = useState(false);
   const [emailVerifiedAt, setEmailVerifiedAt] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendEmailResult, setResendEmailResult] = useState<"sent" | "failed" | null>(null);
   const [verifyFlash, setVerifyFlash] = useState<"verified" | "expired" | null>(null);
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
@@ -824,6 +831,12 @@ function DashboardPage() {
   const [showCitationOnboarding, setShowCitationOnboarding] = useState(false);
   const [citationOnboardingStep, setCitationOnboardingStep] = useState(0);
   const [dontShowCitationsOnboarding, setDontShowCitationsOnboarding] = useState(false);
+  // "See what else we found" checklist on Overview — nudges free-tier users
+  // past the single blurred score into the other paywalled surfaces
+  // (Citations/Research/Tasks) so they see the full breadth of what's locked
+  // before bouncing off Overview alone.
+  const [visitedExploreTabs, setVisitedExploreTabs] = useState<Tab[]>([]);
+  const [exploreCardDismissed, setExploreCardDismissed] = useState(false);
   const [citationSearch, setCitationSearch] = useState("");
   const [citationTypeFilter, setCitationTypeFilter] = useState("All");
   const [citationPromptFilter, setCitationPromptFilter] = useState("All");
@@ -911,7 +924,14 @@ function DashboardPage() {
 
   async function resendVerificationEmail() {
     setResendingVerification(true);
-    await fetch("/api/verify-email/send", { method: "POST" }).catch(() => {});
+    setResendEmailResult(null);
+    try {
+      const res = await fetch("/api/verify-email/send", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      setResendEmailResult(d.sent ? "sent" : "failed");
+    } catch {
+      setResendEmailResult("failed");
+    }
     setResendingVerification(false);
   }
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -958,6 +978,12 @@ function DashboardPage() {
   useEffect(() => {
     const savedTab = sessionStorage.getItem("dashTab");
     if (savedTab) setActiveTab(savedTab as Tab);
+
+    try {
+      const visited = JSON.parse(localStorage.getItem("exploreChecklistVisited") ?? "[]");
+      if (Array.isArray(visited)) setVisitedExploreTabs(visited);
+    } catch {}
+    setExploreCardDismissed(localStorage.getItem("exploreChecklistDismissed") === "true");
 
     createSupabaseBrowserClient()
       .auth.getUser()
@@ -1630,6 +1656,19 @@ function DashboardPage() {
     setActiveTab(tab);
     setSidebarOpen(false);
     sessionStorage.setItem("dashTab", tab);
+    if (EXPLORE_CHECKLIST_ITEMS.some((i) => i.tab === tab)) {
+      setVisitedExploreTabs((prev) => {
+        if (prev.includes(tab)) return prev;
+        const next = [...prev, tab];
+        try { localStorage.setItem("exploreChecklistVisited", JSON.stringify(next)); } catch {}
+        return next;
+      });
+    }
+  }
+
+  function dismissExploreCard() {
+    setExploreCardDismissed(true);
+    try { localStorage.setItem("exploreChecklistDismissed", "true"); } catch {}
   }
 
   async function togglePromptStatus(p: { id: string; status?: string }) {
@@ -2216,9 +2255,14 @@ function DashboardPage() {
           <div className="bg-[var(--rust-wash)] border-b border-[var(--rust)]/25 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
             <span className="text-[var(--rust-deep)]">That verification link expired.</span>
             <div className="flex items-center gap-3 shrink-0">
-              <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--rust-deep)] underline underline-offset-2 disabled:opacity-50">
-                {resendingVerification ? "Sending…" : "Resend"}
-              </button>
+              {resendEmailResult === "sent" ? (
+                <span className="font-semibold text-[var(--rust-deep)]">Sent — check your inbox</span>
+              ) : (
+                <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--rust-deep)] underline underline-offset-2 disabled:opacity-50">
+                  {resendingVerification ? "Sending…" : "Resend"}
+                </button>
+              )}
+              {resendEmailResult === "failed" && <span className="text-[var(--rust-deep)]">Couldn&apos;t send — try again shortly</span>}
               <button onClick={() => setVerifyFlash(null)} className="text-[var(--rust-deep)]/70 hover:text-[var(--rust-deep)]">×</button>
             </div>
           </div>
@@ -2226,9 +2270,16 @@ function DashboardPage() {
         {!verifyFlash && !emailVerifiedAt && (
           <div className="bg-[var(--line-soft)] border-b border-[var(--line)] px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
             <span className="text-[var(--ink-soft)]">Verify your email — check your inbox for a confirmation link. Everything works in the meantime.</span>
-            <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--ink)]/80 underline underline-offset-2 shrink-0 whitespace-nowrap disabled:opacity-50">
-              {resendingVerification ? "Sending…" : "Resend email"}
-            </button>
+            <div className="flex items-center gap-3 shrink-0">
+              {resendEmailResult === "failed" && <span className="text-[var(--ink-faint)] whitespace-nowrap">Couldn&apos;t send — try again shortly</span>}
+              {resendEmailResult === "sent" ? (
+                <span className="font-semibold text-[var(--ink)]/80 whitespace-nowrap">Sent — check your inbox</span>
+              ) : (
+                <button onClick={resendVerificationEmail} disabled={resendingVerification} className="font-semibold text-[var(--ink)]/80 underline underline-offset-2 whitespace-nowrap disabled:opacity-50">
+                  {resendingVerification ? "Sending…" : "Resend email"}
+                </button>
+              )}
+            </div>
           </div>
         )}
         {graceDaysLeft !== null && (
@@ -2374,6 +2425,36 @@ function DashboardPage() {
                       )}
                     </div>
                   </div>
+
+                  {isFreeTier && !exploreCardDismissed && visitedExploreTabs.length < EXPLORE_CHECKLIST_ITEMS.length && (
+                    <div className="rounded-2xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] p-5 flex flex-col gap-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--rust-deep)]">There&apos;s more than a score here</p>
+                          <p className="text-xs text-[var(--ink-soft)] mt-0.5">Your scan turned up a few other things worth a look.</p>
+                        </div>
+                        <button onClick={dismissExploreCard} aria-label="Dismiss" className="text-[var(--rust-deep)]/60 hover:text-[var(--rust-deep)] shrink-0">✕</button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {EXPLORE_CHECKLIST_ITEMS.map((item) => {
+                          const done = visitedExploreTabs.includes(item.tab);
+                          return (
+                            <button
+                              key={item.tab}
+                              onClick={() => navTo(item.tab)}
+                              className={`text-left rounded-xl border p-4 transition-colors ${done ? "border-[var(--olive)]/30 bg-[var(--olive-wash)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--rust)]/30"}`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${done ? "bg-[var(--olive)] text-[var(--surface)]" : "border border-[var(--line)] text-transparent"}`}>✓</span>
+                                <span className="text-xs font-semibold text-[var(--ink)]">{item.label}</span>
+                              </div>
+                              <p className="text-[11px] text-[var(--ink-faint)] leading-snug">{item.desc}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-col items-center gap-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] p-7">
                     {(() => {
