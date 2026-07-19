@@ -2262,7 +2262,7 @@ function DashboardPage() {
             )}
             {activeTab === "publishing" && (
               <button onClick={() => { setPublishResult(null); setShowPublishModal(true); }} className="flex items-center gap-1.5 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] px-4 py-1.5 rounded-full text-sm font-semibold transition-colors">
-                ⚡ Publish now
+                Publish now
               </button>
             )}
             {activeTab === "agent" && (
@@ -4864,7 +4864,7 @@ function DashboardPage() {
                         onClick={() => { setPublishArticleId(selectedArticle.id); setPublishResult(null); setShowPublishModal(true); }}
                         className="w-full text-xs font-medium border border-[var(--line)] text-[var(--ink)]/80 rounded-lg py-2.5 hover:bg-[var(--line-soft)] transition-colors"
                       >
-                        ⚡ Publish now
+                        Publish now
                       </button>
                     )}
 
@@ -6015,7 +6015,7 @@ function DashboardPage() {
                     </div>
                     <div>
                       <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">Describe your site <span className="text-[var(--ink-faint)] font-normal">(optional — makes the prompt more accurate)</span></label>
-                      <input value={stackDescription} onChange={(e) => setStackDescription(e.target.value)} placeholder="e.g. Next.js blog, WordPress, Webflow CMS collection, custom Express app" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
+                      <input value={stackDescription} onChange={(e) => setStackDescription(e.target.value)} placeholder="e.g. Next.js blog, WordPress, Shopify" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
                     </div>
                     <button
                       type="button"
