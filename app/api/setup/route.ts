@@ -18,10 +18,19 @@ export const maxDuration = 120;
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// A self-identifying "bot" UA gets flat-out 403'd by ordinary WAF/bot-detection
+// (Cloudflare, Akamai, etc.) on plenty of real sites — confirmed against
+// moneycontrol.com, which blocks "SEOBot" but serves this one a normal 200.
+// This crawl is a one-time, low-volume fetch of a page the visitor themselves
+// asked us to analyze, not a persistent crawler, so impersonating a browser
+// here isn't the same ethical territory as a scraping bot masking at scale.
+const CRAWLER_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
 async function fetchPage(url: string): Promise<string> {
   try {
     const res = await safeFetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; SEOBot/1.0)" },
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return "";
@@ -39,7 +48,7 @@ async function crawlSite(domain: string): Promise<string> {
   const origin = new URL(base).origin;
 
   const homepageRes = await safeFetch(base, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; SEOBot/1.0)" },
+    headers: { "User-Agent": CRAWLER_USER_AGENT },
     signal: AbortSignal.timeout(8000),
   });
   if (!homepageRes.ok) throw new Error("Could not reach site");
