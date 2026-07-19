@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { requiresPaywall } from "@/lib/plan-limits";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
   // Verify the requester owns the brand or is a teammate of its owner
   const access = await requireBrandAccess(db, user.id, brandId);
   if (!access) return NextResponse.json({ runs: [] });
+  const redact = await requiresPaywall(db, access.ownerId);
 
   const { data: runs, error } = await db
     .from("scan_runs")
@@ -36,5 +38,16 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ runs: runs ?? [] });
+  const redacted = (runs ?? []).map((r) => ({
+    ...r,
+    overall_score: redact ? 0 : r.overall_score,
+    visibility_scores: (r.visibility_scores ?? []).map((s: Record<string, unknown>) => ({
+      ...s,
+      score: redact ? 0 : s.score,
+      mention_count: redact ? 0 : s.mention_count,
+      avg_rank: redact ? null : s.avg_rank,
+    })),
+  }));
+
+  return NextResponse.json({ runs: redacted });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { requiresPaywall } from "@/lib/plan-limits";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
 
   const access = await requireBrandAccess(db, user.id, brandId);
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+  const redact = await requiresPaywall(db, access.ownerId);
 
   // Resolve which scan_run to read
   let resolvedRunId: string;
@@ -43,17 +45,23 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Free-tier/lapsed: the dashboard's own blur rendering already never reads
+  // these fields (it substitutes stable fake values seeded from IDs, not
+  // derived from the real data) — redacting here just makes that real
+  // instead of enforced only by the client choosing not to display them.
   const results = (rows ?? []).map((r) => ({
     promptId: r.prompt_id,
     promptText: r.prompt_text,
     engine: r.engine,
-    response: r.response,
-    brandMentioned: r.brand_mentioned,
-    brandRank: r.brand_rank,
-    competitorMentions: r.competitor_mentions ?? [],
-    citations: (r.citations ?? []).filter((u: string) => {
-      try { return !new URL(u).hostname.endsWith("dataforseo.com"); } catch { return false; }
-    }),
+    response: redact ? null : r.response,
+    brandMentioned: redact ? false : r.brand_mentioned,
+    brandRank: redact ? null : r.brand_rank,
+    competitorMentions: redact ? [] : (r.competitor_mentions ?? []),
+    citations: redact
+      ? []
+      : (r.citations ?? []).filter((u: string) => {
+          try { return !new URL(u).hostname.endsWith("dataforseo.com"); } catch { return false; }
+        }),
     scannedAt: r.scanned_at,
   }));
 
@@ -62,17 +70,19 @@ export async function GET(req: NextRequest) {
 
   let scores = (scoreRows ?? []).map((s) => ({
     engine: s.engine,
-    score: s.score,
-    mentionCount: s.mention_count,
-    totalPrompts: s.total_prompts,
-    avgRank: s.avg_rank,
+    score: redact ? 0 : s.score,
+    mentionCount: redact ? 0 : s.mention_count,
+    totalPrompts: s.total_prompts, // kept — free-tier render uses this as a real denominator for its decoy fraction
+    avgRank: redact ? null : s.avg_rank,
   }));
 
   // If scan finished but no scores (all failed), compute from results
   if (!completed && results.length > 0) scores = [];
 
   // If non-runId call and scores were written, compute overall from them
-  const overallScore = scores.length
+  const overallScore = redact
+    ? 0
+    : scores.length
     ? Math.round(scores.reduce((s, sc) => s + sc.score, 0) / scores.length)
     : 0;
 

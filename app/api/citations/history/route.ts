@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { requiresPaywall } from "@/lib/plan-limits";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -12,6 +13,10 @@ export async function GET(req: NextRequest) {
 
   const access = await requireBrandAccess(db, user.id, brandId);
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+
+  // The dashboard shows this whole chart as a locked skeleton (not even
+  // blurred) for free tier, so the API must not hand out the real series.
+  if (await requiresPaywall(db, access.ownerId)) return NextResponse.json({ series: [] });
 
   // Fetch last 7 scan runs
   const { data: runs } = await db

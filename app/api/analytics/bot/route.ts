@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { requiresPaywall } from "@/lib/plan-limits";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -21,8 +22,19 @@ export async function GET(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
   const brand = access.brand as unknown as { id: string; domain: string; site_key: string };
 
-  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
-  const isFree = !userPlan?.dodo_subscription_id;
+  // See app/api/analytics/web/route.ts — requiresPaywall also catches
+  // cancelled/grace-exceeded owners that the ingestion-side check misses.
+  const isFree = await requiresPaywall(db, access.ownerId);
+  if (isFree) {
+    return NextResponse.json({
+      domain: brand.domain,
+      siteKey: brand.site_key,
+      isFree,
+      stats: { liveBots: 0, botPageviews: 0 },
+      breakdown: [],
+      live: { pages: [], bots: [] },
+    });
+  }
 
   const since = new Date(Date.now() - days * DAY_MS).toISOString();
   const { data: rows } = await db

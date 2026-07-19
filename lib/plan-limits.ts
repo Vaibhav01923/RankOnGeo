@@ -63,6 +63,23 @@ export function isLapsedSubscriber(row: UserPlanRow | null | undefined): boolean
   return false;
 }
 
+// True when the requester's real, sensitive data should be redacted server-
+// side (never subscribed, OR cancelled/expired/payment-grace-exceeded).
+// requireBrandAccess only verifies *ownership* — this is the plan check that
+// was missing from every data-serving route, which is what actually made
+// the dashboard's blur/decoy UI real security instead of decoration: without
+// this, a free-tier user's own valid session could pull the same data
+// straight from the API, no client rendering involved.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function requiresPaywall(db: any, ownerId: string): Promise<boolean> {
+  const { data: row } = await db
+    .from("user_plans")
+    .select("dodo_customer_id, dodo_subscription_id, payment_failed_at")
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  return !row?.dodo_subscription_id || isLapsedSubscriber(row);
+}
+
 // Days left in the failed-payment grace period, for a dashboard warning
 // banner — null when there's nothing to warn about (no failure, or already
 // past grace, in which case isLapsedSubscriber is the relevant check).

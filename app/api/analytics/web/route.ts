@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
+import { requiresPaywall } from "@/lib/plan-limits";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -21,12 +22,23 @@ export async function GET(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
   const brand = access.brand as unknown as { id: string; domain: string; site_key: string };
 
-  // Web/LLM Analytics is a paid-plan perk — ingestion is already blocked
-  // server-side for free-tier brands, so there's nothing to hide here, just
-  // an isFree flag so the dashboard can overlay the upgrade prompt. The flag
-  // reflects the workspace owner's plan, not the acting member's.
-  const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
-  const isFree = !userPlan?.dodo_subscription_id;
+  // Web/LLM Analytics is a paid-plan perk. Ingestion checks only
+  // dodo_subscription_id (see findPaidBrandBySiteKey), not the full lapsed-
+  // subscriber rule, so a cancelled/grace-exceeded owner can still have real
+  // rows on file — redact using the same requiresPaywall rule used elsewhere
+  // so this route can't hand those out even though ingestion itself doesn't
+  // stop for that case.
+  const isFree = await requiresPaywall(db, access.ownerId);
+  if (isFree) {
+    return NextResponse.json({
+      domain: brand.domain,
+      siteKey: brand.site_key,
+      isFree,
+      stats: { liveVisitors: 0, visitors: 0, pageviews: 0, avgDurationSeconds: 0, bounceRate: 0 },
+      live: { pages: [], referrers: [] },
+      topReferrers: [],
+    });
+  }
 
   const since = new Date(Date.now() - days * DAY_MS).toISOString();
   const { data: rows } = await db
