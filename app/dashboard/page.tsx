@@ -1548,6 +1548,24 @@ function DashboardPage() {
     }
   }
 
+  // A brand with zero scan history only otherwise gets data from the daily
+  // cron (see nextCheckIn) — up to 24h of staring at an empty dashboard.
+  // Auto-fires the same one-time initial scan the "Start monitoring" button
+  // triggers, the moment a freshly loaded brand is confirmed to have never
+  // been scanned. Guarded by a ref (not just !scanned) so a failed attempt
+  // doesn't retry-loop the instant scanning flips back to false.
+  const autoScanTriggered = useRef(false);
+  useEffect(() => {
+    if (autoScanTriggered.current) return;
+    if (!brand || loadingBrand || loadingResults || scanning || scanned) return;
+    if (!brand.trackedPrompts.some((p) => p.status !== "paused")) return;
+    autoScanTriggered.current = true;
+    // runScan kicks off a real network request (the scan), it's not deriving
+    // state from props; the ref guard above already makes this a one-shot trigger.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    runScan();
+  }, [brand, loadingBrand, loadingResults, scanning, scanned]);
+
   async function saveOrUpdateChat(msgs: AgentMessage[], currentChatId: string | null): Promise<string | null> {
     if (!brand?.id) return currentChatId;
     const userMsgs = msgs.filter((m) => m.role === "user");
