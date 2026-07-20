@@ -1067,9 +1067,9 @@ function LLMAnalyticsContent() {
 function ArticlesContent() {
   const [filter, setFilter] = useState("All");
   const articles = [
-    { title: "What Tool Do I Use for Testing Across Multiple Browsers Effortlessly?", prompt: "what tool do I use for testing across multiple browsers effortlessly?", status: "Published", seo: "—", updated: "Jun 24" },
-    { title: "Playwright vs Cypress: Complete 2025 Comparison Guide", prompt: "playwright vs cypress 2025", status: "Draft", seo: "72", updated: "Jun 23" },
-    { title: "Setting up Playwright in Docker for CI/CD Pipelines", prompt: "playwright docker ci setup", status: "Draft", seo: "—", updated: "Jun 22" },
+    { title: "What Tool Do I Use for Testing Across Multiple Browsers Effortlessly?", prompt: "what tool do I use for testing across multiple browsers effortlessly?", status: "Published", updated: "Jun 24" },
+    { title: "Playwright vs Cypress: Complete 2025 Comparison Guide", prompt: "playwright vs cypress 2025", status: "Draft", updated: "Jun 23" },
+    { title: "Setting up Playwright in Docker for CI/CD Pipelines", prompt: "playwright docker ci setup", status: "Draft", updated: "Jun 22" },
   ];
   const filtered = filter === "All" ? articles : articles.filter((a) => a.status === filter);
   return (
@@ -1083,11 +1083,10 @@ function ArticlesContent() {
           + New article
         </button>
       </div>
-      <div className="mb-3 grid grid-cols-4 gap-2.5">
+      <div className="mb-3 grid grid-cols-3 gap-2.5">
         {[
           { label: "PUBLISHED", val: "1", sub: "+0 this month" },
           { label: "IN DRAFT", val: "2", sub: "awaiting review" },
-          { label: "AVG SEO SCORE", val: "72", sub: "1 scored" },
           { label: "LAST PUBLISHED", val: "Jun 24", sub: "" },
         ].map((s) => (
           <div key={s.label} className={`${card} p-3.5`}>
@@ -1114,7 +1113,6 @@ function ArticlesContent() {
         <div className="flex gap-3 border-b border-[var(--line)] px-4 py-2">
           <span className={kpiLabel + " mb-0 flex-1"}>Title</span>
           <span className={kpiLabel + " mb-0 w-20 text-center"}>Status</span>
-          <span className={kpiLabel + " mb-0 w-10 text-center"}>SEO</span>
           <span className={kpiLabel + " mb-0 w-14 text-right"}>Updated</span>
         </div>
         {filtered.map((a, i) => (
@@ -1124,7 +1122,6 @@ function ArticlesContent() {
               <p className="mt-0.5 truncate text-[10px] text-[var(--ink-faint)]">{a.prompt}</p>
             </div>
             <span className={`mt-0.5 w-20 text-center text-xs font-semibold ${a.status === "Published" ? "text-[var(--olive)]" : "text-[var(--ink-soft)]"}`}>{a.status}</span>
-            <span className="mt-0.5 w-10 text-center text-xs text-[var(--ink-soft)]">{a.seo}</span>
             <span className="mt-0.5 w-14 text-right text-xs text-[var(--ink-faint)]">{a.updated}</span>
           </div>
         ))}

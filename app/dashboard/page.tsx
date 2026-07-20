@@ -2040,7 +2040,6 @@ function DashboardPage() {
 
   const publishedCount = savedArticles.filter((a) => a.status === "published").length;
   const draftCount = savedArticles.filter((a) => a.status === "draft" || a.status === "writing").length;
-  const avgSeoScore = savedArticles.length ? Math.round(savedArticles.reduce((s, a) => s + a.seoScore, 0) / savedArticles.length) : null;
 
   return (
     <div
@@ -4909,10 +4908,9 @@ function DashboardPage() {
                 </div>
 
                 {savedArticles.length > 0 && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                     <StatCard label="Published" value={publishedCount} sub="+0 this month" />
                     <StatCard label="In Draft" value={draftCount} sub={draftCount === 1 ? "1 ready for review" : ""} />
-                    <StatCard label="Avg SEO Score" value={avgSeoScore ?? "—"} sub={`${savedArticles.filter(a => a.seoScore > 0).length} scored`} />
                     <StatCard label="Last Published" value={savedArticles.filter(a => a.status === "published").length > 0 ? "Recently" : "—"} />
                   </div>
                 )}
@@ -4951,7 +4949,6 @@ function DashboardPage() {
                         <tr className="border-b border-[var(--line)]">
                           <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Title</th>
                           <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Status</th>
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">SEO</th>
                           <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Updated</th>
                         </tr>
                       </thead>
@@ -4965,7 +4962,6 @@ function DashboardPage() {
                             <td className="px-5 py-3">
                               <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[a.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{a.status}</span>
                             </td>
-                            <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/80">{a.seoScore > 0 ? a.seoScore : "—"}</td>
                             <td className="px-5 py-3 text-xs text-[var(--ink-faint)]">{new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
                           </tr>
                         ))}
@@ -4987,7 +4983,6 @@ function DashboardPage() {
                     <div className="flex gap-1.5 flex-wrap">
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[selectedArticle.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{selectedArticle.status}</span>
                       {selectedArticle.wordCount > 0 && <span className="text-[10px] bg-[var(--line)] text-[var(--ink-soft)] px-2 py-0.5 rounded">{selectedArticle.wordCount} words</span>}
-                      {selectedArticle.seoScore > 0 && <span className="text-[10px] bg-[var(--rust)]/10 text-[var(--rust)] px-2 py-0.5 rounded font-medium">SEO {selectedArticle.seoScore}</span>}
                     </div>
                   </div>
 
