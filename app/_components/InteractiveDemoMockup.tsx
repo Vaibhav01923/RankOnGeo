@@ -118,9 +118,9 @@ function OverviewContent() {
 // ── ENGINES ───────────────────────────────────────────────────────
 function EnginesContent() {
   const scans: Array<{ overall: number; data: Record<string, number>; time: string }> = [
-    { overall: 74, data: { ChatGPT: 80, Claude: 78, Gemini: 72, Perplexity: 69, "Google AI": 79 }, time: "Jun 24, 2026, 12:01 AM" },
-    { overall: 71, data: { ChatGPT: 75, Claude: 74, Gemini: 68, Perplexity: 71, "Google AI": 77 }, time: "Jun 23, 2026, 11:09 PM" },
-    { overall: 68, data: { ChatGPT: 73, Claude: 70, Gemini: 65, Perplexity: 64, "Google AI": 74 }, time: "Jun 23, 2026, 10:54 PM" },
+    { overall: 74, data: { ChatGPT: 80, Claude: 78, Gemini: 72, Perplexity: 69, "Google AI": 79 }, time: "Jun 24, 2026, 8:00 AM" },
+    { overall: 71, data: { ChatGPT: 75, Claude: 74, Gemini: 68, Perplexity: 71, "Google AI": 77 }, time: "Jun 21, 2026, 8:00 AM" },
+    { overall: 68, data: { ChatGPT: 73, Claude: 70, Gemini: 65, Perplexity: 64, "Google AI": 74 }, time: "Jun 18, 2026, 8:00 AM" },
   ];
   return (
     <div className="p-5" style={{ animation: "fadeUp 0.3s ease forwards" }}>
