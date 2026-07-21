@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
 import { requiresPaywall } from "@/lib/plan-limits";
+import { buildEventSeries } from "@/lib/analytics-series";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
-const ALLOWED_DAYS = [7, 30, 90];
+const ALLOWED_DAYS = [1, 7, 30, 90];
 
 export async function GET(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
       stats: { liveVisitors: 0, visitors: 0, pageviews: 0, avgDurationSeconds: 0, bounceRate: 0 },
       live: { pages: [], referrers: [] },
       topReferrers: [],
+      series: [],
     });
   }
 
@@ -97,6 +99,7 @@ export async function GET(req: NextRequest) {
     stats: { liveVisitors, visitors, pageviews, avgDurationSeconds, bounceRate },
     live: { pages: toSortedList(pageCounts), referrers: toSortedList(referrerCounts) },
     topReferrers: toSortedList(topReferrerCounts).slice(0, 10),
+    series: buildEventSeries(visits.map((v) => v.created_at), days),
   });
 }
 

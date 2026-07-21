@@ -171,6 +171,7 @@ const EXPLORE_CHECKLIST_ITEMS: { tab: Tab; label: string; desc: string }[] = [
 
 type BotBreakdown = { botName: string; count: number };
 type NamedCount = { label: string; count: number };
+type SeriesPoint = { label: string; count: number };
 type WebAnalyticsData = {
   domain: string;
   siteKey: string;
@@ -178,6 +179,7 @@ type WebAnalyticsData = {
   stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number };
   live: { pages: NamedCount[]; referrers: NamedCount[] };
   topReferrers: NamedCount[];
+  series: SeriesPoint[];
 };
 type LlmAnalyticsData = {
   domain: string;
@@ -186,6 +188,7 @@ type LlmAnalyticsData = {
   stats: { liveBots: number; botPageviews: number };
   breakdown: BotBreakdown[];
   live: { pages: NamedCount[]; bots: NamedCount[] };
+  series: SeriesPoint[];
 };
 
 const BOT_NAME_LABELS: Record<string, string> = {
@@ -336,6 +339,52 @@ function MiniTrendChart({ runs }: { runs: ScanRun[] }) {
           <circle key={i} cx={(i / (scores.length - 1)) * width} cy={height - (s / max) * height} r="2.5" fill={rustStroke} fillOpacity="0.6" />
         ))}
       </svg>
+    </div>
+  );
+}
+
+// Trend chart for Web/LLM Analytics — a plain bar-per-bucket chart (hourly
+// buckets for the 1-day range, daily otherwise; see lib/analytics-series.ts)
+// with a hover tooltip. Deliberately simpler than the Top Citations chart
+// (single series, no per-domain breakdown) so it doesn't need that chart's
+// multi-series color palette or its cursor-following tooltip complexity.
+function AnalyticsSeriesChart({ series }: { series: { label: string; count: number }[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  if (series.length === 0) return null;
+  const max = Math.max(...series.map((s) => s.count), 1);
+  const W = 600, H = 140, padT = 8, padB = 20;
+  const barW = W / series.length;
+  const labelStep = Math.max(1, Math.ceil(series.length / 8));
+  const hovered = hoverIdx !== null ? series[hoverIdx] : null;
+  const hoverLeftPct = hoverIdx !== null ? Math.min(92, Math.max(8, ((hoverIdx + 0.5) / series.length) * 100)) : 0;
+
+  return (
+    <div className="relative" onMouseLeave={() => setHoverIdx(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        {series.map((s, i) => {
+          const barH = s.count > 0 ? Math.max((s.count / max) * (H - padT - padB), 2) : 0;
+          const x = i * barW;
+          const y = H - padB - barH;
+          return (
+            <g key={i} onMouseEnter={() => setHoverIdx(i)}>
+              <rect x={x} y={padT} width={barW} height={H - padT - padB} fill="transparent" />
+              <rect x={x + barW * 0.15} y={y} width={Math.max(barW * 0.7, 1)} height={barH} rx="2" fill="var(--rust)" opacity={hoverIdx === i ? 1 : 0.55} />
+              {i % labelStep === 0 && (
+                <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill="var(--ink-faint)">{s.label}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {hovered && (
+        <div
+          className="absolute top-0 pointer-events-none panel rounded-lg shadow-lg px-2.5 py-1.5 text-xs -translate-x-1/2"
+          style={{ left: `${hoverLeftPct}%` }}
+        >
+          <p className="font-semibold text-[var(--ink)]">{hovered.count.toLocaleString()}</p>
+          <p className="text-[var(--ink-faint)] whitespace-nowrap">{hovered.label}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -4317,6 +4366,13 @@ function DashboardPage() {
                   <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
                 </div>
 
+                {!!webAnalyticsData?.series.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">Pageviews over time</p>
+                    <AnalyticsSeriesChart series={webAnalyticsData.series} />
+                  </div>
+                )}
+
                 {renderAnalyticsUsageBar()}
 
                 <div className="panel rounded-xl overflow-hidden mb-5">
@@ -4458,6 +4514,7 @@ function DashboardPage() {
                       onChange={(e) => setWebAnalyticsDays(Number(e.target.value))}
                       className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
                     >
+                      <option value={1}>Last 24 Hours</option>
                       <option value={7}>Last 7 Days</option>
                       <option value={30}>Last 30 Days</option>
                       <option value={90}>Last 90 Days</option>
@@ -4486,6 +4543,13 @@ function DashboardPage() {
                   <StatCard label="Live Bots" value={llmAnalyticsData?.stats.liveBots ?? 0} sub="last 5 min" />
                   <StatCard label="Bot Pageviews" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
                 </div>
+
+                {!!llmAnalyticsData?.series.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">Bot pageviews over time</p>
+                    <AnalyticsSeriesChart series={llmAnalyticsData.series} />
+                  </div>
+                )}
 
                 {renderAnalyticsUsageBar()}
 
@@ -4623,6 +4687,7 @@ function DashboardPage() {
                       onChange={(e) => setLlmAnalyticsDays(Number(e.target.value))}
                       className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
                     >
+                      <option value={1}>Last 24 Hours</option>
                       <option value={7}>Last 7 Days</option>
                       <option value={30}>Last 30 Days</option>
                       <option value={90}>Last 90 Days</option>
