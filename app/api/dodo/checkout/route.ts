@@ -19,7 +19,7 @@ const PLAN_PRODUCTS: Record<string, string | undefined> = {
 const EARLY_DISCOUNT_CODE = process.env.DODO_EARLY_DISCOUNT_CODE ?? "EARLY50";
 
 export async function POST(req: NextRequest) {
-  const { plan, cancelPath, early } = await req.json();
+  const { plan, cancelPath, early, trialDays } = await req.json();
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
@@ -42,15 +42,19 @@ export async function POST(req: NextRequest) {
   // via DataFast's revenue-attribution integration (see Dodo webhook setup).
   const datafastVisitorId = req.cookies.get("datafast_visitor_id")?.value;
 
+  const validTrialDays = typeof trialDays === "number" && trialDays > 0 && trialDays <= 30 ? trialDays : undefined;
+
   const session = await getDodo().checkoutSessions.create({
     product_cart: [{ product_id: productId, quantity: 1 }],
-    return_url: `${origin}/dashboard?subscription=success${early ? "&early=1" : ""}`,
+    return_url: `${origin}/dashboard?subscription=success${early ? "&early=1" : ""}${validTrialDays ? "&trial=1" : ""}`,
     cancel_url: `${origin}${safeCancelPath}`,
     ...(early ? { discount_codes: [EARLY_DISCOUNT_CODE] } : {}),
+    ...(validTrialDays ? { subscription_data: { trial_period_days: validTrialDays } } : {}),
     metadata: {
       userId: user.id,
       plan,
       ...(early ? { early: "true" } : {}),
+      ...(validTrialDays ? { trial: "true" } : {}),
       ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}),
     },
     customer: { email: user.email! },

@@ -6,8 +6,8 @@ import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
-import { AuthForm } from "../_components/AuthForm";
-import { stashPendingBrandEdits, claimPendingBrand } from "@/lib/pending-brand";
+import { PRICING } from "@/lib/pricing";
+import { stashPendingBrandEdits } from "@/lib/pending-brand";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -28,7 +28,14 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
-type Step = "url" | "brand" | "prompts";
+type Step = "url" | "brand" | "prompts" | "trial";
+
+const STEPS: { key: Step; label: string }[] = [
+  { key: "url", label: "Your website" },
+  { key: "brand", label: "Brand info" },
+  { key: "prompts", label: "Tracked prompts" },
+  { key: "trial", label: "Start free trial" },
+];
 
 function SetupContent() {
   const router = useRouter();
@@ -75,8 +82,13 @@ function SetupContent() {
   const [newPrompt, setNewPrompt] = useState("");
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [showSignupGate, setShowSignupGate] = useState(false);
   const addPromptRef = useRef<HTMLDivElement>(null);
+
+  // Step 4: trial signup
+  const [trialEmail, setTrialEmail] = useState("");
+  const [trialPlan, setTrialPlan] = useState(PRICING[0].planKey);
+  const [trialSubmitting, setTrialSubmitting] = useState(false);
+  const [trialError, setTrialError] = useState("");
 
   // Draw attention to the "add your own" slot as soon as the generated
   // prompts are on screen, instead of leaving it below the fold where people
@@ -194,22 +206,61 @@ function SetupContent() {
       return;
     }
 
-    // No account yet — the anonymous brand row created by /api/setup can't
-    // be saved to (RLS blocks it) or read back from a dashboard that
-    // requires auth. Stash the edits and gate on signup right here instead
-    // of navigating away; /api/brand/claim attaches this exact row (via the
-    // pending_brand_claim cookie /api/setup already set) the moment a
-    // session exists.
-    stashPendingBrandEdits(currentEdits());
-    setShowSignupGate(true);
+    // No account yet — move on to the trial signup step instead of an
+    // inline gate. The anonymous brand row stays put (RLS blocks writing to
+    // it directly); its edits get stashed right before the trial checkout
+    // redirect in handleClaimTrial.
+    setStep("trial");
   }
 
-  async function handleSignedIn() {
-    setSaving(true);
-    const result = await claimPendingBrand();
-    setSaving(false);
-    const brandId = result.claimed ? result.brandId : result.existingBrandId;
-    router.push(brandId ? `/dashboard?brandId=${brandId}` : "/dashboard");
+  async function handleClaimTrial(e: React.FormEvent) {
+    e.preventDefault();
+    if (!brand?.id || trialSubmitting) return;
+    setTrialError("");
+    setTrialSubmitting(true);
+
+    const supabase = createSupabaseBrowserClient();
+    // Thrown away immediately after use — never stored, never sent to our
+    // own backend. Signup works without the user typing a password because
+    // this Supabase project has email confirmation disabled, so signUp()
+    // returns a live session right away; they set a real password later via
+    // the emailed recovery link (see /api/setup/send-password-link).
+    const randomPassword = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+    const { data, error } = await supabase.auth.signUp({ email: trialEmail.trim(), password: randomPassword });
+
+    // Same dual-signal "already registered" detection as AuthForm — but
+    // unlike AuthForm we can't retry with the password the user typed
+    // (there isn't one), so just point them at sign-in.
+    const alreadyRegistered =
+      error?.message === "User already registered" ||
+      (data?.user && data.user.identities && data.user.identities.length === 0);
+
+    if (alreadyRegistered) {
+      setTrialSubmitting(false);
+      setTrialError("You already have a RankOnGeo account with this email — sign in to continue.");
+      return;
+    }
+    if (error || !data.session || !data.user) {
+      setTrialSubmitting(false);
+      setTrialError(error?.message ?? "Something went wrong. Please try again.");
+      return;
+    }
+
+    stashPendingBrandEdits(currentEdits());
+    fetch("/api/setup/send-password-link", { method: "POST" }).catch(() => {});
+
+    const res = await fetch("/api/dodo/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: trialPlan, trialDays: 1, cancelPath: "/setup" }),
+    });
+    const checkoutData = await res.json();
+    if (!res.ok || !checkoutData.url) {
+      setTrialSubmitting(false);
+      setTrialError(checkoutData.error ?? "Couldn't start checkout. Please try again.");
+      return;
+    }
+    window.location.href = checkoutData.url;
   }
 
   return (
@@ -223,22 +274,25 @@ function SetupContent() {
       <main className="max-w-2xl mx-auto px-6 py-12">
         {/* Steps indicator */}
         <div className="flex items-center gap-2 mb-10">
-          {(["url", "brand", "prompts"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-signal-mono font-medium transition-colors ${
-                step === s ? "bg-[var(--rust)] text-[var(--surface)]" :
-                (step === "brand" && s === "url") || (step === "prompts" && s !== "prompts")
-                  ? "bg-[var(--olive-wash)] text-[var(--olive)]"
-                  : "bg-[var(--line-soft)] text-[var(--ink-faint)]"
-              }`}>
-                {i + 1}
+          {(() => {
+            const currentIndex = STEPS.findIndex((s) => s.key === step);
+            return STEPS.map((s, i) => (
+              <div key={s.key} className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-signal-mono font-medium transition-colors ${
+                  i === currentIndex ? "bg-[var(--rust)] text-[var(--surface)]" :
+                  i < currentIndex
+                    ? "bg-[var(--olive-wash)] text-[var(--olive)]"
+                    : "bg-[var(--line-soft)] text-[var(--ink-faint)]"
+                }`}>
+                  {i + 1}
+                </div>
+                <span className={`text-sm ${i === currentIndex ? "text-[var(--ink)] font-medium" : "text-[var(--ink-faint)]"}`}>
+                  {s.label}
+                </span>
+                {i < STEPS.length - 1 && <span className="text-[var(--line)] ml-1">—</span>}
               </div>
-              <span className={`text-sm ${step === s ? "text-[var(--ink)] font-medium" : "text-[var(--ink-faint)]"}`}>
-                {s === "url" ? "Your website" : s === "brand" ? "Brand info" : "Tracked prompts"}
-              </span>
-              {i < 2 && <span className="text-[var(--line)] ml-1">—</span>}
-            </div>
-          ))}
+            ));
+          })()}
         </div>
 
         {/* Step 1: URL */}
@@ -408,7 +462,8 @@ function SetupContent() {
             <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Review search queries</h1>
             <p className="text-[var(--ink-soft)] text-sm mb-2">
               These are questions people ask AI about businesses like yours. We&apos;ll track your brand&apos;s visibility for each —
-              go through the list below and deselect anything that doesn&apos;t fit before you continue.
+              go through the list below and deselect anything that doesn&apos;t fit before you continue. If you&apos;re not showing up
+              in a response, RankOnGeo helps you get mentioned and change what AI says about you.
             </p>
             {(() => {
               const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
@@ -492,62 +547,112 @@ function SetupContent() {
               );
             })()}
 
-            {showSignupGate ? (
+            <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
+              <p className="text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Prompt Tips</p>
+              <ul className="space-y-1 text-xs text-[var(--ink-faint)]">
+                <li>· Focus on questions your customers actually ask</li>
+                <li>· Include your product category or service type</li>
+                <li>· Avoid overly specific or branded terms</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("brand")}
+                disabled={saving}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleStart}
+                disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+              >
+                {saving ? "Saving…" : "Continue"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Trial signup */}
+        {step === "trial" && (
+          <div>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">See what AI says about you — free</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-8">
+              ChatGPT, Gemini, Google AI Search, Perplexity, and Claude — we&apos;ll show you exactly what each one
+              says about your brand for every prompt above, and whether you get mentioned at all.
+            </p>
+
+            <div className="mb-6">
+              <p className="text-sm font-medium text-[var(--ink)] mb-2">Choose your plan</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {PRICING.map((p) => (
+                  <button
+                    key={p.planKey}
+                    type="button"
+                    onClick={() => setTrialPlan(p.planKey)}
+                    className={`text-left rounded-lg border px-4 py-3 transition-colors ${
+                      trialPlan === p.planKey
+                        ? "border-[var(--rust)] bg-[var(--rust-wash)]"
+                        : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--rust)]/30"
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-[var(--ink)]">{p.name}</p>
+                    <p className="text-xs text-[var(--ink-soft)] mt-0.5">${p.price}/mo after trial</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleClaimTrial} className="space-y-5">
               <div>
-                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
-                  <p className="text-sm font-semibold text-[var(--ink)] mb-1">Create your account to generate your report</p>
-                  <p className="text-xs text-[var(--ink-soft)]">
-                    Free — no credit card. Your brand snapshot and prompts above are saved and will be there the
-                    moment you&apos;re signed in.
-                  </p>
-                </div>
-                {saving ? (
-                  <div className="flex items-center justify-center py-4 gap-3 text-sm text-[var(--ink-soft)]">
-                    <span className="w-4 h-4 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
-                    Saving your report…
-                  </div>
-                ) : (
-                  <AuthForm mode="signup" onSignedIn={handleSignedIn} />
-                )}
+                <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={trialEmail}
+                  onChange={(e) => setTrialEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  required
+                  className="w-full border border-[var(--line)] bg-[var(--surface)] rounded-lg px-4 py-3 text-sm outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
+                />
+              </div>
+
+              {trialError && (
+                <p className="text-sm text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3">
+                  {trialError}{" "}
+                  {trialError.includes("sign in") && (
+                    <a href="/auth?mode=signin&redirect=/dashboard" className="underline font-medium">Sign in →</a>
+                  )}
+                </p>
+              )}
+
+              <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowSignupGate(false)}
-                  disabled={saving}
-                  className="mt-4 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-50"
+                  onClick={() => setStep("prompts")}
+                  disabled={trialSubmitting}
+                  className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
                 >
-                  ← Back to prompts
+                  ← Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={trialSubmitting || !trialEmail.trim()}
+                  className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {trialSubmitting ? "Starting your trial…" : "Start free trial →"}
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-6">
-                  <p className="text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Prompt Tips</p>
-                  <ul className="space-y-1 text-xs text-[var(--ink-faint)]">
-                    <li>· Focus on questions your customers actually ask</li>
-                    <li>· Include your product category or service type</li>
-                    <li>· Avoid overly specific or branded terms</li>
-                  </ul>
-                </div>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep("brand")}
-                    disabled={saving}
-                    className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={handleStart}
-                    disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
-                    className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {saving ? "Saving…" : "Generate report"}
-                  </button>
-                </div>
-              </>
-            )}
+              <p className="text-xs text-[var(--ink-faint)] text-center">
+                You won&apos;t be charged today — card required to prevent abuse. After your 1-day free trial ends,
+                you&apos;ll be charged $
+                {PRICING.find((p) => p.planKey === trialPlan)?.price ?? PRICING[0].price}/mo unless you cancel
+                before then. Cancel anytime from Settings.
+              </p>
+            </form>
           </div>
         )}
       </main>
