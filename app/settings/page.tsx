@@ -50,6 +50,13 @@ function SettingsContent() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  // Dodo's hosted customer portal only covers payment method, invoices, and
+  // cancellation — not plan or billing-frequency changes (there's no such
+  // toggle in customers.customerPortal.create, and change-plan is a separate
+  // server-side API). So the pricing cards are the only way to actually
+  // switch plans; keep them reachable but not dumped on the page by default
+  // for someone who's already paying.
+  const [showPlans, setShowPlans] = useState(false);
 
   useEffect(() => {
     createSupabaseBrowserClient().auth.getUser().then(({ data: { user } }) => {
@@ -92,7 +99,11 @@ function SettingsContent() {
     );
   }
 
-  const planKey = sub?.plan;
+  // user_plans.plan defaults to "starter" at the DB level for every row,
+  // whether or not a real subscription ever existed — it's only meaningful
+  // once isFree is false. Showing it unconditionally mislabeled every
+  // never-subscribed (or trial-that-never-activated) account as "Pro".
+  const planKey = sub?.isFree ? null : sub?.plan;
   const planLabel = planKey ? PLAN_NAME[planKey] ?? planKey : "Free";
   const brandLimit = planKey ? BRAND_LIMITS[planKey] ?? FREE_BRAND_LIMIT : FREE_BRAND_LIMIT;
 
@@ -169,24 +180,35 @@ function SettingsContent() {
           )}
 
           {sub?.hasBillingAccount ? (
-            <button
-              onClick={openBillingPortal}
-              disabled={portalLoading}
-              className="w-full bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] font-semibold py-3 rounded-full text-sm transition-colors"
-            >
-              {portalLoading ? "Opening billing portal..." : "Manage billing →"}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={openBillingPortal}
+                disabled={portalLoading}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] font-semibold py-3 rounded-full text-sm transition-colors"
+              >
+                {portalLoading ? "Opening billing portal..." : "Manage billing →"}
+              </button>
+              {!sub?.isFree && (
+                <button
+                  type="button"
+                  onClick={() => setShowPlans((v) => !v)}
+                  className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-full text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
+                >
+                  {showPlans ? "Hide plans" : "Change plan"}
+                </button>
+              )}
+            </div>
           ) : (
             <p className="text-sm text-[var(--ink-soft)]">Pick a plan below to unlock more websites, prompts, and engines.</p>
           )}
         </div>
 
-        <div>
-          <h2 className="font-signal-serif text-xl text-[var(--ink)] mb-4">
-            {sub?.isFree ? "Choose a plan" : "Change plan"}
-          </h2>
-          <PricingCards compact />
-        </div>
+        {(sub?.isFree || showPlans) && (
+          <div>
+            <h2 className="font-signal-serif text-xl text-[var(--ink)] mb-4">{sub?.isFree ? "Choose a plan" : "Change plan"}</h2>
+            <PricingCards compact />
+          </div>
+        )}
       </main>
     </div>
   );
