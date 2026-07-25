@@ -646,7 +646,8 @@ function SetupContent() {
             <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">See what AI says about you — free</h1>
             <p className="text-[var(--ink-soft)] text-sm mb-8">
               ChatGPT, Gemini, Google AI Search, Perplexity, and Claude — we&apos;ll show you exactly what each one
-              says about your brand for every prompt above, and whether you get mentioned at all.
+              says about your brand for every prompt above, and whether you get mentioned at all. Then we help close
+              the gap — RankOnGeo improves your odds of actually getting mentioned, not just measures them.
             </p>
 
             <div className="mb-6">
