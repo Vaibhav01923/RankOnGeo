@@ -180,12 +180,6 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "feedback", title: "Feedback", body: "Request a feature, report a bug, or get help any time — right here." },
 ];
 
-const EXPLORE_CHECKLIST_ITEMS: { tab: Tab; label: string; desc: string }[] = [
-  { tab: "citations", label: "Citations", desc: "Which sites AI engines quote instead of you" },
-  { tab: "gaps", label: "Research", desc: "Exact queries where you're invisible right now" },
-  { tab: "tasks", label: "Tasks", desc: "Turn a gap into engagement, one click at a time" },
-];
-
 type BotBreakdown = { botName: string; count: number };
 type NamedCount = { label: string; count: number };
 type SeriesPoint = { label: string; count: number };
@@ -919,12 +913,6 @@ function DashboardPage() {
   const [showCitationOnboarding, setShowCitationOnboarding] = useState(false);
   const [citationOnboardingStep, setCitationOnboardingStep] = useState(0);
   const [dontShowCitationsOnboarding, setDontShowCitationsOnboarding] = useState(false);
-  // "See what else we found" checklist on Overview — nudges free-tier users
-  // past the single blurred score into the other paywalled surfaces
-  // (Citations/Research/Tasks) so they see the full breadth of what's locked
-  // before bouncing off Overview alone.
-  const [visitedExploreTabs, setVisitedExploreTabs] = useState<Tab[]>([]);
-  const [exploreCardDismissed, setExploreCardDismissed] = useState(false);
   const [citationSearch, setCitationSearch] = useState("");
   const [citationTypeFilter, setCitationTypeFilter] = useState("All");
   const [citationPromptFilter, setCitationPromptFilter] = useState("All");
@@ -1086,12 +1074,6 @@ function DashboardPage() {
     const savedTab = sessionStorage.getItem("dashTab");
     if (savedTab) setActiveTab(savedTab as Tab);
 
-    try {
-      const visited = JSON.parse(localStorage.getItem("exploreChecklistVisited") ?? "[]");
-      if (Array.isArray(visited)) setVisitedExploreTabs(visited);
-    } catch {}
-    setExploreCardDismissed(localStorage.getItem("exploreChecklistDismissed") === "true");
-
     createSupabaseBrowserClient()
       .auth.getUser()
       .then(({ data: { user } }) => setUserEmail(user?.email ?? ""));
@@ -1123,10 +1105,10 @@ function DashboardPage() {
       router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
     }
 
-    // First dashboard load right after a trial checkout — walk the new user
-    // across every tab once. Gated on localStorage (not just the URL param)
-    // so it never re-triggers on a later visit.
-    if (searchParams.get("trial") === "1" && localStorage.getItem("dashboardTourSeen") !== "1") {
+    // First-ever dashboard load for this browser — walk the user across
+    // every tab once. Gated purely on localStorage so it fires for every
+    // account (new or existing) exactly once, then never again.
+    if (localStorage.getItem("dashboardTourSeen") !== "1") {
       localStorage.setItem("dashboardTourSeen", "1");
       setTourStepIndex(0);
     }
@@ -1816,14 +1798,6 @@ function DashboardPage() {
     setActiveTab(tab);
     setSidebarOpen(false);
     sessionStorage.setItem("dashTab", tab);
-    if (EXPLORE_CHECKLIST_ITEMS.some((i) => i.tab === tab)) {
-      setVisitedExploreTabs((prev) => {
-        if (prev.includes(tab)) return prev;
-        const next = [...prev, tab];
-        try { localStorage.setItem("exploreChecklistVisited", JSON.stringify(next)); } catch {}
-        return next;
-      });
-    }
   }
 
   function tourNext() {
@@ -1847,11 +1821,6 @@ function DashboardPage() {
   function startTour() {
     setTourStepIndex(0);
     navTo(TOUR_STEPS[0].tab);
-  }
-
-  function dismissExploreCard() {
-    setExploreCardDismissed(true);
-    try { localStorage.setItem("exploreChecklistDismissed", "true"); } catch {}
   }
 
   async function togglePromptStatus(p: { id: string; status?: string }) {
@@ -2635,35 +2604,6 @@ function DashboardPage() {
                     </div>
                   </div>
 
-                  {isFreeTier && !exploreCardDismissed && visitedExploreTabs.length < EXPLORE_CHECKLIST_ITEMS.length && (
-                    <div className="rounded-2xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] p-5 flex flex-col gap-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--rust-deep)]">There&apos;s more than a score here</p>
-                          <p className="text-xs text-[var(--ink-soft)] mt-0.5">Your scan turned up a few other things worth a look.</p>
-                        </div>
-                        <button onClick={dismissExploreCard} aria-label="Dismiss" className="text-[var(--rust-deep)]/60 hover:text-[var(--rust-deep)] shrink-0">✕</button>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {EXPLORE_CHECKLIST_ITEMS.map((item) => {
-                          const done = visitedExploreTabs.includes(item.tab);
-                          return (
-                            <button
-                              key={item.tab}
-                              onClick={() => navTo(item.tab)}
-                              className={`text-left rounded-xl border p-4 transition-colors ${done ? "border-[var(--olive)]/30 bg-[var(--olive-wash)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--rust)]/30"}`}
-                            >
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${done ? "bg-[var(--olive)] text-[var(--surface)]" : "border border-[var(--line)] text-transparent"}`}>✓</span>
-                                <span className="text-xs font-semibold text-[var(--ink)]">{item.label}</span>
-                              </div>
-                              <p className="text-[11px] text-[var(--ink-faint)] leading-snug">{item.desc}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex flex-col items-center gap-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-[20px] p-7">
                     {(() => {
