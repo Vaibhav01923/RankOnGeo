@@ -29,34 +29,37 @@ function OverviewContent() {
   const lastX = 8 + 14 * 27, lastY = 60 - norm[14];
   const engines = [
     { name: "ChatGPT", pct: 95, detail: "19/20 prompts · avg #2.2" },
+    { name: "Claude", pct: 94, detail: "19/20 prompts · avg #1.8" },
     { name: "Gemini", pct: 90, detail: "18/20 prompts · avg #1.9" },
+    { name: "Perplexity", pct: 91, detail: "18/20 prompts · avg #2.1" },
     { name: "Google AI", pct: 90, detail: "18/20 prompts · avg #1.6" },
   ];
+  // marks order matches ENGINES: ChatGPT, Claude, Gemini, Perplexity, Google AI
   const rows: { text: string; marks: string[]; vis: number }[] = [
-    { text: "Cypress alternative that supports WebKit", marks: ["#1", "#1", "✓"], vis: 100 },
-    { text: "alternative to Selenium", marks: ["—", "#1", "✓"], vis: 67 },
-    { text: "best Selenium alternatives for modern web apps", marks: ["—", "#2", "#3"], vis: 67 },
-    { text: "Selenium alternative with auto-waiting assertions", marks: ["#2", "#1", "#1"], vis: 100 },
-    { text: "alternative to Puppeteer", marks: ["#1", "#1", "✓"], vis: 100 },
-    { text: "best Puppeteer alternatives for cross-browser testing", marks: ["#1", "#2", "#1"], vis: 100 },
-    { text: "Puppeteer alternative that supports Firefox and WebKit", marks: ["#1", "✓", "✓"], vis: 100 },
-    { text: "alternative to WebdriverIO", marks: ["—", "#3", "#1"], vis: 67 },
-    { text: "best WebdriverIO alternatives for TypeScript e2e testing", marks: ["—", "#2", "#1"], vis: 67 },
-    { text: "alternative to TestCafe", marks: ["#2", "#3", "✓"], vis: 100 },
-    { text: "TestCafe alternative with better trace debugging", marks: ["—", "#2", "#1"], vis: 67 },
-    { text: "best end-to-end testing framework for TypeScript teams", marks: ["—", "#2", "✓"], vis: 67 },
-    { text: "Playwright pricing", marks: ["#1", "#1", "✓"], vis: 100 },
-    { text: "Is Playwright free", marks: ["✓", "#1", "#2"], vis: 100 },
-    { text: "Playwright review", marks: ["#2", "#1", "—"], vis: 67 },
-    { text: "best browser automation tool for QA teams", marks: ["#1", "—", "#3"], vis: 67 },
-    { text: "Playwright vs Selenium which is better", marks: ["—", "#2", "—"], vis: 33 },
+    { text: "Cypress alternative that supports WebKit", marks: ["#1", "✓", "#1", "#1", "✓"], vis: 100 },
+    { text: "alternative to Selenium", marks: ["—", "#2", "#1", "—", "✓"], vis: 60 },
+    { text: "best Selenium alternatives for modern web apps", marks: ["—", "—", "#2", "#1", "#3"], vis: 60 },
+    { text: "Selenium alternative with auto-waiting assertions", marks: ["#2", "#1", "#1", "✓", "#1"], vis: 100 },
+    { text: "alternative to Puppeteer", marks: ["#1", "#2", "#1", "✓", "✓"], vis: 100 },
+    { text: "best Puppeteer alternatives for cross-browser testing", marks: ["#1", "✓", "#2", "#2", "#1"], vis: 100 },
+    { text: "Puppeteer alternative that supports Firefox and WebKit", marks: ["#1", "#1", "✓", "✓", "✓"], vis: 100 },
+    { text: "alternative to WebdriverIO", marks: ["—", "—", "#3", "#2", "#1"], vis: 60 },
+    { text: "best WebdriverIO alternatives for TypeScript e2e testing", marks: ["—", "#3", "#2", "—", "#1"], vis: 60 },
+    { text: "alternative to TestCafe", marks: ["#2", "✓", "#3", "#1", "✓"], vis: 100 },
+    { text: "TestCafe alternative with better trace debugging", marks: ["—", "—", "#2", "#3", "#1"], vis: 60 },
+    { text: "best end-to-end testing framework for TypeScript teams", marks: ["—", "#2", "#2", "—", "✓"], vis: 60 },
+    { text: "Playwright pricing", marks: ["#1", "✓", "#1", "#1", "✓"], vis: 100 },
+    { text: "Is Playwright free", marks: ["✓", "#1", "#1", "✓", "#2"], vis: 100 },
+    { text: "Playwright review", marks: ["#2", "#2", "#1", "—", "—"], vis: 60 },
+    { text: "best browser automation tool for QA teams", marks: ["#1", "—", "—", "#2", "#3"], vis: 60 },
+    { text: "Playwright vs Selenium which is better", marks: ["—", "—", "#2", "—", "—"], vis: 20 },
   ];
   const R = 41, C = 2 * Math.PI * R;
   return (
     <div className="p-5" style={{ animation: "fadeUp 0.3s ease forwards" }}>
       <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--rust)]">Overview</p>
       <h2 className="font-signal-serif mb-0.5 text-2xl text-[var(--ink)]">AI Visibility</h2>
-      <p className="mb-1 text-xs text-[var(--ink-faint)]">Visibility up to 92% composite, across ChatGPT, Gemini, Google AI.</p>
+      <p className="mb-1 text-xs text-[var(--ink-faint)]">Visibility up to 92% composite, across ChatGPT, Claude, Gemini, Perplexity, Google AI.</p>
       <p className="mb-4 text-[11px] text-[var(--ink-faint)]/80">We don&apos;t just track this — Research and Tasks turn it into content and engagement that raise it.</p>
 
       <div className={`${card} mb-3 flex flex-col items-center gap-2 p-4`}>
@@ -154,17 +157,23 @@ function EnginesContent() {
 }
 
 // ── PROMPTS ───────────────────────────────────────────────────────
-const PROMPT_ENGINE_COLORS: Record<string, string> = { gpt: ENG_COLORS.ChatGPT, gemini: ENG_COLORS.Gemini, google: ENG_COLORS["Google AI"] };
+const PROMPT_ENGINE_COLORS: Record<string, string> = {
+  gpt: ENG_COLORS.ChatGPT,
+  claude: ENG_COLORS.Claude,
+  gemini: ENG_COLORS.Gemini,
+  perplexity: ENG_COLORS.Perplexity,
+  google: ENG_COLORS["Google AI"],
+};
 const PROMPT_TYPE_COLORS: Record<string, string> = { branded: "#a855f7", competitor: "#b1552e", commercial: "#3b82f6" };
 
 function PromptsContent() {
   const [search, setSearch] = useState("");
-  const rows: { text: string; vis: number; engines: Record<"gpt" | "gemini" | "google", boolean>; competing: string; type: string }[] = [
-    { text: "Playwright review", vis: 67, engines: { gpt: true, gemini: true, google: false }, competing: "Selenium", type: "branded" },
-    { text: "Playwright pricing", vis: 100, engines: { gpt: true, gemini: true, google: true }, competing: "—", type: "branded" },
-    { text: "Is Playwright free", vis: 100, engines: { gpt: true, gemini: true, google: true }, competing: "—", type: "branded" },
-    { text: "best browser automation tool for QA teams", vis: 67, engines: { gpt: true, gemini: false, google: true }, competing: "Selenium", type: "commercial" },
-    { text: "Playwright vs Selenium which is better", vis: 33, engines: { gpt: false, gemini: true, google: false }, competing: "Selenium", type: "competitor" },
+  const rows: { text: string; vis: number; engines: Record<"gpt" | "claude" | "gemini" | "perplexity" | "google", boolean>; competing: string; type: string }[] = [
+    { text: "Playwright review", vis: 60, engines: { gpt: true, claude: true, gemini: true, perplexity: false, google: false }, competing: "Selenium", type: "branded" },
+    { text: "Playwright pricing", vis: 100, engines: { gpt: true, claude: true, gemini: true, perplexity: true, google: true }, competing: "—", type: "branded" },
+    { text: "Is Playwright free", vis: 100, engines: { gpt: true, claude: true, gemini: true, perplexity: true, google: true }, competing: "—", type: "branded" },
+    { text: "best browser automation tool for QA teams", vis: 60, engines: { gpt: true, claude: false, gemini: false, perplexity: true, google: true }, competing: "Selenium", type: "commercial" },
+    { text: "Playwright vs Selenium which is better", vis: 20, engines: { gpt: false, claude: false, gemini: true, perplexity: false, google: false }, competing: "Selenium", type: "competitor" },
   ];
   const filtered = rows.filter((r) => !search || r.text.toLowerCase().includes(search.toLowerCase()));
 
@@ -178,7 +187,7 @@ function PromptsContent() {
           { label: "PROMPTS", val: "20", sub: "tracked" },
           { label: "WITH GAPS", val: "5", sub: "need articles" },
           { label: "AVG VISIBILITY", val: "92%", sub: "across engines" },
-          { label: "ENGINES", val: "3", sub: "being tracked" },
+          { label: "ENGINES", val: "5", sub: "being tracked" },
         ].map((s) => (
           <div key={s.label} className={`${card} p-3.5`}>
             <p className={kpiLabel}>{s.label}</p>
@@ -241,7 +250,7 @@ function PromptsContent() {
               <span className="truncate text-xs font-medium text-[var(--ink)]/90">{r.text}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              {(["gpt", "gemini", "google"] as const).map((e) => (
+              {(["gpt", "claude", "gemini", "perplexity", "google"] as const).map((e) => (
                 <span key={e} className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.engines[e] ? PROMPT_ENGINE_COLORS[e] : "var(--line)" }} />
               ))}
             </div>
@@ -274,7 +283,7 @@ const CITATION_INSTANCES: Record<string, { url: string; source: string; prompt: 
   "reddit.com": [
     { url: "reddit.com/r/softwaretesting/comments/1b91vv6/playwright_costs/", source: "Google AI", prompt: "Is Playwright free" },
     { url: "reddit.com/r/QualityAssurance/comments/1mxe2yc/ai_in_qaautomation/", source: "Google AI", prompt: "best web automation tool for QA teams" },
-    { url: "reddit.com/r/softwaretesting/comments/1bovaoa/selenium_vs_playwright/", source: "Google AI", prompt: "Playwright vs Selenium which is better" },
+    { url: "reddit.com/r/softwaretesting/comments/1bovaoa/selenium_vs_playwright/", source: "Claude", prompt: "Playwright vs Selenium which is better" },
   ],
   "linkedin.com": [
     { url: "linkedin.com/posts/qa-weekly_playwright-vs-selenium-activity/", source: "Perplexity", prompt: "Playwright vs Selenium which is better" },
