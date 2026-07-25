@@ -119,3 +119,13 @@ export async function assertUnderPromptLimit(db: any, userId: string, brandId: s
   if ((count ?? 0) >= limit) return { ok: false, limit };
   return { ok: true };
 }
+
+// Case/whitespace-insensitive — "Best CRM software" and "best crm software "
+// are the same tracked query to an AI engine, so both count as a duplicate
+// even though they're not byte-for-byte identical strings.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function promptAlreadyTracked(db: any, brandId: string, text: string): Promise<boolean> {
+  const normalized = text.trim().toLowerCase();
+  const { data } = await db.from("tracked_prompts").select("text").eq("brand_id", brandId);
+  return (data ?? []).some((p: { text: string }) => p.text.trim().toLowerCase() === normalized);
+}

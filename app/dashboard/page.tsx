@@ -1865,6 +1865,11 @@ function DashboardPage() {
 
   async function addManualPrompt() {
     if (!brand || !newPromptText.trim() || addingPrompt) return;
+    const normalized = newPromptText.trim().toLowerCase();
+    if (brand.trackedPrompts.some((p) => p.text.trim().toLowerCase() === normalized)) {
+      setError("You're already tracking this exact prompt.");
+      return;
+    }
     setAddingPrompt(true);
     try {
       const res = await fetch("/api/prompts", {
@@ -1877,6 +1882,8 @@ function DashboardPage() {
       if (data.prompt) {
         setBrand((b) => b ? { ...b, trackedPrompts: [...b.trackedPrompts, data.prompt] } : b);
         setNewPromptText("");
+      } else if (data.error) {
+        setError(data.error);
       }
     } finally {
       setAddingPrompt(false);

@@ -103,6 +103,7 @@ function SetupContent() {
   const [prompts, setPrompts] = useState<TrackedPrompt[]>([]);
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
   const [newPrompt, setNewPrompt] = useState("");
+  const [promptError, setPromptError] = useState("");
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const addPromptRef = useRef<HTMLDivElement>(null);
@@ -218,6 +219,12 @@ function SetupContent() {
   function addPrompt() {
     const trimmed = newPrompt.trim();
     if (!trimmed) return;
+    setPromptError("");
+    const normalized = trimmed.toLowerCase();
+    if (prompts.some((p) => p.text.trim().toLowerCase() === normalized)) {
+      setPromptError("You're already tracking this exact prompt.");
+      return;
+    }
     const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
     if (selectedCount >= currentPromptCap()) return;
     setPrompts([...prompts, { id: `custom-${Date.now()}`, text: trimmed, category: "custom" }]);
@@ -578,7 +585,7 @@ function SetupContent() {
                   <div className="flex gap-2">
                     <input
                       value={newPrompt}
-                      onChange={(e) => setNewPrompt(e.target.value)}
+                      onChange={(e) => { setNewPrompt(e.target.value); setPromptError(""); }}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPrompt(); } }}
                       placeholder="Add custom prompt…"
                       disabled={remaining <= 0}
@@ -592,7 +599,10 @@ function SetupContent() {
                       Add
                     </button>
                   </div>
-                  {remaining <= 0 && (
+                  {promptError && (
+                    <p className="text-xs text-[var(--rust-deep)] font-medium mt-2">{promptError}</p>
+                  )}
+                  {!promptError && remaining <= 0 && (
                     <p className="text-xs text-[var(--rust-deep)] font-medium mt-2">
                       Limit reached — deselect a prompt above to write your own, or <a href="/pricing" className="underline">upgrade for more</a>
                     </p>

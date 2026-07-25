@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { generatePromptSuggestions } from "@/lib/prompt-suggestions";
-import { assertUnderPromptLimit } from "@/lib/plan-limits";
+import { assertUnderPromptLimit, promptAlreadyTracked } from "@/lib/plan-limits";
 import { requireBrandAccess } from "@/lib/team";
 
 // Moves one suggestion into tracked_prompts, then backfills the pool with a
@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
   const limitCheck = await assertUnderPromptLimit(db, access.ownerId, brandId);
   if (!limitCheck.ok) {
     return NextResponse.json({ error: `Your plan tracks up to ${limitCheck.limit} active prompts. Upgrade to track more.` }, { status: 402 });
+  }
+
+  if (await promptAlreadyTracked(db, brandId, text)) {
+    return NextResponse.json({ error: "You're already tracking this exact prompt." }, { status: 409 });
   }
 
   const { data: prompt, error } = await db
