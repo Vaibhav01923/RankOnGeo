@@ -34,6 +34,45 @@ const QUICK_EDITS = [
   "Add a comparison table",
 ];
 
+// Shared with both the saved article's read-only view and the "preview full
+// AI revision" modal, so a pending edit renders identically to how it'll
+// actually look once accepted — no separate formatting path to drift out of sync.
+const markdownComponents: import("react-markdown").Components = {
+  h1: () => null,
+  h2: ({ children }) => <h2 className="text-2xl font-bold text-[var(--ink)] mt-10 mb-4 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-lg font-semibold text-[var(--ink)]/90 mt-7 mb-3">{children}</h3>,
+  p: ({ children }) => <p className="text-[var(--ink)]/80 leading-relaxed mb-5 text-base">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-[var(--ink)]">{children}</strong>,
+  a: ({ href, children }) => <a href={href} className="text-[var(--rust)] underline underline-offset-2 hover:text-[var(--rust-deep)]">{children}</a>,
+  blockquote: ({ children }) => <blockquote className="bg-[var(--line-soft)] rounded-lg px-5 py-3 italic text-[var(--ink-soft)] my-5 text-sm">{children}</blockquote>,
+  code: ({ className, children, ...props }) => {
+    const isBlock = className?.startsWith("language-");
+    const lang = className?.replace("language-", "") ?? "";
+    if (isBlock) {
+      return (
+        <div className="my-5 rounded-xl overflow-hidden border border-gray-800">
+          {lang && <div className="bg-white/[0.1] px-4 py-2 text-xs text-gray-400 font-mono">{lang}</div>}
+          <pre className="bg-gray-950 text-gray-100 px-5 py-4 overflow-x-auto text-sm font-mono leading-6"><code>{children}</code></pre>
+        </div>
+      );
+    }
+    return <code className="bg-[var(--rust-wash)] text-[var(--rust-deep)] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
+  },
+  pre: ({ children }) => <>{children}</>,
+  hr: () => <hr className="border-[var(--line)] my-8" />,
+};
+
+function ArticleMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {content}
+    </ReactMarkdown>
+  );
+}
+
 function ArticleContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -84,6 +123,7 @@ function ArticleContent() {
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState("");
   const [pendingContent, setPendingContent] = useState<{ article: string; title: string; wordCount: number } | null>(null);
+  const [showRevisionPreview, setShowRevisionPreview] = useState(false);
 
   const gapPrompt = searchParams.get("gapPrompt") ?? "";
   const brandName = searchParams.get("brand") ?? "";
@@ -517,38 +557,7 @@ function ArticleContent() {
             ) : (
               /* Read-only rendered article */
               <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl px-10 py-10">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: () => null,
-                    h2: ({ children }) => <h2 className="text-2xl font-bold text-[var(--ink)] mt-10 mb-4 first:mt-0">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-lg font-semibold text-[var(--ink)]/90 mt-7 mb-3">{children}</h3>,
-                    p: ({ children }) => <p className="text-[var(--ink)]/80 leading-relaxed mb-5 text-base">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ol>,
-                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold text-[var(--ink)]">{children}</strong>,
-                    a: ({ href, children }) => <a href={href} className="text-[var(--rust)] underline underline-offset-2 hover:text-[var(--rust-deep)]">{children}</a>,
-                    blockquote: ({ children }) => <blockquote className="bg-[var(--line-soft)] rounded-lg px-5 py-3 italic text-[var(--ink-soft)] my-5 text-sm">{children}</blockquote>,
-                    code: ({ className, children, ...props }) => {
-                      const isBlock = className?.startsWith("language-");
-                      const lang = className?.replace("language-", "") ?? "";
-                      if (isBlock) {
-                        return (
-                          <div className="my-5 rounded-xl overflow-hidden border border-gray-800">
-                            {lang && <div className="bg-white/[0.1] px-4 py-2 text-xs text-gray-400 font-mono">{lang}</div>}
-                            <pre className="bg-gray-950 text-gray-100 px-5 py-4 overflow-x-auto text-sm font-mono leading-6"><code>{children}</code></pre>
-                          </div>
-                        );
-                      }
-                      return <code className="bg-[var(--rust-wash)] text-[var(--rust-deep)] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
-                    },
-                    pre: ({ children }) => <>{children}</>,
-                    hr: () => <hr className="border-[var(--line)] my-8" />,
-                  }}
-                >
-                  {articleBody}
-                </ReactMarkdown>
+                <ArticleMarkdown content={articleBody} />
               </div>
             )}
 
@@ -616,9 +625,15 @@ function ArticleContent() {
                         <p className="text-xs font-semibold text-[var(--olive)]">AI revision ready</p>
                         <span className="text-xs text-[var(--olive)]">{pendingContent.wordCount.toLocaleString()} words</span>
                       </div>
-                      <p className="text-xs text-[var(--ink-soft)] leading-relaxed mb-3 line-clamp-3">
+                      <p className="text-xs text-[var(--ink-soft)] leading-relaxed mb-2 line-clamp-3">
                         {pendingContent.article.replace(/^#+ .+\n+/m, "").replace(/[#*_`]/g, "").substring(0, 200)}…
                       </p>
+                      <button
+                        onClick={() => setShowRevisionPreview(true)}
+                        className="text-xs font-medium text-[var(--rust)] hover:text-[var(--rust-deep)] underline underline-offset-2 mb-3"
+                      >
+                        Preview full revision →
+                      </button>
                       <div className="flex gap-2">
                         <button
                           onClick={acceptRefinement}
@@ -674,6 +689,39 @@ function ArticleContent() {
           </div>
         )}
       </main>
+
+      {showRevisionPreview && pendingContent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowRevisionPreview(false)}>
+          <div className="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-[var(--line)] flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-base font-semibold text-[var(--ink)]">Preview AI revision</h3>
+                <p className="text-xs text-[var(--ink-faint)] mt-0.5">{pendingContent.wordCount.toLocaleString()} words — not saved yet</p>
+              </div>
+              <button onClick={() => setShowRevisionPreview(false)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)] text-xl">×</button>
+            </div>
+            <div className="px-10 py-8 overflow-y-auto">
+              <h1 className="font-signal-serif text-3xl font-[350] text-[var(--ink)] tracking-tight leading-tight mb-6">{pendingContent.title}</h1>
+              <ArticleMarkdown content={pendingContent.article.replace(/^# .+\n?/m, "").trim()} />
+            </div>
+            <div className="px-6 py-4 border-t border-[var(--line)] flex gap-2 shrink-0">
+              <button
+                onClick={async () => { await acceptRefinement(); setShowRevisionPreview(false); }}
+                disabled={saving}
+                className="flex-1 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] py-2.5 rounded-lg hover:bg-[var(--rust-deep)] disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Saving…" : "Accept & save"}
+              </button>
+              <button
+                onClick={() => { setPendingContent(null); setShowRevisionPreview(false); }}
+                className="text-sm text-[var(--ink-soft)] px-4 py-2.5 rounded-lg border border-[var(--line)] hover:bg-[var(--line-soft)] transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showPublishModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => { if (!publishing) { setShowPublishModal(false); setPublishResult(null); } }}>
