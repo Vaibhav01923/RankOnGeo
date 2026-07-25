@@ -167,15 +167,23 @@ function SetupContent() {
     setDeselectedIds(new Set());
   }
 
+  // Gate on the plan's total cap vs. what's currently selected — not a fixed
+  // "custom slots" number — so deselecting an AI-generated prompt always
+  // opens room to write a replacement, on every plan including Pro. Anyone
+  // without a paid plan yet (anonymous or signed-in-unpaid) is capped at the
+  // free/Pro limit — every paid plan includes at least that many, so nothing
+  // selected here ever needs trimming once a bigger plan gets picked in
+  // step 4; upgrading only ever adds room for more later, never takes any
+  // away.
+  function currentPromptCap(): number {
+    return userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
+  }
+
   function addPrompt() {
     const trimmed = newPrompt.trim();
     if (!trimmed) return;
-    // Gate on the plan's total cap vs. what's currently selected — not a fixed
-    // "custom slots" number — so deselecting an AI-generated prompt always
-    // opens room to write a replacement, on every plan including Pro.
-    const totalCap = userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
     const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
-    if (selectedCount >= totalCap) return;
+    if (selectedCount >= currentPromptCap()) return;
     setPrompts([...prompts, { id: `custom-${Date.now()}`, text: trimmed, category: "custom" }]);
     setNewPrompt("");
   }
@@ -516,7 +524,7 @@ function SetupContent() {
             </div>
 
             {(() => {
-              const totalCap = userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
+              const totalCap = currentPromptCap();
               const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
               const remaining = totalCap - selectedCount;
               return (
@@ -605,6 +613,7 @@ function SetupContent() {
                   >
                     <p className="text-sm font-semibold text-[var(--ink)]">{p.name}</p>
                     <p className="text-xs text-[var(--ink-soft)] mt-0.5">${p.price}/mo after trial</p>
+                    <p className="text-xs text-[var(--ink-faint)] mt-0.5">Room for {PLAN_PROMPT_LIMITS[p.planKey] ?? FREE_PROMPT_LIMIT} tracked prompts</p>
                   </button>
                 ))}
               </div>
