@@ -163,6 +163,23 @@ const TAB_LABELS: Record<Tab, string> = {
   feedback: "Feedback",
 };
 
+const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
+  { tab: "overview", title: "Your AI visibility score", body: "This is your AI visibility percentage — how often your brand gets mentioned across all 5 AI engines: ChatGPT, Claude, Gemini, Perplexity, and Google AI." },
+  { tab: "history", title: "Engines", body: "This shows your scan history and visibility percentage over time, broken down by each of the 5 AI engines." },
+  { tab: "results", title: "Prompts", body: "These are prompts real people might ask AI in your space. See exactly which ones you're getting mentioned on — and which you're not." },
+  { tab: "citations", title: "Citations", body: "These are the sources AI uses to decide who to mention. Engage on them with your brand name to improve your odds of being cited." },
+  { tab: "competitors", title: "Competitors", body: "See every competitor AI mentions alongside — or instead of — you." },
+  { tab: "tasks", title: "Tasks", body: "Use this to boost engagement on replies that promote your brand on Reddit and other citation sources." },
+  { tab: "gaps", title: "Research", body: "Write these articles and publish one on your website every day — that steadily improves your SEO rankings and AI mentions. Publishing is one click away in the Publishing tab." },
+  { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
+  { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
+  { tab: "webAnalytics", title: "Web Analytics", body: "Track your website's own traffic and search performance here too." },
+  { tab: "llmAnalytics", title: "LLM Analytics", body: "See which AI bots — GPTBot, ClaudeBot, and more — are crawling your site." },
+  { tab: "alerts", title: "Alerts", body: "Get notified about changes to your AI visibility on Slack, email, or whatever channel you prefer." },
+  { tab: "team", title: "Team", body: "Invite your teammates to collaborate on this workspace." },
+  { tab: "feedback", title: "Feedback", body: "Request a feature, report a bug, or get help any time — right here." },
+];
+
 const EXPLORE_CHECKLIST_ITEMS: { tab: Tab; label: string; desc: string }[] = [
   { tab: "citations", label: "Citations", desc: "Which sites AI engines quote instead of you" },
   { tab: "gaps", label: "Research", desc: "Exact queries where you're invisible right now" },
@@ -745,6 +762,9 @@ function DashboardPage() {
   // the ~30s polling window to resolve.
   const [paymentPending, setPaymentPending] = useState(false);
   const [recheckingPayment, setRecheckingPayment] = useState(false);
+  // Guided tour shown once right after a trial starts, walking a new user
+  // across every tab. null = not running; an index into TOUR_STEPS otherwise.
+  const [tourStepIndex, setTourStepIndex] = useState<number | null>(null);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
@@ -1101,6 +1121,14 @@ function DashboardPage() {
       params.delete("verify_expired");
       const qs = params.toString();
       router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+
+    // First dashboard load right after a trial checkout — walk the new user
+    // across every tab once. Gated on localStorage (not just the URL param)
+    // so it never re-triggers on a later visit.
+    if (searchParams.get("trial") === "1" && localStorage.getItem("dashboardTourSeen") !== "1") {
+      localStorage.setItem("dashboardTourSeen", "1");
+      setTourStepIndex(0);
     }
 
     // A pending banner set during a prior visit's checkout poll (below) is
@@ -1796,6 +1824,29 @@ function DashboardPage() {
         return next;
       });
     }
+  }
+
+  function tourNext() {
+    if (tourStepIndex === null) return;
+    if (tourStepIndex >= TOUR_STEPS.length - 1) {
+      setTourStepIndex(null);
+      return;
+    }
+    const next = tourStepIndex + 1;
+    setTourStepIndex(next);
+    navTo(TOUR_STEPS[next].tab);
+  }
+
+  function tourPrev() {
+    if (tourStepIndex === null || tourStepIndex === 0) return;
+    const prev = tourStepIndex - 1;
+    setTourStepIndex(prev);
+    navTo(TOUR_STEPS[prev].tab);
+  }
+
+  function startTour() {
+    setTourStepIndex(0);
+    navTo(TOUR_STEPS[0].tab);
   }
 
   function dismissExploreCard() {
@@ -5695,9 +5746,14 @@ function DashboardPage() {
           {/* FEEDBACK TAB */}
           {activeTab === "feedback" && (
             <div className="max-w-3xl mx-auto w-full">
-              <div className="mb-5">
-                <h2 className="text-lg font-semibold text-[var(--ink)]">Feedback &amp; Suggestions</h2>
-                <p className="text-sm text-[var(--ink-soft)] mt-0.5">Share your ideas, report bugs, or suggest improvements. We read every submission.</p>
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--ink)]">Feedback &amp; Suggestions</h2>
+                  <p className="text-sm text-[var(--ink-soft)] mt-0.5">Share your ideas, report bugs, or suggest improvements. We read every submission.</p>
+                </div>
+                <button onClick={startTour} className="text-xs font-medium text-[var(--rust)] underline underline-offset-2 hover:text-[var(--rust-deep)] shrink-0 whitespace-nowrap">
+                  Retake the product tour →
+                </button>
               </div>
 
               <div className="grid md:grid-cols-[1fr_260px] gap-5">
@@ -6244,7 +6300,7 @@ function DashboardPage() {
       {/* Add Channel Modal */}
       {showAddChannel && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowAddChannel(false)}>
-          <div className="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -6285,10 +6341,10 @@ function DashboardPage() {
                   <div className="bg-[#21759b]/5 border border-[#21759b]/20 rounded-xl p-4">
                     <p className="text-xs font-semibold text-[#21759b] mb-2">How to connect WordPress</p>
                     <ol className="space-y-1.5 text-xs text-[var(--ink-soft)]">
-                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">1.</span>In WP Admin, go to <span className="font-medium">Users → Profile</span> (your own user)</li>
-                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">2.</span>Scroll to <span className="font-medium">Application Passwords</span>, name it &quot;RankOnGeo&quot;, click <span className="font-medium">Add New Application Password</span></li>
-                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">3.</span>Copy the generated password below — WordPress only shows it once</li>
-                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">4.</span>Enter your WP username exactly as shown on that Users page (not your display name)</li>
+                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">1.</span><span>In WP Admin, go to <span className="font-medium">Users → Profile</span> (your own user)</span></li>
+                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">2.</span><span>Scroll to <span className="font-medium">Application Passwords</span>, name it &quot;RankOnGeo&quot;, click <span className="font-medium">Add New Application Password</span></span></li>
+                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">3.</span><span>Copy the generated password below — WordPress only shows it once</span></li>
+                      <li className="flex gap-2"><span className="text-[#21759b] font-semibold shrink-0">4.</span><span>Enter your WP username exactly as shown on that Users page (not your display name)</span></li>
                     </ol>
                     <p className="text-[10px] text-[#21759b]/80 mt-2">Publishing failing with a 401? A security plugin may be blocking the REST API — allowlist <span className="font-mono">/wp-json/wp/v2/posts</span>.</p>
                   </div>
@@ -6299,10 +6355,10 @@ function DashboardPage() {
                   <div className="bg-[#5865f2]/5 border border-[#5865f2]/20 rounded-xl p-4">
                     <p className="text-xs font-semibold text-[#5865f2] mb-2">How to get a Discord webhook URL</p>
                     <ol className="space-y-1.5 text-xs text-[var(--ink-soft)]">
-                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">1.</span>Open your Discord server → right-click the channel you want articles posted in</li>
-                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">2.</span>Click <span className="font-medium">Edit Channel</span> → <span className="font-medium">Integrations</span> → <span className="font-medium">Webhooks</span></li>
-                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">3.</span>Click <span className="font-medium">New Webhook</span>, give it a name, then click <span className="font-medium">Copy Webhook URL</span></li>
-                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">4.</span>Paste the URL below — it starts with <span className="font-mono bg-[#5865f2]/10 px-1 rounded">discord.com/api/webhooks/…</span></li>
+                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">1.</span><span>Open your Discord server → right-click the channel you want articles posted in</span></li>
+                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">2.</span><span>Click <span className="font-medium">Edit Channel</span> → <span className="font-medium">Integrations</span> → <span className="font-medium">Webhooks</span></span></li>
+                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">3.</span><span>Click <span className="font-medium">New Webhook</span>, give it a name, then click <span className="font-medium">Copy Webhook URL</span></span></li>
+                      <li className="flex gap-2"><span className="text-[#5865f2] font-semibold shrink-0">4.</span><span>Paste the URL below — it starts with <span className="font-mono bg-[#5865f2]/10 px-1 rounded">discord.com/api/webhooks/…</span></span></li>
                     </ol>
                   </div>
                 )}
@@ -6375,12 +6431,12 @@ Body: {
                       <input value={newChannel.url} onChange={(e) => setNewChannel((p) => ({ ...p, url: e.target.value }))} placeholder="https://yourblog.com" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">Username</label>
-                      <input value={newChannel.username} onChange={(e) => setNewChannel((p) => ({ ...p, username: e.target.value }))} placeholder="admin" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
+                      <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">WordPress username</label>
+                      <input name="wp-site-username" autoComplete="off" value={newChannel.username} onChange={(e) => setNewChannel((p) => ({ ...p, username: e.target.value }))} placeholder="admin" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">Application password</label>
-                      <input type="password" value={newChannel.apiKey} onChange={(e) => setNewChannel((p) => ({ ...p, apiKey: e.target.value }))} placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
+                      <label className="text-xs font-medium text-[var(--ink-soft)] block mb-1">WordPress application password</label>
+                      <input type="password" name="wp-application-password" autoComplete="new-password" value={newChannel.apiKey} onChange={(e) => setNewChannel((p) => ({ ...p, apiKey: e.target.value }))} placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--rust)]/40" />
                     </div>
                   </>
                 )}
@@ -6731,6 +6787,41 @@ Body: {
           <span className="text-sm font-medium text-[var(--ink)]">Confirming your subscription…</span>
         </div>
       )}
+      {tourStepIndex !== null && (() => {
+        const step = TOUR_STEPS[tourStepIndex];
+        return (
+          <div className="fixed bottom-4 right-4 z-[70] w-[calc(100vw-2rem)] max-w-sm bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-2xl p-5">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-[10px] font-semibold text-[var(--rust)] uppercase tracking-widest">
+                Quick tour · {tourStepIndex + 1} of {TOUR_STEPS.length}
+              </p>
+              <button onClick={() => setTourStepIndex(null)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)] text-lg leading-none shrink-0">×</button>
+            </div>
+            <h3 className="text-sm font-semibold text-[var(--ink)] mb-1.5">{step.title}</h3>
+            <p className="text-xs text-[var(--ink-soft)] leading-relaxed mb-4">{step.body}</p>
+            <div className="flex items-center justify-between gap-3">
+              <button onClick={() => setTourStepIndex(null)} className="text-xs text-[var(--ink-faint)] hover:text-[var(--ink-soft)] transition-colors">
+                Skip tour
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={tourPrev}
+                  disabled={tourStepIndex === 0}
+                  className="text-xs font-medium text-[var(--ink-soft)] disabled:opacity-30 hover:text-[var(--ink)] transition-colors px-2 py-1.5"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={tourNext}
+                  className="text-xs font-semibold bg-[var(--rust)] text-[var(--surface)] px-4 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
+                >
+                  {tourStepIndex === TOUR_STEPS.length - 1 ? "Done" : "Next"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* ENGAGE PANEL */}
       {engageItem && (() => {
         const engagePlatform = getEngagePlatform(engageItem.url);
