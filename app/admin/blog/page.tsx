@@ -346,6 +346,7 @@ export default function AdminBlogPage() {
           <h1 className="font-signal-serif text-3xl font-[350] tracking-tight text-[var(--ink)]">Blog studio</h1>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/admin/stats" className={btnGhost}>Funnel stats →</Link>
           <Link href="/blog" className={btnGhost}>View public blog →</Link>
           <button onClick={() => openEditor()} className={btnPrimary}>New post</button>
         </div>

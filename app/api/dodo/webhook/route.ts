@@ -119,6 +119,35 @@ async function handleEarlyWaitlist(db: SupabaseClient<any, any, any>, sub: Webho
   }
 }
 
+// Records a trial-lifecycle funnel event exactly once per subscription.
+// subscription.active is already documented as able to fire more than once
+// (see handleEarlyWaitlist above), and subscription.renewed fires on every
+// renewal for the life of the subscription, not just the first one after a
+// trial — the existence check is what turns "every renewal" into "only the
+// first renewal after a trial", i.e. the actual trial->paid conversion
+// moment, without a separate trial_ends_at column anywhere.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recordTrialEventOnce(db: SupabaseClient<any, any, any>, eventType: "trial_started" | "trial_converted", sub: WebhookPayload.Subscription) {
+  if (sub.metadata?.trial !== "true") return;
+
+  const { data: existing } = await db
+    .from("funnel_events")
+    .select("id")
+    .eq("event_type", eventType)
+    .eq("metadata->>subscriptionId", sub.subscription_id)
+    .maybeSingle();
+  if (existing) return;
+
+  const plan = PRODUCT_ID_TO_PLAN[sub.product_id] ?? sub.metadata?.plan ?? "starter";
+  await db.from("funnel_events").insert({
+    event_type: eventType,
+    email: sub.customer?.email ?? null,
+    user_id: sub.metadata?.userId || null,
+    plan,
+    metadata: { subscriptionId: sub.subscription_id },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
 
@@ -141,6 +170,7 @@ export async function POST(req: NextRequest) {
     const sub = event.data as WebhookPayload.Subscription;
     await upsertPlanFromSubscription(db, sub, event.type);
     await handleEarlyWaitlist(db, sub);
+    await recordTrialEventOnce(db, "trial_started", sub);
   }
 
   // Fires when an existing subscription's plan/product changes — including
@@ -162,6 +192,7 @@ export async function POST(req: NextRequest) {
         .update({ current_period_end: sub.next_billing_date ?? null, payment_failed_at: null })
         .eq("user_id", userId);
     }
+    await recordTrialEventOnce(db, "trial_converted", sub);
   }
 
   // Fires when a RENEWAL payment fails and the subscription enters Dodo's own

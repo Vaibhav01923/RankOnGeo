@@ -92,6 +92,16 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   const userId = user?.id;
 
+  // Fire-and-forget — never blocks or fails the actual request. Every call
+  // here is either the landing page/setup wizard's top-of-funnel submission
+  // (anonymous) or an already signed-in user adding another brand from
+  // inside the app; is_anonymous is what lets the admin stats page tell
+  // those two apart.
+  serverClient()
+    .from("funnel_events")
+    .insert({ event_type: "domain_submitted", domain: normalizedIncoming, user_id: userId ?? null, is_anonymous: !userId })
+    .then(() => {});
+
   // Logged-in users get a generous cap (normal usage adding/re-analyzing
   // several brands); anonymous callers get the same strict cap as the public
   // /api/analyze tool, since this route triggers the same crawl+OpenAI cost.

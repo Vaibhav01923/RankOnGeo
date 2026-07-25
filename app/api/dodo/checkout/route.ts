@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
-import { clientFromRequest } from "@/lib/supabase";
+import { clientFromRequest, serverClient } from "@/lib/supabase";
 
 const getDodo = () =>
   new DodoPayments({
@@ -59,6 +59,24 @@ export async function POST(req: NextRequest) {
     },
     customer: { email: user.email! },
   });
+
+  // Fire-and-forget — "attempted" a trial checkout, not confirmed. The gap
+  // between this and the webhook-confirmed trial_started event is real
+  // card/mandate failures (e.g. the INR e-mandate registration issue seen
+  // earlier), which this alone can't distinguish from someone just abandoning
+  // the Dodo page.
+  if (validTrialDays) {
+    serverClient()
+      .from("funnel_events")
+      .insert({
+        event_type: "trial_checkout_started",
+        email: user.email,
+        user_id: user.id,
+        plan,
+        metadata: { subscriptionSessionId: session.session_id },
+      })
+      .then(() => {});
+  }
 
   return NextResponse.json({ url: session.checkout_url });
 }
