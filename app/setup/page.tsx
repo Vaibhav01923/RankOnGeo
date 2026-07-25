@@ -37,6 +37,19 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "trial", label: "Start free trial" },
 ];
 
+// Anonymous visitors going through the trial funnel aren't capped at a
+// specific plan's limit while selecting prompts in step 3 — instead, step 4
+// auto-recommends whichever plan actually covers how many they picked, so
+// there's never a "you built 18, only 10 will be tracked" bait-and-switch.
+// This is the platform-wide ceiling on how many they can select at all.
+const ANONYMOUS_TRIAL_BROWSE_CAP = Math.max(...Object.values(PLAN_PROMPT_LIMITS));
+
+function recommendedPlanFor(promptCount: number): string {
+  if (promptCount > (PLAN_PROMPT_LIMITS.growth ?? 20)) return "enterprise";
+  if (promptCount > (PLAN_PROMPT_LIMITS.starter ?? 10)) return "growth";
+  return "starter";
+}
+
 function SetupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,6 +66,16 @@ function SetupContent() {
       .select("plan, dodo_subscription_id")
       .single()
       .then(({ data }) => { if (data?.dodo_subscription_id) setUserPlan(data.plan); });
+  }, []);
+
+  // Distinguishes "signed in but never subscribed" (still capped at the free
+  // limit — they skip step 4 entirely via handleStart's signed-in branch, so
+  // there's no step 4 to auto-pick a plan big enough for whatever they
+  // selected) from "anonymous visitor going through the trial funnel" (gets
+  // the generous browse cap below).
+  const [hasSession, setHasSession] = useState(false);
+  useEffect(() => {
+    createSupabaseBrowserClient().auth.getUser().then(({ data: { user } }) => setHasSession(!!user));
   }, []);
 
   useEffect(() => {
@@ -87,8 +110,20 @@ function SetupContent() {
   // Step 4: trial signup
   const [trialEmail, setTrialEmail] = useState("");
   const [trialPlan, setTrialPlan] = useState(PRICING[0].planKey);
+  const [trialPlanTouched, setTrialPlanTouched] = useState(false);
   const [trialSubmitting, setTrialSubmitting] = useState(false);
   const [trialError, setTrialError] = useState("");
+
+  // Auto-recommend whichever plan actually covers how many prompts they
+  // selected — 11 selected quietly recommends Business instead of either
+  // capping them at 10 or (worse) letting them build a list Pro can't
+  // track. Only while they haven't manually picked a plan themselves;
+  // once they click a card directly, their choice sticks.
+  useEffect(() => {
+    if (trialPlanTouched) return;
+    const selectedCount = prompts.filter((p) => !deselectedIds.has(p.id)).length;
+    setTrialPlan(recommendedPlanFor(selectedCount));
+  }, [prompts, deselectedIds, trialPlanTouched]);
 
   // Draw attention to the "add your own" slot as soon as the generated
   // prompts are on screen, instead of leaving it below the fold where people
@@ -169,14 +204,15 @@ function SetupContent() {
 
   // Gate on the plan's total cap vs. what's currently selected — not a fixed
   // "custom slots" number — so deselecting an AI-generated prompt always
-  // opens room to write a replacement, on every plan including Pro. Anyone
-  // without a paid plan yet (anonymous or signed-in-unpaid) is capped at the
-  // free/Pro limit — every paid plan includes at least that many, so nothing
-  // selected here ever needs trimming once a bigger plan gets picked in
-  // step 4; upgrading only ever adds room for more later, never takes any
-  // away.
+  // opens room to write a replacement. Anonymous visitors (the trial funnel)
+  // get the generous platform-wide ceiling since step 4 auto-recommends
+  // whichever plan actually fits their selection. Signed-in-but-unpaid users
+  // stay capped at the free/Pro limit — they skip step 4 entirely via
+  // handleStart's signed-in branch, so there's no later step to pick a
+  // bigger plan for them.
   function currentPromptCap(): number {
-    return userPlan ? PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT : FREE_PROMPT_LIMIT;
+    if (userPlan) return PLAN_PROMPT_LIMITS[userPlan] ?? FREE_PROMPT_LIMIT;
+    return hasSession ? FREE_PROMPT_LIMIT : ANONYMOUS_TRIAL_BROWSE_CAP;
   }
 
   function addPrompt() {
@@ -254,7 +290,13 @@ function SetupContent() {
       return;
     }
 
-    stashPendingBrandEdits(currentEdits());
+    // Safety net, not the common path: step 4 auto-recommends a plan that
+    // covers the full selection, but if they manually override to a smaller
+    // one, trim quietly to what it actually allows rather than saving more
+    // prompts than the plan (and billing) supports.
+    const edits = currentEdits();
+    const planCap = PLAN_PROMPT_LIMITS[trialPlan] ?? FREE_PROMPT_LIMIT;
+    stashPendingBrandEdits({ ...edits, prompts: edits.prompts.slice(0, planCap) });
     fetch("/api/setup/send-password-link", { method: "POST" }).catch(() => {});
 
     const res = await fetch("/api/dodo/checkout", {
@@ -598,13 +640,18 @@ function SetupContent() {
             </p>
 
             <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--ink)] mb-2">Choose your plan</p>
+              <p className="text-sm font-medium text-[var(--ink)] mb-2">
+                Choose your plan
+                {!trialPlanTouched && (
+                  <span className="text-[var(--ink-faint)] font-normal"> — picked to fit your {prompts.filter((p) => !deselectedIds.has(p.id)).length} selected prompts</span>
+                )}
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {PRICING.map((p) => (
                   <button
                     key={p.planKey}
                     type="button"
-                    onClick={() => setTrialPlan(p.planKey)}
+                    onClick={() => { setTrialPlan(p.planKey); setTrialPlanTouched(true); }}
                     className={`text-left rounded-lg border px-4 py-3 transition-colors ${
                       trialPlan === p.planKey
                         ? "border-[var(--rust)] bg-[var(--rust-wash)]"
