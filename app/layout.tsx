@@ -61,10 +61,11 @@ export const metadata: Metadata = {
 };
 
 // Runs before first paint so the page never flashes the wrong theme —
-// reads the user's explicit choice if they've made one, otherwise follows
-// system preference. Kept inline (not a separate script file) so it blocks
+// reads the user's explicit choice if they've made one (set by
+// ThemeToggle), otherwise defaults to light regardless of system/OS
+// preference. Kept inline (not a separate script file) so it blocks
 // rendering instead of racing it.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t="light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
 
 export default function RootLayout({
   children,
