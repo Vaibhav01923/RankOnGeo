@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import { clientFromRequest, serverClient } from "@/lib/supabase";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 const getDodo = () =>
   new DodoPayments({
@@ -42,7 +43,33 @@ export async function POST(req: NextRequest) {
   // via DataFast's revenue-attribution integration (see Dodo webhook setup).
   const datafastVisitorId = req.cookies.get("datafast_visitor_id")?.value;
 
-  const validTrialDays = typeof trialDays === "number" && trialDays > 0 && trialDays <= 30 ? trialDays : undefined;
+  let validTrialDays = typeof trialDays === "number" && trialDays > 0 && trialDays <= 30 ? trialDays : undefined;
+
+  // One free trial per account, ever — trialDays is client-supplied, so
+  // trusting it blindly would let anyone re-request a trial on a second
+  // checkout after theirs lapsed or converted. trial_started (not
+  // trial_checkout_started) is the signal: it only exists once Dodo's
+  // webhook confirms the mandate actually activated, so a prior *failed*
+  // checkout attempt doesn't unfairly block a retry.
+  if (validTrialDays) {
+    const { data: priorTrial } = await serverClient()
+      .from("funnel_events")
+      .select("id")
+      .eq("event_type", "trial_started")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (priorTrial) validTrialDays = undefined;
+  }
+
+  // Defense in depth against the "spin up N throwaway emails to keep
+  // re-claiming trials" pattern, which the per-account check above can't
+  // catch on its own since each one is a genuinely new account.
+  if (validTrialDays) {
+    const ipOk = await checkRateLimit("trial-checkout", clientIp(req), 3, 86400);
+    if (!ipOk) {
+      return NextResponse.json({ error: "Too many trial signups from this network — try again later." }, { status: 429 });
+    }
+  }
 
   const session = await getDodo().checkoutSessions.create({
     product_cart: [{ product_id: productId, quantity: 1 }],

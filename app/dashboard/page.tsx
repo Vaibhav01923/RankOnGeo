@@ -526,7 +526,7 @@ function PaywallModal({ onClose }: { onClose: () => void }) {
           <h2 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Upgrade to unlock this</h2>
           <p className="text-sm text-[var(--ink-soft)]">Pick a plan to see full visibility scores and start engaging on citations.</p>
         </div>
-        <PricingCards compact />
+        <PricingCards compact hideTrialCta />
       </div>
     </div>
   );

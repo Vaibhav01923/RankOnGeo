@@ -5,7 +5,20 @@ import { PRICING } from "@/lib/pricing";
 
 export { PRICING };
 
-export function PricingCards({ compact = false, early = false }: { compact?: boolean; early?: boolean }) {
+export function PricingCards({
+  compact = false,
+  early = false,
+  hideTrialCta = false,
+}: {
+  compact?: boolean;
+  early?: boolean;
+  // The free trial is a one-time, new-account thing (see /api/dodo/checkout's
+  // per-account + per-IP checks) — set this wherever PricingCards renders for
+  // someone who's already a customer (e.g. Settings' "Change plan"), so they
+  // aren't shown a CTA that either does nothing for them or, worse, implies
+  // they're about to get a trial they've already used.
+  hideTrialCta?: boolean;
+}) {
   const router = useRouter();
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
@@ -116,12 +129,14 @@ export function PricingCards({ compact = false, early = false }: { compact?: boo
               >
                 {checkingOut === plan.planKey ? "Redirecting…" : early ? "Claim 50% off" : "Get started"}
               </button>
-              <button
-                onClick={() => router.push("/setup")}
-                className="mt-2.5 w-full rounded-full border border-[var(--line)] py-3 text-center text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)]"
-              >
-                Start free trial
-              </button>
+              {!hideTrialCta && (
+                <button
+                  onClick={() => router.push("/setup")}
+                  className="mt-2.5 w-full rounded-full border border-[var(--line)] py-3 text-center text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cream)]"
+                >
+                  Start free trial
+                </button>
+              )}
             </div>
           );
         })}

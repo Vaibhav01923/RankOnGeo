@@ -206,7 +206,7 @@ function SettingsContent() {
         {(sub?.isFree || showPlans) && (
           <div>
             <h2 className="font-signal-serif text-xl text-[var(--ink)] mb-4">{sub?.isFree ? "Choose a plan" : "Change plan"}</h2>
-            <PricingCards compact />
+            <PricingCards compact hideTrialCta />
           </div>
         )}
       </main>
