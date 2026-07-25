@@ -34,8 +34,19 @@ export async function POST(req: NextRequest) {
 
   const dodo = getDodo();
 
+  // Checked in a separate pass from "active" below — a pending subscription
+  // found in the same customer's list means their card/mandate is still
+  // clearing on Dodo's end (common for INR e-mandate registration, which can
+  // take well past what feels like a completed checkout), not a missed
+  // webhook. The dashboard surfaces this distinctly so the user isn't left
+  // guessing whether something's actually broken.
+  let sawPending = false;
+
   for await (const customer of dodo.customers.list({ email: user.email })) {
-    for await (const sub of dodo.subscriptions.list({ customer_id: customer.customer_id, status: "active" })) {
+    for await (const sub of dodo.subscriptions.list({ customer_id: customer.customer_id })) {
+      if (sub.status === "pending") { sawPending = true; continue; }
+      if (sub.status !== "active") continue;
+
       const plan = sub.metadata?.plan;
       if (!plan) continue;
 
@@ -54,5 +65,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ isFree: true });
+  return NextResponse.json({ isFree: true, pending: sawPending });
 }

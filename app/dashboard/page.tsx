@@ -732,6 +732,13 @@ function DashboardPage() {
   const [resendEmailResult, setResendEmailResult] = useState<"sent" | "failed" | null>(null);
   const [verifyFlash, setVerifyFlash] = useState<"verified" | "expired" | null>(null);
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
+  // Set once reconcile-me sees a Dodo subscription stuck in "pending" (e.g.
+  // an INR card mandate still clearing) rather than finding nothing at all —
+  // distinct from a genuinely missed webhook, and shown as a standing banner
+  // (not just the transient "Confirming…" pill) since it can take well past
+  // the ~30s polling window to resolve.
+  const [paymentPending, setPaymentPending] = useState(false);
+  const [recheckingPayment, setRecheckingPayment] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const openPaywall = () => setShowPaywallModal(true);
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
@@ -989,6 +996,25 @@ function DashboardPage() {
     }
     setResendingVerification(false);
   }
+
+  async function recheckPaymentStatus() {
+    setRecheckingPayment(true);
+    try {
+      await fetch("/api/dodo/reconcile-me", { method: "POST" }).catch(() => null);
+      const d = await fetch("/api/credits").then((r) => r.json()).catch(() => null);
+      if (d && typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance, canPurchase: d.canPurchase !== false });
+      if (d) { setIsFreeTier(!!d.isFree); setIsLapsed(!!d.isLapsed); setGraceDaysLeft(typeof d.graceDaysLeft === "number" ? d.graceDaysLeft : null); }
+      const stillPending = !!d?.isFree;
+      setPaymentPending(stillPending);
+      if (stillPending) {
+        localStorage.setItem("dodoPaymentPending", "1");
+      } else {
+        localStorage.removeItem("dodoPaymentPending");
+      }
+    } finally {
+      setRecheckingPayment(false);
+    }
+  }
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishArticleId, setPublishArticleId] = useState("");
   const [publishChannelId, setPublishChannelId] = useState("");
@@ -1071,6 +1097,12 @@ function DashboardPage() {
       router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
     }
 
+    // A pending banner set during a prior visit's checkout poll (below) is
+    // re-shown here so refreshing the page — which drops the one-shot
+    // `?subscription=success` param below — doesn't silently lose the
+    // "your payment is still processing" message the user already saw.
+    if (localStorage.getItem("dodoPaymentPending") === "1") setPaymentPending(true);
+
     fetchCredits().then((d) => {
       // Dodo's webhook that activates the plan has repeatedly failed to arrive
       // on the first real attempt, so don't just wait on it — actively ask
@@ -1085,14 +1117,23 @@ function DashboardPage() {
           fetch("/api/dodo/reconcile-me", { method: "POST" })
             .then((r) => r.json())
             .catch(() => null)
-            .then(() => fetchCredits())
+            .then((reconcileResult) => {
+              const pending = !!reconcileResult?.pending;
+              setPaymentPending(pending);
+              if (pending) localStorage.setItem("dodoPaymentPending", "1");
+              else localStorage.removeItem("dodoPaymentPending");
+              return fetchCredits();
+            })
             .then((d2) => {
+              if (!d2.isFree) localStorage.removeItem("dodoPaymentPending");
               if (!d2.isFree || attempts >= 10) {
                 clearInterval(poll);
                 setConfirmingSubscription(false);
               }
             });
         }, 3000);
+      } else if (!d.isFree) {
+        localStorage.removeItem("dodoPaymentPending");
       }
 
       // Credit top-ups are granted by Dodo automatically on successful
@@ -2384,6 +2425,20 @@ function DashboardPage() {
                 Update payment →
               </a>
             )}
+          </div>
+        )}
+        {paymentPending && (
+          <div className="bg-[var(--rust-wash)] border-b border-[var(--rust)]/25 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 text-sm">
+            <span className="text-[var(--rust-deep)]">
+              There seems to be an issue with your payment — it looks like it&apos;s still processing on our end. This usually clears up on its own; check back in 30–60 minutes.
+            </span>
+            <button
+              onClick={recheckPaymentStatus}
+              disabled={recheckingPayment}
+              className="font-semibold text-[var(--rust-deep)] underline underline-offset-2 shrink-0 whitespace-nowrap disabled:opacity-50"
+            >
+              {recheckingPayment ? "Checking…" : "Recheck now"}
+            </button>
           </div>
         )}
         {/* Top bar */}
