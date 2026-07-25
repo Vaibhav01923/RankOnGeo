@@ -62,9 +62,13 @@ function SetupContent() {
   // Step 1 fields
   const [domain, setDomain] = useState(searchParams.get("domain") ?? "");
 
-  // Optional "how did you hear about us" — asked during the idle analyzing
-  // wait, tracked in funnel_events (event_type: acquisition_source) for the
-  // admin stats page. Never blocks the actual analysis flow.
+  // Optional "how did you hear about us" — pops up once analysis starts and
+  // stays up (a closable corner card, not tied to the loading spinner) across
+  // every later step until answered or dismissed, so people who don't get to
+  // it during the ~10-20s wait can still answer afterward. Tracked in
+  // funnel_events (event_type: acquisition_source) for the admin stats page.
+  // Never blocks the actual analysis or wizard flow.
+  const [sourcePopupVisible, setSourcePopupVisible] = useState(false);
   const [sourceAnswer, setSourceAnswer] = useState<string | null>(null);
   const [hideSourceAsk, setHideSourceAsk] = useState(false);
   const [showSourceOther, setShowSourceOther] = useState(false);
@@ -76,6 +80,15 @@ function SetupContent() {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    if (loading) setSourcePopupVisible(true);
+  }, [loading]);
+
+  function dismissSourceAsk() {
+    setHideSourceAsk(true);
+    try { localStorage.setItem("acquisitionSourceAnswered", "1"); } catch {}
+  }
+
   function submitAcquisitionSource(source: string) {
     setSourceAnswer(source);
     try { localStorage.setItem("acquisitionSourceAnswered", "1"); } catch {}
@@ -84,6 +97,8 @@ function SetupContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ domain: domain.trim(), source }),
     }).catch(() => {});
+    // Brief "Thanks!" state, then fold the popup away on its own.
+    setTimeout(() => setHideSourceAsk(true), 1600);
   }
 
   useEffect(() => {
@@ -398,52 +413,6 @@ function SetupContent() {
                   In a moment you&apos;ll see where ChatGPT, Claude, Gemini, Perplexity and Google AI mention you today —
                   then the research and content that get them to mention you more.
                 </p>
-
-                {!hideSourceAsk && (
-                  <div className="mt-4 w-full max-w-sm border border-[var(--line)] bg-[var(--surface)] rounded-lg p-4">
-                    {sourceAnswer ? (
-                      <p className="text-xs text-[var(--olive)] text-center font-medium">Thanks!</p>
-                    ) : (
-                      <>
-                        <p className="text-xs font-medium text-[var(--ink)] mb-2.5 text-center">
-                          Quick one while we analyze — how&apos;d you find RankOnGeo?
-                        </p>
-                        <div className="flex flex-wrap justify-center gap-1.5">
-                          {SOURCE_OPTIONS.map((opt) => (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => (opt === "Other" ? setShowSourceOther(true) : submitAcquisitionSource(opt))}
-                              className="text-xs px-2.5 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-soft)] hover:border-[var(--rust)]/40 hover:text-[var(--ink)] transition-colors"
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                        {showSourceOther && (
-                          <div className="flex gap-2 mt-2.5">
-                            <input
-                              value={sourceOtherInput}
-                              onChange={(e) => setSourceOtherInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && sourceOtherInput.trim()) { e.preventDefault(); submitAcquisitionSource(sourceOtherInput.trim()); }
-                              }}
-                              placeholder="Tell us…"
-                              className="flex-1 border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-1.5 text-xs outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => sourceOtherInput.trim() && submitAcquisitionSource(sourceOtherInput.trim())}
-                              className="px-3 py-1.5 text-xs font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
-                            >
-                              Send
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             )}
             {!loading && <form onSubmit={handleAnalyze} className="space-y-5">
@@ -799,6 +768,63 @@ function SetupContent() {
           </div>
         )}
       </main>
+
+      {sourcePopupVisible && !hideSourceAsk && (
+        <div className="fixed bottom-5 right-5 z-50 w-[calc(100%-2.5rem)] max-w-xs rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-lg p-4 animate-[fadeSlideIn_0.3s_ease_forwards]">
+          <button
+            type="button"
+            onClick={dismissSourceAsk}
+            aria-label="Dismiss"
+            className="absolute top-2.5 right-2.5 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+          {sourceAnswer ? (
+            <p className="text-xs text-[var(--olive)] font-medium">Thanks!</p>
+          ) : (
+            <>
+              <p className="text-xs font-medium text-[var(--ink)] mb-2.5 pr-4">
+                Quick one while you&apos;re here — how&apos;d you find RankOnGeo?
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SOURCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => (opt === "Other" ? setShowSourceOther(true) : submitAcquisitionSource(opt))}
+                    className="text-xs px-2.5 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-soft)] hover:border-[var(--rust)]/40 hover:text-[var(--ink)] transition-colors"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              {showSourceOther && (
+                <div className="flex gap-2 mt-2.5">
+                  <input
+                    value={sourceOtherInput}
+                    onChange={(e) => setSourceOtherInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && sourceOtherInput.trim()) { e.preventDefault(); submitAcquisitionSource(sourceOtherInput.trim()); }
+                    }}
+                    placeholder="Tell us…"
+                    autoFocus
+                    className="flex-1 border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-1.5 text-xs outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)] focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => sourceOtherInput.trim() && submitAcquisitionSource(sourceOtherInput.trim())}
+                    className="px-3 py-1.5 text-xs font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
+                  >
+                    Send
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
