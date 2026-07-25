@@ -599,11 +599,17 @@ RankOnGeo will POST to an endpoint I create whenever a new article is ready. Ple
 
 3. Use the title/content to create and publish a new post through my site's existing
    content system (CMS API, database, static-file commit — whatever fits my stack above).
+   If my site doesn't have a blog section yet, create one: a listing page (e.g. /blog)
+   plus a page template for individual posts, so each new post gets its own indexable URL.
 
-4. Return { "ok": true } with a 200 status on success, and a clear error status/message
+4. Make sure each newly published post is actually discoverable by search engines: add
+   its URL to my site's XML sitemap (create one if it doesn't exist), and confirm nothing
+   in robots.txt or the page's meta tags blocks it from being indexed.
+
+5. Return { "ok": true } with a 200 status on success, and a clear error status/message
    otherwise (RankOnGeo shows the response back to me if something fails).
 
-5. Once it's built (and deployed, if that's needed for it to be reachable), end your reply
+6. Once it's built (and deployed, if that's needed for it to be reachable), end your reply
    with a clearly labeled "What to do next" section for me, spelling out:
    - The exact endpoint URL to paste into RankOnGeo's "Your endpoint URL" field
    - Any manual step I still need to do myself (deploy, set an env var, restart something, etc.)
