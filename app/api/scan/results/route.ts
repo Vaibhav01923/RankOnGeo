@@ -86,5 +86,58 @@ export async function GET(req: NextRequest) {
     ? Math.round(scores.reduce((s, sc) => s + sc.score, 0) / scores.length)
     : 0;
 
-  return NextResponse.json({ results, scores, overallScore, completed });
+  // Gaps need each active prompt's most recent result per engine, not just
+  // whichever prompts happened to be in the single latest scan_run — a
+  // scheduled scan only re-runs prompts actually due that day (weekly-cadence
+  // ones aren't due every firing, see lib/prompt-cadence.ts), so a prompt
+  // that's a real, unresolved gap can otherwise vanish from the latest run's
+  // results without ever having been fixed. Only computed for the dashboard's
+  // own overview fetch (no runId) — the runId path is used to poll one
+  // specific scan's progress and must stay scoped to just that run.
+  let latestResults: typeof results = [];
+  if (!runId) {
+    const { data: activePrompts } = await db
+      .from("tracked_prompts")
+      .select("id")
+      .eq("brand_id", brandId)
+      .neq("status", "paused");
+    const activeIds = (activePrompts ?? []).map((p) => p.id as string);
+
+    if (activeIds.length > 0) {
+      // 35 days comfortably covers even weekly cadence (~6.5 days) with
+      // margin for a missed cron firing or two.
+      const since = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentRows } = await db
+        .from("scan_results")
+        .select("prompt_id, prompt_text, engine, response, brand_mentioned, brand_rank, competitor_mentions, citations, scanned_at")
+        .eq("brand_id", brandId)
+        .in("prompt_id", activeIds)
+        .gte("scanned_at", since)
+        .order("scanned_at", { ascending: false });
+
+      const seen = new Set<string>();
+      for (const r of recentRows ?? []) {
+        const key = `${r.prompt_id}::${r.engine}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        latestResults.push({
+          promptId: r.prompt_id,
+          promptText: r.prompt_text,
+          engine: r.engine,
+          response: redact ? "" : r.response,
+          brandMentioned: redact ? false : r.brand_mentioned,
+          brandRank: redact ? null : r.brand_rank,
+          competitorMentions: redact ? [] : (r.competitor_mentions ?? []),
+          citations: redact
+            ? []
+            : (r.citations ?? []).filter((u: string) => {
+                try { return !new URL(u).hostname.endsWith("dataforseo.com"); } catch { return false; }
+              }),
+          scannedAt: r.scanned_at,
+        });
+      }
+    }
+  }
+
+  return NextResponse.json({ results, scores, overallScore, completed, latestResults });
 }

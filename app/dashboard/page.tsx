@@ -664,6 +664,12 @@ function DashboardPage() {
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [results, setResults] = useState<ScanResult[]>([]);
+  // Each active prompt's most recent result per engine, independent of which
+  // scan_run it came from — backs the gaps list specifically so a
+  // weekly-cadence prompt that wasn't due in the latest scan doesn't
+  // silently vanish from Research without actually being resolved. See
+  // /api/scan/results' latestResults field.
+  const [gapResults, setGapResults] = useState<ScanResult[]>([]);
   const [scores, setScores] = useState<VisibilityScore[]>([]);
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [overallScore, setOverallScore] = useState<number | null>(null);
@@ -1130,6 +1136,7 @@ function DashboardPage() {
               if (d.scores?.length) setScores(d.scores);
               if (d.overallScore !== undefined) setOverallScore(d.overallScore);
             }
+            if (d.latestResults?.length) setGapResults(d.latestResults);
           }).finally(() => setLoadingResults(false));
           fetch(`/api/keywords?brandId=${id}`).then((r) => r.json()).then((d) => setSocialKeywords(d.keywords ?? []));
           fetch(`/api/tasks?brandId=${id}`).then((r) => r.json()).then((d) => setEngageTasks((d.tasks ?? []).map(mapEngageTask)));
@@ -1266,8 +1273,12 @@ function DashboardPage() {
     });
     setScores(sc);
     setOverallScore(Math.round(sc.reduce((s, x) => s + x.score, 0) / sc.length));
-    setGaps(computeGaps(results, brand));
   }, [results, brand]);
+
+  useEffect(() => {
+    if (!brand || gapResults.length === 0) return;
+    setGaps(computeGaps(gapResults, brand));
+  }, [gapResults, brand]);
 
   useEffect(() => {
     agentEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1580,7 +1591,13 @@ function DashboardPage() {
               clearTimeout(deadline);
               if (finalScores?.length) setScores(finalScores);
               if (finalScore !== undefined) setOverallScore(finalScore);
-              setGaps(computeGaps(accumulated, brand));
+              // Fetch latestResults rather than trusting `accumulated` alone —
+              // this scan may only have covered a subset of prompts, and
+              // latestResults correctly merges that with each other active
+              // prompt's most recent known result instead of dropping them.
+              fetch(`/api/scan/results?brandId=${brand.id}`).then((r) => r.json()).then((d) => {
+                setGapResults(d.latestResults?.length ? d.latestResults : accumulated);
+              }).catch(() => setGapResults(accumulated));
               if (brand.id) fetch(`/api/history?brandId=${brand.id}`).then((r) => r.json()).then((d) => setScanHistory(d.runs ?? []));
               setCitationsStale(false);
               resolve();
@@ -1775,6 +1792,7 @@ function DashboardPage() {
         if (d.scores?.length) setScores(d.scores);
         if (d.overallScore !== undefined) setOverallScore(d.overallScore);
       }
+      if (d.latestResults?.length) setGapResults(d.latestResults);
       setCitationsStale(false);
     } finally {
       setRefreshingCitations(false);
@@ -4905,6 +4923,11 @@ function DashboardPage() {
                     <p className="text-sm text-[var(--ink-faint)] mt-0.5">
                       {isFreeTier ? <BlurInline onUnlock={openPaywall}>{2 + (decoyHash(brand.id ?? brand.name) % 9)} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
                     </p>
+                    <div className="mt-3 bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3">
+                      <p className="text-xs text-[var(--ink-soft)]">
+                        <span className="font-semibold text-[var(--ink)]">Publish one gap article a day.</span> Batch-publishing several to your blog at once can read as mass-produced content to Google and hurt SEO — space them out instead.
+                      </p>
+                    </div>
                   </div>
                   <div className="space-y-3">
                     {gaps.map((gap, i) => (
