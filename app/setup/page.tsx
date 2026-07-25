@@ -272,24 +272,28 @@ function SetupContent() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-12">
-        {/* Steps indicator */}
+        {/* Steps indicator — only steps reached so far are shown, each one
+            animating in as the user arrives at it, instead of spoiling the
+            full length of the wizard up front. */}
         <div className="flex items-center gap-2 mb-10">
           {(() => {
             const currentIndex = STEPS.findIndex((s) => s.key === step);
-            return STEPS.map((s, i) => (
-              <div key={s.key} className="flex items-center gap-2">
+            const visibleSteps = STEPS.slice(0, currentIndex + 1);
+            return visibleSteps.map((s, i) => (
+              <div
+                key={s.key}
+                className="flex items-center gap-2"
+                style={i === currentIndex ? { animation: "fadeSlideIn 0.35s ease forwards" } : undefined}
+              >
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-signal-mono font-medium transition-colors ${
-                  i === currentIndex ? "bg-[var(--rust)] text-[var(--surface)]" :
-                  i < currentIndex
-                    ? "bg-[var(--olive-wash)] text-[var(--olive)]"
-                    : "bg-[var(--line-soft)] text-[var(--ink-faint)]"
+                  i === currentIndex ? "bg-[var(--rust)] text-[var(--surface)]" : "bg-[var(--olive-wash)] text-[var(--olive)]"
                 }`}>
                   {i + 1}
                 </div>
                 <span className={`text-sm ${i === currentIndex ? "text-[var(--ink)] font-medium" : "text-[var(--ink-faint)]"}`}>
                   {s.label}
                 </span>
-                {i < STEPS.length - 1 && <span className="text-[var(--line)] ml-1">—</span>}
+                {i < visibleSteps.length - 1 && <span className="text-[var(--line)] ml-1">—</span>}
               </div>
             ));
           })()}
