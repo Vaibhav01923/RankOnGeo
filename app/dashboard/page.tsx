@@ -1646,8 +1646,17 @@ function DashboardPage() {
             if (completed) {
               clearInterval(poll);
               clearTimeout(deadline);
-              if (finalScores?.length) setScores(finalScores);
-              if (finalScore !== undefined) setOverallScore(finalScore);
+              // A brand new trial account can still be mid missed-webhook
+              // (see reconcile-me) when this first scan finishes — reading
+              // scores while the subscription hasn't synced yet gets them
+              // server-side redacted to 0, and nothing would ever re-fetch
+              // to correct it afterward. Self-heal first, then re-read.
+              await fetch("/api/dodo/reconcile-me", { method: "POST" }).catch(() => null);
+              const rescored = await fetch(`/api/scan/results?brandId=${brand.id}&runId=${scanRunId}`).then((r) => r.json()).catch(() => null);
+              if (rescored?.scores?.length) setScores(rescored.scores);
+              else if (finalScores?.length) setScores(finalScores);
+              if (rescored?.overallScore !== undefined) setOverallScore(rescored.overallScore);
+              else if (finalScore !== undefined) setOverallScore(finalScore);
               // Fetch latestResults rather than trusting `accumulated` alone —
               // this scan may only have covered a subset of prompts, and
               // latestResults correctly merges that with each other active
