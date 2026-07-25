@@ -8,7 +8,7 @@ const PLAN_NAME: Record<string, string> = Object.fromEntries(PRICING.map((p) => 
 
 type DaySeries = { date: string; domain_submitted: number; trial_started: number; trial_converted: number };
 
-type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted";
+type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted" | "acquisition_source";
 
 type FunnelEvent = {
   id: string;
@@ -17,6 +17,7 @@ type FunnelEvent = {
   email: string | null;
   plan: string | null;
   is_anonymous: boolean | null;
+  metadata: { source?: string } | null;
   created_at: string;
 };
 
@@ -25,6 +26,7 @@ type Stats = {
   last30d: Record<EventType, number>;
   distinctDomains: number;
   planCounts: Record<string, number>;
+  sourceCounts: Record<string, number>;
   series: DaySeries[];
   rates: { checkoutToStartedPct: number; startedToConvertedPct: number; domainToConvertedPct: number };
   recent: FunnelEvent[];
@@ -35,6 +37,7 @@ const EVENT_LABEL: Record<EventType, string> = {
   trial_checkout_started: "Trial checkout started",
   trial_started: "Trial started",
   trial_converted: "Trial converted",
+  acquisition_source: "Told us how they found us",
 };
 
 const EVENT_COLOR: Record<EventType, string> = {
@@ -42,6 +45,7 @@ const EVENT_COLOR: Record<EventType, string> = {
   trial_checkout_started: "text-[var(--rust-deep)] bg-[var(--rust-wash)]",
   trial_started: "text-[var(--olive)] bg-[var(--olive-wash)]",
   trial_converted: "text-[var(--olive)] bg-[var(--olive-wash)]",
+  acquisition_source: "text-[var(--ink-soft)] bg-[var(--line-soft)]",
 };
 
 function KpiTile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -218,6 +222,37 @@ export default function AdminStatsPage() {
             </div>
           </div>
 
+          {/* Acquisition source */}
+          <div className="mb-8 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+            <div className="mb-4 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Where people found us</p>
+              <p className="text-xs text-[var(--ink-faint)]">{stats.allTime.acquisition_source.toLocaleString()} answered</p>
+            </div>
+            {Object.keys(stats.sourceCounts).length === 0 ? (
+              <p className="text-sm text-[var(--ink-faint)]">No answers yet — asked while a landing-page visitor&apos;s site is analyzing.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {Object.entries(stats.sourceCounts)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([source, count]) => {
+                    const total = Object.values(stats.sourceCounts).reduce((s, c) => s + c, 0);
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    return (
+                      <div key={source}>
+                        <div className="mb-1 flex items-center justify-between text-xs">
+                          <span className="font-medium text-[var(--ink)] truncate pr-2">{source}</span>
+                          <span className="shrink-0 text-[var(--ink-faint)]">{count} · {pct}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-[var(--line-soft)]">
+                          <div className="h-1.5 rounded-full bg-[var(--olive)]" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
           {/* Recent activity */}
           <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Recent activity</p>
@@ -237,7 +272,9 @@ export default function AdminStatsPage() {
                       <td className="py-2 pr-4">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${EVENT_COLOR[e.event_type]}`}>{EVENT_LABEL[e.event_type]}</span>
                       </td>
-                      <td className="py-2 pr-4 text-[var(--ink-soft)]">{e.domain ?? e.email ?? "—"}</td>
+                      <td className="py-2 pr-4 text-[var(--ink-soft)]">
+                        {e.event_type === "acquisition_source" ? e.metadata?.source ?? "—" : e.domain ?? e.email ?? "—"}
+                      </td>
                       <td className="py-2 pr-4 text-[var(--ink-soft)]">{e.plan ? PLAN_NAME[e.plan] ?? e.plan : "—"}</td>
                       <td className="py-2 text-[var(--ink-faint)]">{new Date(e.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
                     </tr>

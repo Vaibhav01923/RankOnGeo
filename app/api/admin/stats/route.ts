@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
 
-type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted";
-const EVENT_TYPES: EventType[] = ["domain_submitted", "trial_checkout_started", "trial_started", "trial_converted"];
+type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted" | "acquisition_source";
+const EVENT_TYPES: EventType[] = ["domain_submitted", "trial_checkout_started", "trial_started", "trial_converted", "acquisition_source"];
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const db = serverClient();
   const since30d = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
 
-  const [allTimeCounts, last30dCounts, domainRows, planRows, seriesRows, recent] = await Promise.all([
+  const [allTimeCounts, last30dCounts, domainRows, planRows, acquisitionSourceRows, seriesRows, recent] = await Promise.all([
     Promise.all(
       EVENT_TYPES.map((t) =>
         db.from("funnel_events").select("id", { count: "exact", head: true }).eq("event_type", t)
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     ),
     db.from("funnel_events").select("domain").eq("event_type", "domain_submitted").not("domain", "is", null),
     db.from("funnel_events").select("plan").eq("event_type", "trial_started").not("plan", "is", null),
+    db.from("funnel_events").select("metadata").eq("event_type", "acquisition_source"),
     db
       .from("funnel_events")
       .select("event_type, created_at")
@@ -48,6 +49,13 @@ export async function GET(req: NextRequest) {
   for (const row of planRows.data ?? []) {
     const plan = row.plan as string;
     planCounts[plan] = (planCounts[plan] ?? 0) + 1;
+  }
+
+  const sourceCounts: Record<string, number> = {};
+  for (const row of acquisitionSourceRows.data ?? []) {
+    const source = (row.metadata as { source?: string } | null)?.source;
+    if (!source) continue;
+    sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
   }
 
   // Bucket into a fixed 30-day range (today inclusive) so the chart always
@@ -71,6 +79,7 @@ export async function GET(req: NextRequest) {
     last30d,
     distinctDomains,
     planCounts,
+    sourceCounts,
     series,
     rates: {
       checkoutToStartedPct: rate(allTime.trial_started, allTime.trial_checkout_started),
