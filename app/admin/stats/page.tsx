@@ -10,15 +10,14 @@ type DaySeries = { date: string; domain_submitted: number; trial_started: number
 
 type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted" | "acquisition_source";
 
-type FunnelEvent = {
+type DomainRow = {
   id: string;
-  event_type: EventType;
-  domain: string | null;
+  name: string;
+  domain: string;
   email: string | null;
   plan: string | null;
-  is_anonymous: boolean | null;
-  metadata: { source?: string } | null;
-  created_at: string;
+  source: string | null;
+  createdAt: string;
 };
 
 type Stats = {
@@ -29,23 +28,7 @@ type Stats = {
   sourceCounts: Record<string, number>;
   series: DaySeries[];
   rates: { checkoutToStartedPct: number; startedToConvertedPct: number; domainToConvertedPct: number };
-  recent: FunnelEvent[];
-};
-
-const EVENT_LABEL: Record<EventType, string> = {
-  domain_submitted: "Domain submitted",
-  trial_checkout_started: "Trial checkout started",
-  trial_started: "Trial started",
-  trial_converted: "Trial converted",
-  acquisition_source: "Told us how they found us",
-};
-
-const EVENT_COLOR: Record<EventType, string> = {
-  domain_submitted: "text-[var(--ink-soft)] bg-[var(--line-soft)]",
-  trial_checkout_started: "text-[var(--rust-deep)] bg-[var(--rust-wash)]",
-  trial_started: "text-[var(--olive)] bg-[var(--olive-wash)]",
-  trial_converted: "text-[var(--olive)] bg-[var(--olive-wash)]",
-  acquisition_source: "text-[var(--ink-soft)] bg-[var(--line-soft)]",
+  domains: DomainRow[];
 };
 
 function KpiTile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -253,34 +236,32 @@ export default function AdminStatsPage() {
             )}
           </div>
 
-          {/* Recent activity */}
+          {/* Domains */}
           <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Recent activity</p>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Domains</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--line)] text-left text-xs uppercase tracking-wide text-[var(--ink-faint)]">
-                    <th className="pb-2 pr-4 font-medium">Event</th>
-                    <th className="pb-2 pr-4 font-medium">Domain / Email</th>
+                    <th className="pb-2 pr-4 font-medium">Domain</th>
+                    <th className="pb-2 pr-4 font-medium">Found us via</th>
                     <th className="pb-2 pr-4 font-medium">Plan</th>
+                    <th className="pb-2 pr-4 font-medium">Email</th>
                     <th className="pb-2 font-medium">When</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.recent.map((e) => (
-                    <tr key={e.id} className="border-b border-[var(--line)]/60 last:border-0">
-                      <td className="py-2 pr-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${EVENT_COLOR[e.event_type]}`}>{EVENT_LABEL[e.event_type]}</span>
-                      </td>
-                      <td className="py-2 pr-4 text-[var(--ink-soft)]">
-                        {e.event_type === "acquisition_source" ? e.metadata?.source ?? "—" : e.domain ?? e.email ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-[var(--ink-soft)]">{e.plan ? PLAN_NAME[e.plan] ?? e.plan : "—"}</td>
-                      <td className="py-2 text-[var(--ink-faint)]">{new Date(e.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+                  {stats.domains.map((d) => (
+                    <tr key={d.id} className="border-b border-[var(--line)]/60 last:border-0">
+                      <td className="py-2 pr-4 text-[var(--ink)]">{d.domain}</td>
+                      <td className="py-2 pr-4 text-[var(--ink-soft)]">{d.source ?? "—"}</td>
+                      <td className="py-2 pr-4 text-[var(--ink-soft)]">{d.plan ? PLAN_NAME[d.plan] ?? d.plan : "—"}</td>
+                      <td className="py-2 pr-4 text-[var(--ink-soft)]">{d.email ?? "—"}</td>
+                      <td className="py-2 text-[var(--ink-faint)]">{new Date(d.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
                     </tr>
                   ))}
-                  {stats.recent.length === 0 && (
-                    <tr><td colSpan={4} className="py-6 text-center text-[var(--ink-faint)]">No activity yet.</td></tr>
+                  {stats.domains.length === 0 && (
+                    <tr><td colSpan={5} className="py-6 text-center text-[var(--ink-faint)]">No domains yet.</td></tr>
                   )}
                 </tbody>
               </table>

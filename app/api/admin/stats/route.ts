@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
+import { isUnpaidPlan } from "@/lib/plan-limits";
 
 type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted" | "acquisition_source";
 const EVENT_TYPES: EventType[] = ["domain_submitted", "trial_checkout_started", "trial_started", "trial_converted", "acquisition_source"];
@@ -18,7 +19,18 @@ export async function GET(req: NextRequest) {
   const db = serverClient();
   const since30d = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
 
-  const [allTimeCounts, last30dCounts, domainRows, planRows, acquisitionSourceRows, seriesRows, recent] = await Promise.all([
+  const [
+    allTimeCounts,
+    last30dCounts,
+    domainRows,
+    planRows,
+    acquisitionSourceRows,
+    seriesRows,
+    brandRows,
+    userPlanRows,
+    sourceByDomainRows,
+    { data: authUsers },
+  ] = await Promise.all([
     Promise.all(
       EVENT_TYPES.map((t) =>
         db.from("funnel_events").select("id", { count: "exact", head: true }).eq("event_type", t)
@@ -37,7 +49,15 @@ export async function GET(req: NextRequest) {
       .select("event_type, created_at")
       .in("event_type", ["domain_submitted", "trial_started", "trial_converted"])
       .gte("created_at", since30d),
-    db.from("funnel_events").select("*").order("created_at", { ascending: false }).limit(50),
+    db.from("brands").select("id, name, domain, user_id, created_at").order("created_at", { ascending: false }).limit(200),
+    db.from("user_plans").select("user_id, plan, dodo_customer_id, dodo_subscription_id, payment_failed_at"),
+    db
+      .from("funnel_events")
+      .select("domain, metadata, created_at")
+      .eq("event_type", "acquisition_source")
+      .not("domain", "is", null)
+      .order("created_at", { ascending: false }),
+    db.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   const allTime = Object.fromEntries(EVENT_TYPES.map((t, i) => [t, allTimeCounts[i].count ?? 0])) as Record<EventType, number>;
@@ -74,6 +94,35 @@ export async function GET(req: NextRequest) {
 
   const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
 
+  const emailByUserId = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email ?? null]));
+  // Every signup gets a user_plans row defaulting to plan:"starter" even before
+  // they've paid anything — only show a plan here for accounts that actually
+  // have an active paid subscription, otherwise an abandoned checkout reads as
+  // a real "Pro" customer in this table.
+  const planByUserId = new Map(
+    (userPlanRows.data ?? [])
+      .filter((r) => !isUnpaidPlan(r))
+      .map((r) => [r.user_id as string, r.plan as string])
+  );
+
+  // Rows are already newest-first, so the first source seen per domain is the most recent.
+  const sourceByDomain = new Map<string, string>();
+  for (const row of sourceByDomainRows.data ?? []) {
+    const domain = row.domain as string;
+    const source = (row.metadata as { source?: string } | null)?.source;
+    if (source && !sourceByDomain.has(domain)) sourceByDomain.set(domain, source);
+  }
+
+  const domains = (brandRows.data ?? []).map((b) => ({
+    id: b.id as string,
+    name: b.name as string,
+    domain: b.domain as string,
+    email: b.user_id ? emailByUserId.get(b.user_id as string) ?? null : null,
+    plan: b.user_id ? planByUserId.get(b.user_id as string) ?? null : null,
+    source: sourceByDomain.get(b.domain as string) ?? null,
+    createdAt: b.created_at as string,
+  }));
+
   return NextResponse.json({
     allTime,
     last30d,
@@ -86,6 +135,6 @@ export async function GET(req: NextRequest) {
       startedToConvertedPct: rate(allTime.trial_converted, allTime.trial_started),
       domainToConvertedPct: rate(allTime.trial_converted, allTime.domain_submitted),
     },
-    recent: recent.data ?? [],
+    domains,
   });
 }
