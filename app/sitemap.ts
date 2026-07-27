@@ -1,7 +1,14 @@
 import type { MetadataRoute } from "next";
 import { getPublishedPosts, SITE_URL } from "@/lib/blog";
 
-export const revalidate = 3600;
+// Was 3600 (1h) — on-demand revalidatePath("/sitemap.xml") calls at publish
+// time (app/api/admin/blog, app/api/rankongeo-publish) aren't reliably
+// refreshing this route in production (confirmed: a post published at
+// 12:11 UTC was still missing from the live sitemap at 12:15, cached HIT).
+// A short time-based window is the self-healing fallback regardless of why
+// on-demand revalidation isn't taking — new posts now show up within a
+// minute of publishing instead of waiting up to an hour.
+export const revalidate = 60;
 
 // Fixed date for pages without a real per-page "last edited" timestamp
 // tracked anywhere — a static literal here is still strictly more honest

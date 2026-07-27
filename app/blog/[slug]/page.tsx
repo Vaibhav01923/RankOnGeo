@@ -7,7 +7,10 @@ import { getPublishedPostBySlug, getPublishedPosts, readingTimeMinutes, SITE_URL
 import { DEMO_CALL_URL } from "@/lib/links";
 import { ORGANIZATION } from "../../_components/WebPageJsonLd";
 
-export const revalidate = 3600;
+// See app/sitemap.ts for why this dropped from 3600 to 60 — on-demand
+// revalidatePath calls at publish time aren't reliably refreshing routes in
+// production, so a short time-based window is the self-healing fallback.
+export const revalidate = 60;
 
 type Props = { params: Promise<{ slug: string }> };
 
