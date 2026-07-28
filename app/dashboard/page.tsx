@@ -987,6 +987,9 @@ function DashboardPage() {
   const [addingChannel, setAddingChannel] = useState(false);
   const [stackDescription, setStackDescription] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
+  const [rotatingSecretId, setRotatingSecretId] = useState<string | null>(null);
+  const [revealedSecret, setRevealedSecret] = useState<{ channelId: string; secret: string } | null>(null);
+  const [revealedSecretCopied, setRevealedSecretCopied] = useState(false);
 
   // newChannel.type defaults to "webhook", so the type card is already
   // active the first time the modal opens — its own onClick only generates
@@ -1495,6 +1498,21 @@ function DashboardPage() {
   async function deleteChannel(id: string) {
     await fetch(`/api/publishing/channels?id=${id}`, { method: "DELETE" });
     setPublishingChannels((prev) => prev.filter((ch) => ch.id !== id));
+  }
+
+  // Only meaningful for webhook channels — the secret we auto-generated
+  // ourselves. Rotating invalidates the old one immediately, so the reveal
+  // below is the only chance to copy the new value into their endpoint.
+  async function rotateChannelSecret(id: string) {
+    setRotatingSecretId(id);
+    const newSecret = crypto.randomUUID();
+    const res = await fetch("/api/publishing/channels", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, apiKey: newSecret }) });
+    const d = await res.json();
+    if (d.channel) {
+      setPublishingChannels((prev) => prev.map((ch) => ch.id === id ? d.channel : ch));
+      setRevealedSecret({ channelId: id, secret: newSecret });
+    }
+    setRotatingSecretId(null);
   }
 
   async function publishNow() {
@@ -5410,7 +5428,42 @@ function DashboardPage() {
                             {lastEntry?.status === "failed" && (
                               <p className="text-[10px] text-red-700 mt-1.5 leading-snug">⚠ Last attempt failed — {(lastEntry.error_message ?? "unknown error").slice(0, 80)}</p>
                             )}
-                            <button onClick={() => deleteChannel(ch.id)} className="mt-2 text-[10px] text-red-700/80 hover:text-red-700">Remove</button>
+                            <div className="flex items-center gap-3 mt-2">
+                              {ch.type === "webhook" && (
+                                <button
+                                  onClick={() => rotateChannelSecret(ch.id)}
+                                  disabled={rotatingSecretId === ch.id}
+                                  className="text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)] disabled:opacity-50"
+                                >
+                                  {rotatingSecretId === ch.id ? "Rotating…" : "Rotate secret"}
+                                </button>
+                              )}
+                              <button onClick={() => deleteChannel(ch.id)} className="text-[10px] text-red-700/80 hover:text-red-700">Remove</button>
+                            </div>
+                            {revealedSecret?.channelId === ch.id && (
+                              <div className="mt-2 bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-lg p-2.5">
+                                <p className="text-[10px] text-[var(--rust-deep)] font-medium mb-1.5">
+                                  New secret — update your endpoint&apos;s expected value now, the old one stopped working.
+                                </p>
+                                <div className="flex gap-1.5">
+                                  <input readOnly value={revealedSecret.secret} className="flex-1 min-w-0 border border-[var(--line)] rounded px-2 py-1 text-[10px] font-mono bg-[var(--surface)] text-[var(--ink-soft)] outline-none" />
+                                  <button
+                                    type="button"
+                                    onClick={() => { navigator.clipboard.writeText(revealedSecret.secret); setRevealedSecretCopied(true); setTimeout(() => setRevealedSecretCopied(false), 2000); }}
+                                    className="text-[10px] font-medium border border-[var(--line)] rounded px-2 hover:bg-[var(--line-soft)] transition-colors shrink-0"
+                                  >
+                                    {revealedSecretCopied ? "Copied" : "Copy"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevealedSecret(null)}
+                                    className="text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)] shrink-0"
+                                  >
+                                    Dismiss
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
