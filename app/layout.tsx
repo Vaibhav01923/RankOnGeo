@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   // rel=canonical point at a URL that immediately redirects away from itself.
   metadataBase: new URL("https://www.rankongeo.com"),
   title: {
-    default: "RankOnGeo — Track Your Brand in AI Search",
+    default: "RankOnGeo — Check Your AI Visibility Score, Get Mentioned by AI",
     template: "%s — RankOnGeo",
   },
   description:
@@ -44,13 +44,13 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "RankOnGeo",
     url: "https://www.rankongeo.com",
-    title: "RankOnGeo — Track Your Brand in AI Search",
+    title: "RankOnGeo — Check Your AI Visibility Score, Get Mentioned by AI",
     description:
       "See how ChatGPT, Claude, Gemini, Perplexity and Google AI respond about your brand. Close the gap with research, articles, and publishing.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "RankOnGeo — Track Your Brand in AI Search",
+    title: "RankOnGeo — Check Your AI Visibility Score, Get Mentioned by AI",
     description:
       "See how ChatGPT, Claude, Gemini, Perplexity and Google AI respond about your brand.",
   },
