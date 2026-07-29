@@ -1151,8 +1151,16 @@ function DashboardPage() {
       setRedditUsername(d.username);
     });
 
-    const fetchCredits = () =>
-      fetch("/api/credits").then((r) => r.json()).then((d) => {
+    // A returning visit already has ?brandId= in the URL (set by loadBrand's
+    // router.replace below on first load) — use it here too so a member's
+    // plan/credits resolve to the workspace owner's on the very first fetch.
+    // Without this, every fresh mount (reload, new tab) briefly fetches the
+    // signed-in user's own (free) plan first, flashing the paywall before
+    // loadBrand's later brandId-scoped re-fetch corrects it a moment after.
+    const fetchCredits = () => {
+      const knownBrandId = searchParams.get("brandId");
+      const url = knownBrandId ? `/api/credits?brandId=${knownBrandId}` : "/api/credits";
+      return fetch(url).then((r) => r.json()).then((d) => {
         if (typeof d.balance === "number") setCredits({ plan: d.plan ?? null, balance: d.balance, canPurchase: d.canPurchase !== false });
         setIsFreeTier(!!d.isFree);
         setIsLapsed(!!d.isLapsed);
@@ -1161,6 +1169,7 @@ function DashboardPage() {
         setCreditsLoaded(true);
         return d;
       });
+    };
 
     if (searchParams.get("verified") === "1" || searchParams.get("verify_expired") === "1") {
       setVerifyFlash(searchParams.get("verified") === "1" ? "verified" : "expired");
