@@ -3406,18 +3406,21 @@ function DashboardPage() {
                       </div>
 
                       {/* Active / Paused filter */}
-                      <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
-                        {(["active", "paused"] as const).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => setPromptStatusFilter(s)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-all ${
-                              promptStatusFilter === s ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
-                            }`}
-                          >
-                            {s} ({s === "active" ? activePrompts.length : pausedPrompts.length})
-                          </button>
-                        ))}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="flex gap-1 bg-[var(--line)] rounded-lg p-1 w-fit">
+                          {(["active", "paused"] as const).map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setPromptStatusFilter(s)}
+                              className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-all ${
+                                promptStatusFilter === s ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
+                              }`}
+                            >
+                              {s} ({s === "active" ? activePrompts.length : pausedPrompts.length})
+                            </button>
+                          ))}
+                        </div>
+                        <InfoTooltip text={"How scan frequency works: every active prompt is checked on the regular scan cycle (about every 3 days) by default. If a prompt gets your brand mentioned by every engine for 7 scans in a row, RankOnGeo automatically shifts it to a lighter “Stable” cadence — checked about once a week instead of every cycle, since re-verifying a proven winner that often just wastes scan capacity. The moment a Stable prompt's weekly check shows even one dropped mention, it immediately snaps back to the full every-cycle cadence, so a real regression is never more than one check away from being caught. This is fully automatic per-prompt based on its own track record — nothing to configure. Want to force an immediate check regardless of cadence? Hit Re-scan — manual scans always check every active prompt, ignoring cadence entirely."} />
                       </div>
 
                       {/* Search */}
@@ -3491,7 +3494,7 @@ function DashboardPage() {
                                 })()}
                                 <span className="text-sm text-[var(--ink)]/90 font-medium leading-snug line-clamp-2">{p.text}</span>
                                 {p.status !== "paused" && p.cadence === "weekly" && (
-                                  <span title="Won its last 7 scans in a row — now checked about weekly instead of every cycle. Drops back to every scan if visibility slips." className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--olive-wash)] text-[var(--olive)] px-1.5 py-0.5 rounded-full">Monitoring</span>
+                                  <span title="Won its last 7 scans in a row — now checked about weekly instead of every cycle. Drops back to every scan if visibility slips." className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-[var(--olive-wash)] text-[var(--olive)] px-1.5 py-0.5 rounded-full">Stable</span>
                                 )}
                               </button>
                               {/* Engine mention dots */}
