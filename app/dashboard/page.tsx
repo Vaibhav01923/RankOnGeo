@@ -183,13 +183,22 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
 type BotBreakdown = { botName: string; count: number };
 type NamedCount = { label: string; count: number };
 type SeriesPoint = { label: string; count: number };
+type PageBreakdown = { path: string; pageviews: number; bounceRate: number; avgDurationSeconds: number };
+type CampaignCount = { source: string; medium: string; campaign: string; count: number };
 type WebAnalyticsData = {
   domain: string;
   siteKey: string;
   isFree: boolean;
-  stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number };
+  stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number; newVisitors: number; returningVisitors: number };
   live: { pages: NamedCount[]; referrers: NamedCount[] };
   topReferrers: NamedCount[];
+  topPages: NamedCount[];
+  pagesBreakdown: PageBreakdown[];
+  countries: NamedCount[];
+  devices: NamedCount[];
+  browsers: NamedCount[];
+  operatingSystems: NamedCount[];
+  topCampaigns: CampaignCount[];
   series: SeriesPoint[];
 };
 type LlmAnalyticsData = {
@@ -432,6 +441,14 @@ function EmptyState({ label, sub }: { label: string; sub: string }) {
       <p className="text-xs text-[var(--ink-faint)]">{sub}</p>
     </div>
   );
+}
+
+// ISO-3166 alpha-2 -> flag emoji via the regional-indicator-symbol trick.
+// "Unknown" (or anything non-2-letter) falls back to no flag.
+function countryCodeToFlag(code: string): string {
+  if (code.length !== 2) return "";
+  const base = 0x1f1e6 - "A".charCodeAt(0);
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => base + c.charCodeAt(0)));
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -1096,6 +1113,7 @@ function DashboardPage() {
   const [copiedWebsiteId, setCopiedWebsiteId] = useState(false);
   const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
   const [llmDetailsExpanded, setLlmDetailsExpanded] = useState(true);
+  const [pagesDetailsExpanded, setPagesDetailsExpanded] = useState(false);
 
   useEffect(() => {
     const savedTab = sessionStorage.getItem("dashTab");
@@ -4498,6 +4516,15 @@ function DashboardPage() {
                   <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
                 </div>
 
+                <div className="flex items-center gap-1 mb-2">
+                  <p className="text-xs font-semibold text-[var(--ink-soft)]">New vs. Returning</p>
+                  <InfoTooltip text="A visitor counts as Returning if this same anonymous visitor ID (the one used for Unique Visitors) has a recorded visit to your site from before the selected date range. No cookies, no cross-device or cross-browser matching." />
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <StatCard label="New Visitors" value={webAnalyticsData?.stats.newVisitors ?? 0} />
+                  <StatCard label="Returning Visitors" value={webAnalyticsData?.stats.returningVisitors ?? 0} />
+                </div>
+
                 {!!webAnalyticsData?.series.length && (
                   <div className="panel rounded-xl p-5 mb-5">
                     <p className="text-sm font-semibold text-[var(--ink)] mb-3">Pageviews over time</p>
@@ -4566,6 +4593,133 @@ function DashboardPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {!!webAnalyticsData?.topPages.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Top Pages</p>
+                    <p className="text-xs text-[var(--ink-faint)] mb-3">Your most-visited pages over this period.</p>
+                    <div className="space-y-2">
+                      {webAnalyticsData.topPages.map((p) => (
+                        <div key={p.label} className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--ink)]/80 font-mono w-28 shrink-0 truncate">{p.label}</span>
+                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((p.count / webAnalyticsData.topPages[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{p.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!!webAnalyticsData?.pagesBreakdown.length && (
+                  <div className="panel rounded-xl overflow-hidden mb-5">
+                    <button
+                      onClick={() => setPagesDetailsExpanded((v) => !v)}
+                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors"
+                    >
+                      <span className="flex items-center gap-1">
+                        <p className="text-sm font-semibold text-[var(--ink)]">Page Performance</p>
+                        <InfoTooltip text="Bounce rate and duration here are measured for sessions that started on each page — not total time spent on that one page across a session." />
+                      </span>
+                      <svg className={`w-4 h-4 text-[var(--ink-faint)] transition-transform ${pagesDetailsExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {pagesDetailsExpanded && (
+                      <div className="border-t border-[var(--line)] overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-left text-[var(--ink-faint)]">
+                              <th className="px-5 py-2 font-medium">Page</th>
+                              <th className="px-5 py-2 font-medium text-right">Pageviews</th>
+                              <th className="px-5 py-2 font-medium text-right">Bounce Rate</th>
+                              <th className="px-5 py-2 font-medium text-right">Avg. Duration</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {webAnalyticsData.pagesBreakdown.map((p) => (
+                              <tr key={p.path} className="border-t border-[var(--line)]">
+                                <td className="px-5 py-2 font-mono text-[var(--ink)]/80 truncate max-w-[240px]">{p.path}</td>
+                                <td className="px-5 py-2 text-right font-semibold text-[var(--ink)]">{p.pageviews}</td>
+                                <td className="px-5 py-2 text-right text-[var(--ink-soft)]">{p.bounceRate}%</td>
+                                <td className="px-5 py-2 text-right text-[var(--ink-soft)]">{p.avgDurationSeconds}s</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!!webAnalyticsData?.countries.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <div className="flex items-center gap-1 mb-1">
+                      <p className="text-sm font-semibold text-[var(--ink)]">Visitors by Country</p>
+                      <InfoTooltip text="Approximate visitor location by country, derived from your hosting provider's edge network at request time — no IP addresses are stored." />
+                    </div>
+                    <div className="space-y-2 mt-3">
+                      {webAnalyticsData.countries.map((c) => (
+                        <div key={c.label} className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--ink)]/80 font-medium w-28 shrink-0 truncate">{countryCodeToFlag(c.label)} {c.label}</span>
+                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((c.count / webAnalyticsData.countries[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{c.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!!webAnalyticsData?.devices.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">Devices, Browsers &amp; OS</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      {([["Device", webAnalyticsData.devices], ["Browser", webAnalyticsData.browsers], ["OS", webAnalyticsData.operatingSystems]] as const).map(([label, list]) => (
+                        <div key={label}>
+                          <p className="text-xs font-semibold text-[var(--ink)]/90 mb-2">{label}</p>
+                          <div className="space-y-1.5">
+                            {list.map((item) => (
+                              <div key={item.label} className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-[var(--ink)]/80 truncate capitalize">{item.label}</span>
+                                <span className="text-xs font-semibold text-[var(--ink)] shrink-0">{item.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!!webAnalyticsData?.topCampaigns.length && (
+                  <div className="panel rounded-xl p-5 mb-5 overflow-x-auto">
+                    <div className="flex items-center gap-1 mb-3">
+                      <p className="text-sm font-semibold text-[var(--ink)]">Top Campaigns</p>
+                      <InfoTooltip text="Traffic tagged with utm_source/utm_medium/utm_campaign in the landing page URL — useful for measuring specific ad or email campaigns." />
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-[var(--ink-faint)]">
+                          <th className="py-2 font-medium">Source</th>
+                          <th className="py-2 font-medium">Medium</th>
+                          <th className="py-2 font-medium">Campaign</th>
+                          <th className="py-2 font-medium text-right">Visits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {webAnalyticsData.topCampaigns.map((c, i) => (
+                          <tr key={`${c.source}-${c.medium}-${c.campaign}-${i}`} className="border-t border-[var(--line)]">
+                            <td className="py-2 text-[var(--ink)]/80">{c.source}</td>
+                            <td className="py-2 text-[var(--ink)]/80">{c.medium}</td>
+                            <td className="py-2 text-[var(--ink)]/80">{c.campaign}</td>
+                            <td className="py-2 text-right font-semibold text-[var(--ink)]">{c.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
 

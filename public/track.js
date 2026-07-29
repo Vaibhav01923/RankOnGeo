@@ -28,6 +28,11 @@
     var visitorId = getOrSet(window.localStorage, "rog_visitor_id");
     var sessionId = getOrSet(window.sessionStorage, "rog_session_id");
 
+    var params = new URLSearchParams(window.location.search);
+    var utmSource = params.get("utm_source");
+    var utmMedium = params.get("utm_medium");
+    var utmCampaign = params.get("utm_campaign");
+
     // Must be the canonical www host, not the apex domain — the apex 308s to
     // www, and a redirected response fails the browser's CORS preflight
     // (preflight requests are never followed on redirect), silently killing
@@ -41,6 +46,9 @@
         referrer: document.referrer || null,
         visitorId: visitorId,
         sessionId: sessionId,
+        utmSource: utmSource,
+        utmMedium: utmMedium,
+        utmCampaign: utmCampaign,
       }),
       keepalive: true,
     }).catch(function () {});

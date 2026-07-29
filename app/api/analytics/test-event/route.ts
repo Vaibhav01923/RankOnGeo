@@ -35,6 +35,14 @@ export async function POST(req: NextRequest) {
       session_id: `test-${randomUUID()}`,
       path: "/test-page",
       referrer: "https://example.com/test-referrer",
+      geo_country: "US",
+      user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+      device_type: "desktop",
+      browser: "Chrome",
+      os: "macOS",
+      utm_source: "test-source",
+      utm_medium: "test-medium",
+      utm_campaign: "test-campaign",
     });
   } else {
     await admin.from("bot_visits").insert({
