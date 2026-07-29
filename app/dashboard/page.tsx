@@ -4492,7 +4492,7 @@ function DashboardPage() {
               <div className={webAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
                   <StatCard label="Live Visitors" value={webAnalyticsData?.stats.liveVisitors ?? 0} sub="last 5 min" />
-                  <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
+                  <StatCard label="Unique Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
                   <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
                   <StatCard label="Visit Duration" value={`${webAnalyticsData?.stats.avgDurationSeconds ?? 0}s`} />
                   <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
