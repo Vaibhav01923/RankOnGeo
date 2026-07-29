@@ -9,8 +9,9 @@ const getDodo = () =>
     environment: (process.env.DODO_ENVIRONMENT ?? "test_mode") as "test_mode" | "live_mode",
   });
 
-// One-time analytics event-capacity top-up, $0.75 per 1,000-event unit —
-// separate from the recurring plan subscription checkout. Requires an active
+// One-time analytics event-capacity top-up, $1 per 100,000-event unit
+// (1,000,000-event minimum purchase) — separate from the recurring plan
+// subscription checkout. Requires an active
 // subscription (top-ups add to an existing plan's balance, they don't stand
 // alone). The purchased balance never expires and rolls over across billing
 // periods (see purchased_event_balance on user_plans, drawn down by

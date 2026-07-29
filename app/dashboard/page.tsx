@@ -806,7 +806,7 @@ function DashboardPage() {
   const [buyCreditsQty, setBuyCreditsQty] = useState(50);
   const [buyCreditsSubmitting, setBuyCreditsSubmitting] = useState(false);
   const [showBuyEventsModal, setShowBuyEventsModal] = useState(false);
-  const [buyEventsUnits, setBuyEventsUnits] = useState(50);
+  const [buyEventsUnits, setBuyEventsUnits] = useState(10);
   const [buyEventsSubmitting, setBuyEventsSubmitting] = useState(false);
   const [analyticsUsage, setAnalyticsUsage] = useState<{ quota: number; totalEvents: number; overageEvents: number; purchasedEventBalance: number; ingestionPaused: boolean } | null>(null);
   const [deleteBrandTarget, setDeleteBrandTarget] = useState<{ id: string; name: string; domain: string } | null>(null);
@@ -5201,7 +5201,7 @@ function DashboardPage() {
             </div>
           )}
 
-          {/* Buy events modal — $0.75 per 1,000-event unit, never expires, rolls over */}
+          {/* Buy events modal — $1 per 100,000-event unit, 1,000,000-event minimum purchase, never expires, rolls over */}
           {showBuyEventsModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowBuyEventsModal(false)}>
               <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
@@ -5211,18 +5211,18 @@ function DashboardPage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
-                <p className="text-xs text-[var(--ink-faint)] mb-5">$0.75 per 1,000 Web/LLM Analytics events, added to your balance on top of your plan&apos;s monthly quota. Never expires, rolls over indefinitely.</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per 100,000 Web/LLM Analytics events, added to your balance on top of your plan&apos;s monthly quota. 1,000,000-event minimum purchase. Never expires, rolls over indefinitely.</p>
 
                 <div className="text-center mb-3">
-                  <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{(buyEventsUnits * 1000).toLocaleString()}</span>
+                  <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{(buyEventsUnits * 100000).toLocaleString()}</span>
                   <span className="text-sm text-[var(--ink-faint)] ml-1.5">events</span>
                 </div>
 
                 <input
                   type="range"
                   min={10}
-                  max={500}
-                  step={10}
+                  max={50}
+                  step={1}
                   value={buyEventsUnits}
                   onChange={(e) => setBuyEventsUnits(Number(e.target.value))}
                   className="w-full accent-[var(--rust)] mb-4"
@@ -5230,7 +5230,7 @@ function DashboardPage() {
 
                 <div className="flex items-center justify-between border border-[var(--line)] rounded-lg px-3 py-2 mb-4 bg-[var(--line-soft)]">
                   <span className="text-xs text-[var(--ink-soft)]">Total</span>
-                  <span className="font-signal-mono text-sm font-bold text-[var(--ink)]">${(buyEventsUnits * 0.75).toFixed(2)}</span>
+                  <span className="font-signal-mono text-sm font-bold text-[var(--ink)]">${buyEventsUnits.toFixed(2)}</span>
                 </div>
 
                 <button
@@ -5238,7 +5238,7 @@ function DashboardPage() {
                   disabled={buyEventsSubmitting}
                   className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[var(--rust)] text-white px-3 py-2.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors disabled:opacity-60"
                 >
-                  {buyEventsSubmitting ? "Redirecting…" : `Buy ${(buyEventsUnits * 1000).toLocaleString()} events — $${(buyEventsUnits * 0.75).toFixed(2)}`}
+                  {buyEventsSubmitting ? "Redirecting…" : `Buy ${(buyEventsUnits * 100000).toLocaleString()} events — $${buyEventsUnits.toFixed(2)}`}
                 </button>
               </div>
             </div>
