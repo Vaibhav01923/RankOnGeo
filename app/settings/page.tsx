@@ -37,6 +37,7 @@ type SubscriptionInfo = {
   isLapsed: boolean;
   graceDaysLeft: number | null;
   hasBillingAccount: boolean;
+  purchasedEventBalance: number;
   status: string | null;
   nextBillingDate: string | null;
   cancelAtNextBillingDate: boolean;
@@ -172,6 +173,17 @@ function SettingsContent() {
           <p className="text-sm text-[var(--ink-soft)] mb-4">
             {brandCount} of {brandLimit} website{brandLimit === 1 ? "" : "s"} tracked
           </p>
+
+          {!sub?.isFree && (
+            <div className="flex items-center justify-between bg-[var(--line-soft)] rounded-lg px-3 py-2.5 mb-4">
+              <p className="text-sm text-[var(--ink-soft)]">
+                {sub && sub.purchasedEventBalance > 0
+                  ? `${sub.purchasedEventBalance.toLocaleString()} extra Web/LLM Analytics events in balance`
+                  : "No extra Web/LLM Analytics events purchased"}
+              </p>
+              <a href="/dashboard" className="text-sm font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] shrink-0">Buy more →</a>
+            </div>
+          )}
 
           {portalError && (
             <p className="text-xs text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2 mb-4">

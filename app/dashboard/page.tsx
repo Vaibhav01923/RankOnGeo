@@ -805,7 +805,10 @@ function DashboardPage() {
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
   const [buyCreditsQty, setBuyCreditsQty] = useState(50);
   const [buyCreditsSubmitting, setBuyCreditsSubmitting] = useState(false);
-  const [analyticsUsage, setAnalyticsUsage] = useState<{ quota: number; totalEvents: number; overageEvents: number; creditsCharged: number; ingestionPaused: boolean } | null>(null);
+  const [showBuyEventsModal, setShowBuyEventsModal] = useState(false);
+  const [buyEventsUnits, setBuyEventsUnits] = useState(50);
+  const [buyEventsSubmitting, setBuyEventsSubmitting] = useState(false);
+  const [analyticsUsage, setAnalyticsUsage] = useState<{ quota: number; totalEvents: number; overageEvents: number; purchasedEventBalance: number; ingestionPaused: boolean } | null>(null);
   const [deleteBrandTarget, setDeleteBrandTarget] = useState<{ id: string; name: string; domain: string } | null>(null);
   const [deleteBrandConfirmText, setDeleteBrandConfirmText] = useState("");
   const [deletingBrand, setDeletingBrand] = useState(false);
@@ -902,11 +905,23 @@ function DashboardPage() {
       .finally(() => setBuyCreditsSubmitting(false));
   };
 
+  const buyEvents = () => {
+    setBuyEventsSubmitting(true);
+    fetch("/api/dodo/events-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ units: buyEventsUnits, cancelPath: window.location.pathname + window.location.search }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.url) window.location.href = d.url; })
+      .finally(() => setBuyEventsSubmitting(false));
+  };
+
   // Shared Web+LLM Analytics monthly-usage widget, shown on both tabs since
   // the quota (and any overage) is combined across both event types.
   const renderAnalyticsUsageBar = () => {
     if (!analyticsUsage) return null;
-    const { quota, totalEvents, overageEvents, creditsCharged, ingestionPaused } = analyticsUsage;
+    const { quota, totalEvents, overageEvents, purchasedEventBalance, ingestionPaused } = analyticsUsage;
     const pct = quota > 0 ? Math.min(100, Math.round((totalEvents / quota) * 100)) : 0;
     return (
       <div className="panel rounded-xl px-5 py-4 mb-5">
@@ -914,16 +929,22 @@ function DashboardPage() {
           <p className="text-xs font-semibold text-[var(--ink)]">Monthly usage</p>
           <p className="text-xs text-[var(--ink-faint)]">
             {totalEvents.toLocaleString()} / {quota.toLocaleString()} events
-            {overageEvents > 0 && ` · +${overageEvents.toLocaleString()} over (${creditsCharged} credits)`}
+            {overageEvents > 0 && ` · +${overageEvents.toLocaleString()} over`}
           </p>
         </div>
         <div className="h-1.5 rounded-full bg-[var(--line-soft)] overflow-hidden">
           <div className={`h-full rounded-full ${overageEvents > 0 ? "bg-[var(--rust)]" : "bg-[var(--ink-faint)]"}`} style={{ width: `${pct}%` }} />
         </div>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-[11px] text-[var(--ink-faint)]">
+            {purchasedEventBalance > 0 ? `${purchasedEventBalance.toLocaleString()} extra events in balance` : "No extra events purchased"}
+          </p>
+          <button onClick={() => setShowBuyEventsModal(true)} className="text-xs font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] underline shrink-0">Buy more events</button>
+        </div>
         {ingestionPaused && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[var(--rust-wash)] px-3 py-2">
-            <p className="text-xs text-[var(--rust-deep)] font-medium">Analytics tracking is paused — out of credits to cover this month&apos;s overage.</p>
-            <button onClick={() => setShowBuyCreditsModal(true)} className="text-xs font-semibold text-[var(--rust-deep)] underline shrink-0">Buy credits</button>
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[var(--rust-wash)] px-3 py-2">
+            <p className="text-xs text-[var(--rust-deep)] font-medium">Analytics tracking is paused — out of purchased events to cover this month&apos;s overage.</p>
+            <button onClick={() => setShowBuyEventsModal(true)} className="text-xs font-semibold text-[var(--rust-deep)] underline shrink-0">Buy events</button>
           </div>
         )}
       </div>
@@ -5138,7 +5159,7 @@ function DashboardPage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
-                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per credit, added on top of your current balance. Used for Reddit engagement orders and Web/LLM Analytics overage.</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per credit, added on top of your current balance. Used for Reddit engagement orders.</p>
 
                 <div className="text-center mb-3">
                   <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{buyCreditsQty}</span>
@@ -5166,6 +5187,49 @@ function DashboardPage() {
                   className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[var(--rust)] text-white px-3 py-2.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors disabled:opacity-60"
                 >
                   {buyCreditsSubmitting ? "Redirecting…" : `Buy ${buyCreditsQty} credits — $${buyCreditsQty}`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Buy events modal — $0.75 per 1,000-event unit, never expires, rolls over */}
+          {showBuyEventsModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowBuyEventsModal(false)}>
+              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-base font-semibold text-[var(--ink)]">Buy more events</p>
+                  <button onClick={() => setShowBuyEventsModal(false)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-5">$0.75 per 1,000 Web/LLM Analytics events, added to your balance on top of your plan&apos;s monthly quota. Never expires, rolls over indefinitely.</p>
+
+                <div className="text-center mb-3">
+                  <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{(buyEventsUnits * 1000).toLocaleString()}</span>
+                  <span className="text-sm text-[var(--ink-faint)] ml-1.5">events</span>
+                </div>
+
+                <input
+                  type="range"
+                  min={10}
+                  max={500}
+                  step={10}
+                  value={buyEventsUnits}
+                  onChange={(e) => setBuyEventsUnits(Number(e.target.value))}
+                  className="w-full accent-[var(--rust)] mb-4"
+                />
+
+                <div className="flex items-center justify-between border border-[var(--line)] rounded-lg px-3 py-2 mb-4 bg-[var(--line-soft)]">
+                  <span className="text-xs text-[var(--ink-soft)]">Total</span>
+                  <span className="font-signal-mono text-sm font-bold text-[var(--ink)]">${(buyEventsUnits * 0.75).toFixed(2)}</span>
+                </div>
+
+                <button
+                  onClick={buyEvents}
+                  disabled={buyEventsSubmitting}
+                  className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold bg-[var(--rust)] text-white px-3 py-2.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors disabled:opacity-60"
+                >
+                  {buyEventsSubmitting ? "Redirecting…" : `Buy ${(buyEventsUnits * 1000).toLocaleString()} events — $${(buyEventsUnits * 0.75).toFixed(2)}`}
                 </button>
               </div>
             </div>

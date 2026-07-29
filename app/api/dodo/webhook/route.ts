@@ -262,6 +262,27 @@ export async function POST(req: NextRequest) {
         console.error("[dodo webhook] DataFast revenue forwarding threw", err);
       }
     }
+
+    // Events top-up (see app/api/dodo/events-checkout/route.ts) credits our
+    // own internal balance, not a Dodo credit entitlement — do that here.
+    // Insert-with-conflict on payment_id makes this idempotent against
+    // webhook redelivery: a payment can only ever credit the balance once.
+    if (payment.metadata?.type === "events_topup" && payment.metadata?.userId) {
+      const userId = payment.metadata.userId;
+      const amount = Number(payment.metadata.eventsAmount ?? 0);
+      if (amount > 0) {
+        const { error: insertErr } = await db
+          .from("event_balance_credits")
+          .insert({ payment_id: payment.payment_id, user_id: userId, amount });
+        if (!insertErr) {
+          const { data: plan } = await db.from("user_plans").select("purchased_event_balance").eq("user_id", userId).maybeSingle();
+          await db
+            .from("user_plans")
+            .update({ purchased_event_balance: (plan?.purchased_event_balance ?? 0) + amount })
+            .eq("user_id", userId);
+        }
+      }
+    }
   }
 
   if (event.type === "subscription.cancelled" || event.type === "subscription.expired") {

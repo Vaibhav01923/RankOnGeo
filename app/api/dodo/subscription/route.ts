@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const { data: userPlan } = await db
     .from("user_plans")
-    .select("plan, dodo_customer_id, dodo_subscription_id, payment_failed_at")
+    .select("plan, dodo_customer_id, dodo_subscription_id, payment_failed_at, purchased_event_balance")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     isLapsed: isLapsedSubscriber(userPlan),
     graceDaysLeft: gracePeriodDaysLeft(userPlan),
     hasBillingAccount: !!userPlan?.dodo_customer_id,
+    purchasedEventBalance: userPlan?.purchased_event_balance ?? 0,
     status: null as string | null,
     nextBillingDate: null as string | null,
     cancelAtNextBillingDate: false,

@@ -1,18 +1,12 @@
 import { inngest } from "@/inngest/client";
 import { serverClient } from "@/lib/supabase";
-import DodoPayments from "dodopayments";
 import { analyticsEventQuotaForPlan } from "@/lib/plan-limits";
-import { currentBillingPeriod, billingPeriodStart, owedOverageCredits } from "@/lib/analytics-billing";
-
-const getDodo = () =>
-  new DodoPayments({
-    bearerToken: process.env.DODO_API_KEY!,
-    environment: (process.env.DODO_ENVIRONMENT ?? "test_mode") as "test_mode" | "live_mode",
-  });
+import { currentBillingPeriod, billingPeriodStart } from "@/lib/analytics-billing";
 
 // Meters Web+LLM Analytics usage against each paid brand's monthly quota and
-// debits Dodo credits for overage — the only thing that ever charges for
-// analytics volume; ingestion itself never blocks synchronously per-event.
+// draws down the account's purchased event balance for any overage — ingestion
+// itself never blocks synchronously per-event, this is the only thing that
+// gates/pauses it. See lib/analytics-billing.ts for the balance model.
 export const meterAnalyticsUsage = inngest.createFunction(
   { id: "meter-analytics-usage", retries: 0, triggers: [{ cron: "*/15 * * * *" }] },
   async ({ step }) => {
@@ -22,23 +16,22 @@ export const meterAnalyticsUsage = inngest.createFunction(
 
     const result = await step.run("meter-brands", async () => {
       const { data: brands } = await db.from("brands").select("id, user_id");
-      if (!brands?.length) return { checked: 0, charged: 0, paused: 0, resumed: 0 };
+      if (!brands?.length) return { checked: 0, paused: 0, resumed: 0 };
 
       const userIds = [...new Set(brands.map((b) => b.user_id))];
       const { data: plans } = await db
         .from("user_plans")
-        .select("user_id, plan, dodo_customer_id, dodo_subscription_id")
+        .select("user_id, plan, dodo_customer_id, dodo_subscription_id, purchased_event_balance")
         .in("user_id", userIds);
       const planByUser = new Map((plans ?? []).map((p) => [p.user_id, p]));
 
       const { data: cycles } = await db
         .from("analytics_usage_cycles")
-        .select("brand_id, period, credits_charged, ingestion_paused")
+        .select("brand_id, period, events_covered_by_balance, ingestion_paused")
         .in("brand_id", brands.map((b) => b.id));
       const cycleByBrand = new Map((cycles ?? []).map((c) => [c.brand_id, c]));
 
-      const dodo = getDodo();
-      let charged = 0, paused = 0, resumed = 0, checked = 0;
+      let checked = 0, paused = 0, resumed = 0;
 
       for (const brand of brands) {
         const userPlan = planByUser.get(brand.user_id);
@@ -56,44 +49,44 @@ export const meterAnalyticsUsage = inngest.createFunction(
           .from("bot_visits").select("id", { count: "exact", head: true })
           .eq("brand_id", brand.id).gte("created_at", periodStart);
         const totalEvents = (webCount ?? 0) + (botCount ?? 0);
-        const owed = owedOverageCredits(totalEvents, quota);
+        const overageEvents = Math.max(0, totalEvents - quota);
 
         const cycle = cycleByBrand.get(brand.id);
-        // A cycle row from a prior month is stale — the new period starts at 0 charged/unpaused.
-        let creditsCharged = cycle?.period === period ? cycle.credits_charged : 0;
+        // A cycle row from a prior month is stale — the new period starts at 0
+        // covered/unpaused. The purchased balance itself is NOT period-scoped —
+        // it rolls over indefinitely, tracked separately on user_plans.
+        let eventsCovered = cycle?.period === period ? cycle.events_covered_by_balance : 0;
         let ingestionPaused = cycle?.period === period ? cycle.ingestion_paused : false;
 
-        if (owed > creditsCharged) {
-          const diff = owed - creditsCharged;
-          try {
-            await dodo.creditEntitlements.balances.createLedgerEntry(userPlan.dodo_customer_id, {
-              credit_entitlement_id: process.env.DODO_CREDIT_ENTITLEMENT_ID!,
-              amount: diff.toString(),
-              entry_type: "debit",
-              reason: `Web/LLM Analytics overage (${totalEvents} events, ${quota}/mo included)`,
-              idempotency_key: `analytics-overage:${brand.id}:${period}:${owed}`,
-              metadata: { brandId: brand.id, period, totalEvents: String(totalEvents), quota: String(quota) },
-            });
-            creditsCharged = owed;
-            if (ingestionPaused) resumed++;
-            ingestionPaused = false;
-            charged++;
-          } catch {
-            // Insufficient credits — pause ingestion for this brand until a
-            // top-up or the next billing period; leave creditsCharged as-is
-            // so the same diff is retried (and only retried once) next tick.
-            ingestionPaused = true;
-            paused++;
+        const newOverage = overageEvents - eventsCovered;
+        if (newOverage > 0) {
+          const available = userPlan.purchased_event_balance ?? 0;
+          const covered = Math.min(newOverage, available);
+          if (covered > 0) {
+            await db
+              .from("user_plans")
+              .update({ purchased_event_balance: available - covered })
+              .eq("user_id", brand.user_id);
+            userPlan.purchased_event_balance = available - covered;
           }
+          eventsCovered += covered;
+          const stillPaused = covered < newOverage;
+          if (ingestionPaused && !stillPaused) resumed++;
+          if (!ingestionPaused && stillPaused) paused++;
+          ingestionPaused = stillPaused;
+        } else if (ingestionPaused) {
+          // Quota/usage no longer implies overage this tick (e.g. new period).
+          ingestionPaused = false;
+          resumed++;
         }
 
         await db.from("analytics_usage_cycles").upsert(
-          { brand_id: brand.id, period, credits_charged: creditsCharged, ingestion_paused: ingestionPaused, updated_at: new Date().toISOString() },
+          { brand_id: brand.id, period, events_covered_by_balance: eventsCovered, ingestion_paused: ingestionPaused, updated_at: new Date().toISOString() },
           { onConflict: "brand_id" }
         );
       }
 
-      return { checked, charged, paused, resumed };
+      return { checked, paused, resumed };
     });
 
     return result;
