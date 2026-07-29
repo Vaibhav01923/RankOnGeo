@@ -444,6 +444,30 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
+function InfoTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block align-middle ml-1.5">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        aria-label="More info"
+        className="w-4 h-4 inline-flex items-center justify-center rounded-full border border-[var(--ink-faint)] text-[var(--ink-faint)] text-[10px] leading-none font-semibold hover:border-[var(--ink-soft)] hover:text-[var(--ink-soft)] transition-colors"
+      >
+        i
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-2 z-50 w-72 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-lg p-3.5 text-left">
+            <p className="text-xs text-[var(--ink-soft)] leading-relaxed whitespace-normal">{text}</p>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 function NavItem({ label, active, onClick, badge }: { label: string; active: boolean; onClick: () => void; badge?: number }) {
   return (
     <button
@@ -4610,7 +4634,10 @@ function DashboardPage() {
               <div className="max-w-4xl mx-auto w-full">
                 <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
                   <div>
-                    <h2 className="text-lg font-semibold text-[var(--ink)]">Web Analytics</h2>
+                    <h2 className="text-lg font-semibold text-[var(--ink)] inline-flex items-center">
+                      Web Analytics
+                      <InfoTooltip text="Real human visitors to your site — including people who clicked through from an AI answer (shown under Top Referrers, e.g. chatgpt.com). Different from LLM Analytics, which tracks AI bots crawling your content, not people." />
+                    </h2>
                     <p className="text-sm text-[var(--ink-soft)] mt-0.5">Privacy first analytics for your website</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -4783,7 +4810,10 @@ function DashboardPage() {
               <div className="max-w-4xl mx-auto w-full">
                 <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
                   <div>
-                    <h2 className="text-lg font-semibold text-[var(--ink)]">LLM Analytics</h2>
+                    <h2 className="text-lg font-semibold text-[var(--ink)] inline-flex items-center">
+                      LLM Analytics
+                      <InfoTooltip text="AI bots and crawlers (GPTBot, ClaudeBot, PerplexityBot, etc.) fetching your pages to ingest content — not human visitors. This tells you whether AI models can even see your content. For real people clicking through from an AI answer, see Web Analytics → Top Referrers instead." />
+                    </h2>
                     <p className="text-sm text-[var(--ink-soft)] mt-0.5">AI and bot traffic analytics</p>
                   </div>
                   <div className="flex items-center gap-2">
