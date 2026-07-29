@@ -31,7 +31,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RankOnGeo — Track Your Brand in AI Search",
+  title: "RankOnGeo — Check Your AI Visibility Score, Get Mentioned by AI",
   description:
     "See how ChatGPT, Claude, Gemini, Perplexity and Google AI respond about your brand. Close the gap with research, articles, and publishing.",
   alternates: { canonical: "/" },
