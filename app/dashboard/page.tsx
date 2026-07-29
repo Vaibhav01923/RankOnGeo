@@ -170,7 +170,7 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "citations", title: "Citations", body: "These are the sources AI uses to decide who to mention. Engage on them with your brand name to improve your odds of being cited." },
   { tab: "competitors", title: "Competitors", body: "See every competitor AI mentions alongside — or instead of — you." },
   { tab: "tasks", title: "Tasks", body: "Use this to boost engagement on replies that promote your brand on Reddit and other citation sources." },
-  { tab: "gaps", title: "Research", body: "Write these articles and publish one on your website every day — that steadily improves your SEO rankings and AI mentions. Publishing is one click away in the Publishing tab." },
+  { tab: "gaps", title: "Research", body: "These are real queries where competitors show up and you don't. Publishing an article for each one is a double win — on-page SEO for Google, and GEO (Generative Engine Optimization) that teaches AI engines to cite and recommend you. Publish one a day; it's one click away in the Publishing tab." },
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
   { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
   { tab: "webAnalytics", title: "Web Analytics", body: "Track your website's own traffic and search performance here too." },
@@ -5031,7 +5031,10 @@ function DashboardPage() {
               ) : (
                 <>
                   <div className="mb-5">
-                    <h2 className="text-xl font-bold text-[var(--ink)]">Research</h2>
+                    <h2 className="text-xl font-bold text-[var(--ink)] inline-flex items-center">
+                      Research
+                      <InfoTooltip text="Each of these is a real query where you're missing while a competitor shows up. Writing and publishing an article that answers it is a double win — it's on-page SEO for Google, since it builds topical relevance for that exact query, and it's GEO (Generative Engine Optimization), since it gives AI engines fresh, citable content to reference when they answer this query." />
+                    </h2>
                     <p className="text-sm text-[var(--ink-faint)] mt-0.5">
                       {isFreeTier ? <BlurInline onUnlock={openPaywall}>{2 + (decoyHash(brand.id ?? brand.name) % 9)} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
                     </p>
