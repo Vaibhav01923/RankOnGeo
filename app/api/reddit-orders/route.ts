@@ -4,7 +4,7 @@ import { placeRedditOrder } from "@/lib/reddit-order-service";
 import { requireBrandAccess } from "@/lib/team";
 import type { RedditServiceType } from "@/lib/types";
 
-const SERVICE_TYPES: RedditServiceType[] = ["post_upvote", "post_downvote", "comment_upvote", "comment_downvote", "custom_comments"];
+const SERVICE_TYPES: RedditServiceType[] = ["post_upvote", "post_downvote", "comment_upvote", "comment_downvote", "custom_comments", "create_post"];
 
 export async function POST(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -18,11 +18,14 @@ export async function POST(req: NextRequest) {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
   }
-  const { brandId, url, serviceType, quantity, commentText, speed } = body;
+  const { brandId, url, serviceType, quantity, commentText, speed, subreddit, postTitle } = body;
 
-  if (!brandId || !url) return new Response(JSON.stringify({ error: "brandId and url required" }), { status: 400 });
   if (!SERVICE_TYPES.includes(serviceType)) {
     return new Response(JSON.stringify({ error: "Invalid service type" }), { status: 400 });
+  }
+  // create_post doesn't have a URL yet — it needs a subreddit instead.
+  if (!brandId || (serviceType === "create_post" ? !subreddit : !url)) {
+    return new Response(JSON.stringify({ error: serviceType === "create_post" ? "brandId and subreddit required" : "brandId and url required" }), { status: 400 });
   }
 
   const access = await requireBrandAccess(db, user.id, brandId);
@@ -38,6 +41,8 @@ export async function POST(req: NextRequest) {
     quantity,
     commentText,
     speed,
+    subreddit,
+    postTitle,
   });
 
   if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: result.status });

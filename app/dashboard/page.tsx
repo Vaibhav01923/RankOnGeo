@@ -19,7 +19,7 @@ const ENGINE_LABELS: Record<AIEngine, string> = {
   grok: "Grok",
 };
 
-const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "post" | "comment"; creditsPerUnit: number; min: number; max: number; caveat?: string }> = {
+const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "post" | "comment" | "new_post"; creditsPerUnit: number; min: number; max: number; caveat?: string }> = {
   post_upvote: { label: "Upvotes", target: "post", creditsPerUnit: 0.5, min: 5, max: 1000 },
   post_downvote: {
     label: "Downvotes", target: "post", creditsPerUnit: 0.5, min: 5, max: 1000,
@@ -28,10 +28,12 @@ const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "p
   comment_upvote: { label: "Upvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
   comment_downvote: { label: "Downvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
   custom_comments: { label: "Post a new comment", target: "post", creditsPerUnit: 5, min: 1, max: 1 },
+  create_post: { label: "Create a new post", target: "new_post", creditsPerUnit: 10, min: 1, max: 1 },
 };
-const REDDIT_TARGET_SERVICES: Record<"post" | "comment", RedditServiceType[]> = {
+const REDDIT_TARGET_SERVICES: Record<"post" | "comment" | "new_post", RedditServiceType[]> = {
   post: ["post_upvote", "post_downvote", "custom_comments"],
   comment: ["comment_upvote", "comment_downvote"],
+  new_post: ["create_post"],
 };
 
 const TASK_STATUS_BADGE: Record<string, { label: string; className: string; dotClassName: string }> = {
@@ -423,6 +425,7 @@ function mapEngageTask(t: Record<string, unknown>): EngageTask {
     promptText: (t.prompt_text as string) ?? null,
     engine: (t.engine as string) ?? null,
     replyText: (t.reply_text as string) ?? null,
+    postTitle: (t.post_title as string) ?? null,
     upvotesOrdered: (t.upvotes_ordered as number) ?? 0,
     deliverySpeed: t.delivery_speed as string,
     serviceType: (t.service_type as RedditServiceType) ?? "post_upvote",
@@ -967,6 +970,8 @@ function DashboardPage() {
   const [redditOrderQty, setRedditOrderQty] = useState(10);
   const [redditOrderSpeed, setRedditOrderSpeed] = useState<"slow" | "normal" | "fast">("normal");
   const [redditOrderComment, setRedditOrderComment] = useState("");
+  const [redditOrderSubreddit, setRedditOrderSubreddit] = useState("");
+  const [redditOrderPostTitle, setRedditOrderPostTitle] = useState("");
   const [redditOrderSubmitting, setRedditOrderSubmitting] = useState(false);
   const [redditOrderError, setRedditOrderError] = useState("");
   const [redditOrderSuccess, setRedditOrderSuccess] = useState("");
@@ -2104,7 +2109,17 @@ function DashboardPage() {
     setRedditOrderError("");
     setRedditOrderSuccess("");
 
-    if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(redditOrderUrl.trim())) {
+    const isCreatePost = redditOrderService === "create_post";
+    if (isCreatePost) {
+      if (!/^[A-Za-z0-9_]{3,21}$/.test(redditOrderSubreddit.trim().replace(/^r\//i, ""))) {
+        setRedditOrderError("Enter a valid subreddit name (letters, numbers, underscores, 3-21 characters)");
+        return;
+      }
+      if (!redditOrderPostTitle.trim()) {
+        setRedditOrderError("Enter a title for the post");
+        return;
+      }
+    } else if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(redditOrderUrl.trim())) {
       setRedditOrderError("Enter a valid reddit.com link");
       return;
     }
@@ -2120,21 +2135,25 @@ function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brandId: brand?.id,
-          url: redditOrderUrl.trim(),
+          url: isCreatePost ? undefined : redditOrderUrl.trim(),
           serviceType: redditOrderService,
-          quantity: redditOrderService === "custom_comments" ? undefined : redditOrderQty,
-          commentText: redditOrderService === "custom_comments" ? redditOrderComment.trim() : undefined,
+          quantity: redditOrderService === "custom_comments" || isCreatePost ? undefined : redditOrderQty,
+          commentText: redditOrderService === "custom_comments" || isCreatePost ? redditOrderComment.trim() : undefined,
           speed: redditOrderSpeed,
+          subreddit: isCreatePost ? redditOrderSubreddit.trim().replace(/^r\//i, "") : undefined,
+          postTitle: isCreatePost ? redditOrderPostTitle.trim() : undefined,
         }),
       });
       const d = await res.json();
       if (res.ok) {
         if (d.task) setEngageTasks((prev) => [mapEngageTask(d.task), ...prev]);
-        const spent = REDDIT_SERVICE_META[redditOrderService].creditsPerUnit * (redditOrderService === "custom_comments" ? 1 : redditOrderQty);
+        const spent = REDDIT_SERVICE_META[redditOrderService].creditsPerUnit * (redditOrderService === "custom_comments" || isCreatePost ? 1 : redditOrderQty);
         setCredits((prev) => (prev ? { ...prev, balance: prev.balance - spent } : prev));
         setRedditOrderSuccess(d.queued ? "High demand for this link right now — we'll submit your order automatically." : "Order submitted.");
         setRedditOrderUrl("");
         setRedditOrderComment("");
+        setRedditOrderSubreddit("");
+        setRedditOrderPostTitle("");
       } else {
         setRedditOrderError(d.error ?? "Failed to submit order");
       }
@@ -2202,7 +2221,7 @@ function DashboardPage() {
 
   // Citations derived data
   const engagedUrls = new Set(engageTasks.map((t) => t.url));
-  const redditOrderTarget: "post" | "comment" = REDDIT_SERVICE_META[redditOrderService].target;
+  const redditOrderTarget: "post" | "comment" | "new_post" = REDDIT_SERVICE_META[redditOrderService].target;
   const CITATION_BLOCKED = [
     "google.com", "googleapis.com", "googleusercontent.com",
     "gstatic.com", "googlesyndication.com", "doubleclick.net",
@@ -6139,7 +6158,7 @@ function DashboardPage() {
                 {/* Tier 1: target — same segmented-tab style as tier 2 below, so both
                     read as one consistent picker instead of two different UI patterns. */}
                 <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
-                  {(["post", "comment"] as const).map((target) => (
+                  {(["post", "comment", "new_post"] as const).map((target) => (
                     <button
                       key={target}
                       onClick={() => setRedditOrderService(REDDIT_TARGET_SERVICES[target][0])}
@@ -6147,46 +6166,70 @@ function DashboardPage() {
                         redditOrderTarget === target ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
                       }`}
                     >
-                      {target === "post" ? "Post" : "Comment"}
+                      {target === "post" ? "Post" : target === "comment" ? "Comment" : "New Post"}
                     </button>
                   ))}
                 </div>
 
-                {/* Tier 2: action within that target */}
-                <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
-                  {REDDIT_TARGET_SERVICES[redditOrderTarget].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setRedditOrderService(s)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                        redditOrderService === s ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
-                      }`}
-                    >
-                      {REDDIT_SERVICE_META[s].label}
-                    </button>
-                  ))}
-                </div>
+                {/* Tier 2: action within that target — skipped when there's only one option (new_post) */}
+                {REDDIT_TARGET_SERVICES[redditOrderTarget].length > 1 && (
+                  <div className="flex gap-1 mb-3 bg-[var(--line)] rounded-lg p-1 w-fit">
+                    {REDDIT_TARGET_SERVICES[redditOrderTarget].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setRedditOrderService(s)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                          redditOrderService === s ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]/80"
+                        }`}
+                      >
+                        {REDDIT_SERVICE_META[s].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                <input
-                  value={redditOrderUrl}
-                  onChange={(e) => setRedditOrderUrl(e.target.value)}
-                  placeholder={redditOrderTarget === "comment" ? "https://www.reddit.com/r/.../comments/.../comment/..." : "https://www.reddit.com/r/.../comments/..."}
-                  className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
-                />
-                <p className="text-[10px] text-[var(--ink-faint)] mt-1 mb-3">
-                  {redditOrderTarget === "comment"
-                    ? "Paste the comment's own link, not the post's — on Reddit, click the timestamp under the specific comment (or its \"…\" menu → Share → Copy Link) to get it."
-                    : "The link to the post/thread itself."}
-                </p>
+                {redditOrderTarget === "new_post" ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm text-[var(--ink-faint)] shrink-0">r/</span>
+                      <input
+                        value={redditOrderSubreddit}
+                        onChange={(e) => setRedditOrderSubreddit(e.target.value)}
+                        placeholder="subreddit"
+                        className="flex-1 text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                      />
+                    </div>
+                    <input
+                      value={redditOrderPostTitle}
+                      onChange={(e) => setRedditOrderPostTitle(e.target.value.slice(0, 300))}
+                      placeholder="Post title"
+                      className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 mb-3"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={redditOrderUrl}
+                      onChange={(e) => setRedditOrderUrl(e.target.value)}
+                      placeholder={redditOrderTarget === "comment" ? "https://www.reddit.com/r/.../comments/.../comment/..." : "https://www.reddit.com/r/.../comments/..."}
+                      className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                    />
+                    <p className="text-[10px] text-[var(--ink-faint)] mt-1 mb-3">
+                      {redditOrderTarget === "comment"
+                        ? "Paste the comment's own link, not the post's — on Reddit, click the timestamp under the specific comment (or its \"…\" menu → Share → Copy Link) to get it."
+                        : "The link to the post/thread itself."}
+                    </p>
+                  </>
+                )}
 
-                {redditOrderService === "custom_comments" ? (
+                {redditOrderService === "custom_comments" || redditOrderService === "create_post" ? (
                   <div className="mb-3">
                     <textarea
                       value={redditOrderComment}
                       onChange={(e) => setRedditOrderComment(e.target.value)}
-                      placeholder="Comment to post…"
-                      maxLength={1000}
-                      rows={3}
+                      placeholder={redditOrderService === "create_post" ? "Post body (optional)…" : "Comment to post…"}
+                      maxLength={redditOrderService === "create_post" ? 10000 : 1000}
+                      rows={redditOrderService === "create_post" ? 6 : 3}
                       className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 resize-y"
                     />
                     <p className="text-[10px] text-[var(--ink-faint)] mt-1">No NSFW, explicit, hateful, or illegal content — orders that violate this are rejected before any credits are charged.</p>
@@ -6224,10 +6267,12 @@ function DashboardPage() {
                   <span>
                     {redditOrderService === "custom_comments"
                       ? "1 comment"
+                      : redditOrderService === "create_post"
+                      ? "1 new post"
                       : `${redditOrderQty} ${REDDIT_SERVICE_META[redditOrderService].label.toLowerCase()} × ${REDDIT_SERVICE_META[redditOrderService].creditsPerUnit} credits`}
                   </span>
                   <span className="font-semibold text-[var(--ink)]/80">
-                    {redditOrderService === "custom_comments" ? REDDIT_SERVICE_META.custom_comments.creditsPerUnit : redditOrderQty * REDDIT_SERVICE_META[redditOrderService].creditsPerUnit} credits
+                    {redditOrderService === "custom_comments" || redditOrderService === "create_post" ? REDDIT_SERVICE_META[redditOrderService].creditsPerUnit : redditOrderQty * REDDIT_SERVICE_META[redditOrderService].creditsPerUnit} credits
                   </span>
                 </div>
 
@@ -6236,10 +6281,15 @@ function DashboardPage() {
 
                 <button
                   onClick={submitRedditOrder}
-                  disabled={redditOrderSubmitting || !redditOrderUrl.trim() || (redditOrderService === "custom_comments" ? !redditOrderComment.trim() : false)}
+                  disabled={
+                    redditOrderSubmitting ||
+                    (redditOrderService === "create_post"
+                      ? !redditOrderSubreddit.trim() || !redditOrderPostTitle.trim()
+                      : !redditOrderUrl.trim() || (redditOrderService === "custom_comments" && !redditOrderComment.trim()))
+                  }
                   className="w-full text-sm font-semibold bg-[#FF4500] text-white py-2.5 rounded-lg hover:bg-[#e03d00] disabled:opacity-50 transition-colors"
                 >
-                  {redditOrderSubmitting ? "Submitting…" : "Submit order"}
+                  {redditOrderSubmitting ? "Submitting…" : redditOrderService === "create_post" ? "Submit post" : "Submit order"}
                 </button>
               </div>
 
@@ -6299,7 +6349,9 @@ function DashboardPage() {
                     const serviceMeta = REDDIT_SERVICE_META[task.serviceType] ?? REDDIT_SERVICE_META.post_upvote;
                     // Post vs comment upvotes share the word "Upvotes" — qualify it here since
                     // this list has no tab grouping to disambiguate them like the order form does.
-                    const serviceLabel = task.serviceType === "custom_comments" ? serviceMeta.label : `${serviceMeta.target === "comment" ? "Comment" : "Post"} ${serviceMeta.label}`;
+                    const serviceLabel = task.serviceType === "custom_comments" || task.serviceType === "create_post"
+                      ? serviceMeta.label
+                      : `${serviceMeta.target === "comment" ? "Comment" : "Post"} ${serviceMeta.label}`;
                     return (
                     <div key={task.id} className="panel rounded-xl p-4 hover:border-[var(--line)] transition-colors">
                       <div className="flex items-start gap-3">
@@ -6322,19 +6374,22 @@ function DashboardPage() {
                           <a href={task.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 hover:underline truncate block max-w-full mb-2">
                             {task.url.replace(/^https?:\/\/(www\.)?/, "")}
                           </a>
+                          {task.serviceType === "create_post" && task.postTitle && (
+                            <p className="text-xs font-semibold text-[var(--ink)] mb-1">{task.postTitle}</p>
+                          )}
                           {task.replyText && (
                             <p className="text-xs text-[var(--ink-soft)] bg-[var(--line-soft)] rounded-lg px-3 py-2 border border-[var(--line)] line-clamp-2 mb-2">{task.replyText}</p>
                           )}
                           <div className="flex items-center gap-4 text-[10px] text-[var(--ink-faint)]">
                             {task.creditsCharged > 0 ? (
                               <>
-                                {task.serviceType !== "custom_comments" && (
+                                {task.serviceType !== "custom_comments" && task.serviceType !== "create_post" && (
                                   <span className="flex items-center gap-1">
                                     <svg className="w-3 h-3 text-[#FF4500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 8H4z"/></svg>
                                     {task.upvotesOrdered} {serviceLabel.toLowerCase()} ordered
                                   </span>
                                 )}
-                                {task.serviceType !== "custom_comments" && <span className="capitalize">{task.deliverySpeed} delivery</span>}
+                                {task.serviceType !== "custom_comments" && task.serviceType !== "create_post" && <span className="capitalize">{task.deliverySpeed} delivery</span>}
                                 <span className="font-medium text-[var(--ink-soft)]">{task.creditsCharged} credits</span>
                               </>
                             ) : (

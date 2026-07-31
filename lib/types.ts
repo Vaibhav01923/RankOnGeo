@@ -63,7 +63,7 @@ export type SocialKeyword = {
   createdAt: string;
 };
 
-export type RedditServiceType = "post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote" | "custom_comments";
+export type RedditServiceType = "post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote" | "custom_comments" | "create_post";
 
 export type EngageTask = {
   id: string;
@@ -72,6 +72,7 @@ export type EngageTask = {
   promptText: string | null;
   engine: string | null;
   replyText: string | null;
+  postTitle: string | null;
   upvotesOrdered: number;
   deliverySpeed: string;
   serviceType: RedditServiceType;

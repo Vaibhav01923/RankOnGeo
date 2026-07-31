@@ -14,7 +14,11 @@ const CREDIT_COST: Record<RedditServiceType, number> = {
   comment_upvote: 1,
   comment_downvote: 1,
   custom_comments: 5,
+  create_post: 10,
 };
+
+// Reddit's own subreddit name rules: 3-21 chars, letters/digits/underscore.
+const SUBREDDIT_RE = /^[A-Za-z0-9_]{3,21}$/;
 
 const QUANTITY_LIMITS: Record<"post_upvote" | "post_downvote" | "comment_upvote" | "comment_downvote", { min: number; max: number }> = {
   post_upvote: { min: 5, max: 1000 },
@@ -67,13 +71,18 @@ export type PlaceRedditOrderParams = {
   // member places it. Defaults to userId (solo case).
   billingUserId?: string;
   brandId: string;
-  url: string;
+  // Required for every serviceType except create_post, which doesn't have a
+  // URL yet — the target subreddit is used to construct one instead.
+  url?: string;
   serviceType: RedditServiceType;
   quantity?: number;
   commentText?: string;
   speed?: "slow" | "normal" | "fast";
   promptText?: string | null;
   engine?: string | null;
+  // create_post only
+  subreddit?: string;
+  postTitle?: string;
 };
 
 export type PlaceRedditOrderResult =
@@ -81,42 +90,72 @@ export type PlaceRedditOrderResult =
   | { ok: false; status: number; error: string };
 
 export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<PlaceRedditOrderResult> {
-  const { db, userId, brandId, url, serviceType, quantity, commentText, speed, promptText, engine } = params;
+  const { db, userId, brandId, serviceType, quantity, commentText, speed, promptText, engine, subreddit, postTitle } = params;
   const billingUserId = params.billingUserId ?? userId;
 
-  if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(url)) {
-    return { ok: false, status: 400, error: "Must be a reddit.com link" };
-  }
-
+  let url: string;
   let creditsNeeded: number;
   let effectiveQuantity: number;
   let trimmedComment = "";
+  let trimmedTitle = "";
+  let trimmedSubreddit = "";
 
-  if (serviceType === "custom_comments") {
+  if (serviceType === "create_post") {
+    trimmedSubreddit = (subreddit ?? "").trim().replace(/^r\//i, "");
+    if (!SUBREDDIT_RE.test(trimmedSubreddit)) {
+      return { ok: false, status: 400, error: "Enter a valid subreddit name (letters, numbers, underscores, 3-21 characters)" };
+    }
+    trimmedTitle = (postTitle ?? "").trim();
+    if (!trimmedTitle) return { ok: false, status: 400, error: "Post title is required" };
+    if (trimmedTitle.length > 300) return { ok: false, status: 400, error: "Title must be 300 characters or fewer" };
     trimmedComment = (commentText ?? "").trim();
-    if (!trimmedComment) return { ok: false, status: 400, error: "Comment text is required" };
-    if (trimmedComment.length > 1000) return { ok: false, status: 400, error: "Comment must be 1000 characters or fewer" };
+    if (trimmedComment.length > 10000) return { ok: false, status: 400, error: "Body must be 10,000 characters or fewer" };
 
     try {
-      const moderation = await getOpenAI().moderations.create({ model: "omni-moderation-latest", input: trimmedComment });
+      const moderation = await getOpenAI().moderations.create({ model: "omni-moderation-latest", input: `${trimmedTitle}\n\n${trimmedComment}` });
       if (moderation.results[0]?.flagged) {
-        return { ok: false, status: 400, error: "Comment violates content policy — no NSFW, explicit, or hateful content allowed" };
+        return { ok: false, status: 400, error: "Post violates content policy — no NSFW, explicit, or hateful content allowed" };
       }
     } catch (e) {
-      console.error("[reddit-order] moderation check failed", { url, error: e instanceof Error ? e.message : e });
-      return { ok: false, status: 500, error: "Could not verify comment content — try again" };
+      console.error("[reddit-order] moderation check failed", { subreddit: trimmedSubreddit, error: e instanceof Error ? e.message : e });
+      return { ok: false, status: 500, error: "Could not verify post content — try again" };
     }
 
+    url = `https://www.reddit.com/r/${trimmedSubreddit}/`;
     effectiveQuantity = 1;
-    creditsNeeded = CREDIT_COST.custom_comments;
+    creditsNeeded = CREDIT_COST.create_post;
   } else {
-    const limits = QUANTITY_LIMITS[serviceType];
-    const qty = quantity ?? 0;
-    if (!Number.isInteger(qty) || qty < limits.min || qty > limits.max) {
-      return { ok: false, status: 400, error: `Quantity must be between ${limits.min} and ${limits.max}` };
+    url = params.url ?? "";
+    if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(url)) {
+      return { ok: false, status: 400, error: "Must be a reddit.com link" };
     }
-    effectiveQuantity = qty;
-    creditsNeeded = qty * CREDIT_COST[serviceType];
+
+    if (serviceType === "custom_comments") {
+      trimmedComment = (commentText ?? "").trim();
+      if (!trimmedComment) return { ok: false, status: 400, error: "Comment text is required" };
+      if (trimmedComment.length > 1000) return { ok: false, status: 400, error: "Comment must be 1000 characters or fewer" };
+
+      try {
+        const moderation = await getOpenAI().moderations.create({ model: "omni-moderation-latest", input: trimmedComment });
+        if (moderation.results[0]?.flagged) {
+          return { ok: false, status: 400, error: "Comment violates content policy — no NSFW, explicit, or hateful content allowed" };
+        }
+      } catch (e) {
+        console.error("[reddit-order] moderation check failed", { url, error: e instanceof Error ? e.message : e });
+        return { ok: false, status: 500, error: "Could not verify comment content — try again" };
+      }
+
+      effectiveQuantity = 1;
+      creditsNeeded = CREDIT_COST.custom_comments;
+    } else {
+      const limits = QUANTITY_LIMITS[serviceType];
+      const qty = quantity ?? 0;
+      if (!Number.isInteger(qty) || qty < limits.min || qty > limits.max) {
+        return { ok: false, status: 400, error: `Quantity must be between ${limits.min} and ${limits.max}` };
+      }
+      effectiveQuantity = qty;
+      creditsNeeded = qty * CREDIT_COST[serviceType];
+    }
   }
 
   let userPlan: { dodo_customer_id: string | null } | null = null;
@@ -172,8 +211,9 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       url,
       prompt_text: promptText ?? null,
       engine: engine ?? null,
-      reply_text: serviceType === "custom_comments" ? trimmedComment : null,
-      upvotes_ordered: serviceType === "custom_comments" ? 0 : effectiveQuantity,
+      reply_text: serviceType === "custom_comments" || serviceType === "create_post" ? trimmedComment || null : null,
+      post_title: serviceType === "create_post" ? trimmedTitle : null,
+      upvotes_ordered: serviceType === "custom_comments" || serviceType === "create_post" ? 0 : effectiveQuantity,
       delivery_speed: speed ?? "normal",
       service_type: serviceType,
       credits_charged: creditsNeeded,
@@ -200,10 +240,12 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     url,
     serviceType,
     quantity: effectiveQuantity,
-    commentText: serviceType === "custom_comments" ? trimmedComment : null,
-    speed: serviceType === "custom_comments" ? null : speed ?? "normal",
+    commentText: serviceType === "custom_comments" || serviceType === "create_post" ? trimmedComment || null : null,
+    speed: serviceType === "custom_comments" || serviceType === "create_post" ? null : speed ?? "normal",
     promptText: promptText ?? null,
     engine: engine ?? null,
+    subreddit: serviceType === "create_post" ? trimmedSubreddit : null,
+    postTitle: serviceType === "create_post" ? trimmedTitle : null,
   });
 
   if (!notified) {
