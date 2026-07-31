@@ -73,6 +73,7 @@ export type EngageTask = {
   engine: string | null;
   replyText: string | null;
   postTitle: string | null;
+  mediaUrl: string | null;
   upvotesOrdered: number;
   deliverySpeed: string;
   serviceType: RedditServiceType;

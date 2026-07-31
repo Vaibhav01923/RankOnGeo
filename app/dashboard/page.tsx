@@ -426,6 +426,7 @@ function mapEngageTask(t: Record<string, unknown>): EngageTask {
     engine: (t.engine as string) ?? null,
     replyText: (t.reply_text as string) ?? null,
     postTitle: (t.post_title as string) ?? null,
+    mediaUrl: (t.media_url as string) ?? null,
     upvotesOrdered: (t.upvotes_ordered as number) ?? 0,
     deliverySpeed: t.delivery_speed as string,
     serviceType: (t.service_type as RedditServiceType) ?? "post_upvote",
@@ -972,6 +973,7 @@ function DashboardPage() {
   const [redditOrderComment, setRedditOrderComment] = useState("");
   const [redditOrderSubreddit, setRedditOrderSubreddit] = useState("");
   const [redditOrderPostTitle, setRedditOrderPostTitle] = useState("");
+  const [redditOrderMediaUrl, setRedditOrderMediaUrl] = useState("");
   const [redditOrderSubmitting, setRedditOrderSubmitting] = useState(false);
   const [redditOrderError, setRedditOrderError] = useState("");
   const [redditOrderSuccess, setRedditOrderSuccess] = useState("");
@@ -2119,6 +2121,10 @@ function DashboardPage() {
         setRedditOrderError("Enter a title for the post");
         return;
       }
+      if (redditOrderMediaUrl.trim() && !/^https?:\/\//i.test(redditOrderMediaUrl.trim())) {
+        setRedditOrderError("Image/video URL must start with http:// or https://");
+        return;
+      }
     } else if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(redditOrderUrl.trim())) {
       setRedditOrderError("Enter a valid reddit.com link");
       return;
@@ -2142,6 +2148,7 @@ function DashboardPage() {
           speed: redditOrderSpeed,
           subreddit: isCreatePost ? redditOrderSubreddit.trim().replace(/^r\//i, "") : undefined,
           postTitle: isCreatePost ? redditOrderPostTitle.trim() : undefined,
+          mediaUrl: isCreatePost && redditOrderMediaUrl.trim() ? redditOrderMediaUrl.trim() : undefined,
         }),
       });
       const d = await res.json();
@@ -2154,6 +2161,7 @@ function DashboardPage() {
         setRedditOrderComment("");
         setRedditOrderSubreddit("");
         setRedditOrderPostTitle("");
+        setRedditOrderMediaUrl("");
       } else {
         setRedditOrderError(d.error ?? "Failed to submit order");
       }
@@ -6233,6 +6241,14 @@ function DashboardPage() {
                       className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 resize-y"
                     />
                     <p className="text-[10px] text-[var(--ink-faint)] mt-1">No NSFW, explicit, hateful, or illegal content — orders that violate this are rejected before any credits are charged.</p>
+                    {redditOrderService === "create_post" && (
+                      <input
+                        value={redditOrderMediaUrl}
+                        onChange={(e) => setRedditOrderMediaUrl(e.target.value)}
+                        placeholder="Image or video URL (optional)"
+                        className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 mt-2"
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="flex gap-3 mb-3">

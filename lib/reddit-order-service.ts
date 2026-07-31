@@ -83,14 +83,26 @@ export type PlaceRedditOrderParams = {
   // create_post only
   subreddit?: string;
   postTitle?: string;
+  mediaUrl?: string;
 };
 
 export type PlaceRedditOrderResult =
   | { ok: true; task: Record<string, unknown>; queued: boolean }
   | { ok: false; status: number; error: string };
 
+// Basic http(s) URL check — the actual media (image or video) is fetched
+// and attached by whoever fulfills the task in Discord, not by us.
+function isValidMediaUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<PlaceRedditOrderResult> {
-  const { db, userId, brandId, serviceType, quantity, commentText, speed, promptText, engine, subreddit, postTitle } = params;
+  const { db, userId, brandId, serviceType, quantity, commentText, speed, promptText, engine, subreddit, postTitle, mediaUrl } = params;
   const billingUserId = params.billingUserId ?? userId;
 
   let url: string;
@@ -99,6 +111,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
   let trimmedComment = "";
   let trimmedTitle = "";
   let trimmedSubreddit = "";
+  let trimmedMediaUrl = "";
 
   if (serviceType === "create_post") {
     trimmedSubreddit = (subreddit ?? "").trim().replace(/^r\//i, "");
@@ -110,6 +123,10 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     if (trimmedTitle.length > 300) return { ok: false, status: 400, error: "Title must be 300 characters or fewer" };
     trimmedComment = (commentText ?? "").trim();
     if (trimmedComment.length > 10000) return { ok: false, status: 400, error: "Body must be 10,000 characters or fewer" };
+    trimmedMediaUrl = (mediaUrl ?? "").trim();
+    if (trimmedMediaUrl && !isValidMediaUrl(trimmedMediaUrl)) {
+      return { ok: false, status: 400, error: "Image/video URL must be a valid http(s) link" };
+    }
 
     try {
       const moderation = await getOpenAI().moderations.create({ model: "omni-moderation-latest", input: `${trimmedTitle}\n\n${trimmedComment}` });
@@ -213,6 +230,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       engine: engine ?? null,
       reply_text: serviceType === "custom_comments" || serviceType === "create_post" ? trimmedComment || null : null,
       post_title: serviceType === "create_post" ? trimmedTitle : null,
+      media_url: serviceType === "create_post" ? trimmedMediaUrl || null : null,
       upvotes_ordered: serviceType === "custom_comments" || serviceType === "create_post" ? 0 : effectiveQuantity,
       delivery_speed: speed ?? "normal",
       service_type: serviceType,
@@ -246,6 +264,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     engine: engine ?? null,
     subreddit: serviceType === "create_post" ? trimmedSubreddit : null,
     postTitle: serviceType === "create_post" ? trimmedTitle : null,
+    mediaUrl: serviceType === "create_post" ? trimmedMediaUrl || null : null,
   });
 
   if (!notified) {

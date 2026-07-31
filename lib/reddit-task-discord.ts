@@ -9,6 +9,8 @@ const SERVICE_LABELS: Record<RedditServiceType, string> = {
   create_post: "Create a new post",
 };
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
+
 // Reddit engagement tasks are fulfilled by a human on the team, not an
 // automated provider — this posts the task to Discord with a link-style
 // "Mark as Done" button so whoever picks it up can close it out with one
@@ -27,6 +29,7 @@ export async function notifyDiscordOfTask(params: {
   engine?: string | null;
   subreddit?: string | null;
   postTitle?: string | null;
+  mediaUrl?: string | null;
 }): Promise<boolean> {
   const webhookUrl = process.env.DISCORD_TASKS_WEBHOOK_URL;
   if (!webhookUrl) {
@@ -51,26 +54,31 @@ export async function notifyDiscordOfTask(params: {
   if (params.engine) fields.push({ name: "Engine", value: params.engine, inline: true });
   if (params.promptText) fields.push({ name: "Prompt", value: params.promptText.slice(0, 200) });
   if (params.commentText) fields.push({ name: isCreatePost ? "Body" : "Comment text", value: params.commentText.slice(0, 1000) });
+  if (params.mediaUrl) fields.push({ name: "Media", value: params.mediaUrl });
+
+  const isImage = !!params.mediaUrl && IMAGE_EXT_RE.test(params.mediaUrl);
+
+  const embed: Record<string, unknown> = {
+    title: isCreatePost ? "New Reddit post to submit" : "New Reddit engagement task",
+    url: params.url,
+    color: 0xb1552e,
+    fields,
+    timestamp: new Date().toISOString(),
+  };
+  // Discord renders this as an inline preview when the URL is an actual
+  // image — for video links it just won't render, the "Media" field/button
+  // above is the fallback so the link is still one click away either way.
+  if (isImage) embed.image = { url: params.mediaUrl };
+
+  const buttons = [
+    { type: 2, style: 5, label: "✅ Mark as Done", url: markDoneUrl },
+    { type: 2, style: 5, label: isCreatePost ? "Open subreddit" : "Open Reddit link", url: params.url },
+  ];
+  if (params.mediaUrl) buttons.push({ type: 2, style: 5, label: "Open media", url: params.mediaUrl });
 
   const body = {
-    embeds: [
-      {
-        title: isCreatePost ? "New Reddit post to submit" : "New Reddit engagement task",
-        url: params.url,
-        color: 0xb1552e,
-        fields,
-        timestamp: new Date().toISOString(),
-      },
-    ],
-    components: [
-      {
-        type: 1,
-        components: [
-          { type: 2, style: 5, label: "✅ Mark as Done", url: markDoneUrl },
-          { type: 2, style: 5, label: isCreatePost ? "Open subreddit" : "Open Reddit link", url: params.url },
-        ],
-      },
-    ],
+    embeds: [embed],
+    components: [{ type: 1, components: buttons }],
   };
 
   try {
