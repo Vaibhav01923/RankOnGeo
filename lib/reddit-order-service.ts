@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import DodoPayments from "dodopayments";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createOrder as createBuyUpvotesOrder, BuyUpvotesError } from "@/lib/buyupvotes";
+import { notifyDiscordOfTask } from "@/lib/reddit-task-discord";
 import type { RedditServiceType } from "@/lib/types";
 
-// Priced at a consistent 25 credits per $1 of actual BuyUpvotes cost
-// (confirmed against their live /services rates: post votes $0.02/unit,
-// comment votes $0.04/unit, custom comments $0.20/unit).
+// Kept at the same rate as when these were fulfilled via a paid provider
+// (BuyUpvotes) — tasks are now routed to Discord for a human to fulfill
+// instead, but the pricing was left unchanged.
 const CREDIT_COST: Record<RedditServiceType, number> = {
   post_upvote: 0.5,
   post_downvote: 0.5,
@@ -22,9 +22,6 @@ const QUANTITY_LIMITS: Record<"post_upvote" | "post_downvote" | "comment_upvote"
   comment_upvote: { min: 5, max: 1000 },
   comment_downvote: { min: 5, max: 1000 },
 };
-
-// BuyUpvotes' speed param is deliveries/hour (10-900); map our simple slow/normal/fast picker onto it.
-const SPEED_MAP: Record<string, number> = { slow: 50, normal: 200, fast: 900 };
 
 const getDodo = () =>
   new DodoPayments({
@@ -164,26 +161,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
   }
 
   const refund = (reason: string) => refundRedditOrderCredits({ customerId, taskId, amount: creditsNeeded, url, serviceType, reason });
-
-  let providerOrderId: string | null = null;
-  let status: "pending" | "queued" = "pending";
-
-  try {
-    const order =
-      serviceType === "custom_comments"
-        ? await createBuyUpvotesOrder({ service: "custom_comments", link: url, comments: trimmedComment, delay1: 2, delay2: 5 })
-        : await createBuyUpvotesOrder({ service: serviceType, link: url, quantity: effectiveQuantity, speed: SPEED_MAP[speed ?? "normal"] });
-    providerOrderId = String(order.orderId);
-  } catch (e) {
-    if (e instanceof BuyUpvotesError && e.status === 429) {
-      // Concurrency cap hit (max 3 pending/running per link+service) — don't refund, the poller retries submission.
-      status = "queued";
-    } else {
-      console.error("[reddit-order] provider order failed", { taskId, url, serviceType, error: e instanceof Error ? e.message : e });
-      await refund(`Refund: order failed to submit (${e instanceof Error ? e.message : "unknown error"})`);
-      return { ok: false, status: 502, error: "Failed to submit order to provider — credits refunded" };
-    }
-  }
+  const markDoneToken = randomUUID();
 
   const { data: task, error } = await db
     .from("engage_tasks")
@@ -198,18 +176,41 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       upvotes_ordered: serviceType === "custom_comments" ? 0 : effectiveQuantity,
       delivery_speed: speed ?? "normal",
       service_type: serviceType,
-      provider_order_id: providerOrderId,
       credits_charged: creditsNeeded,
-      status,
+      status: "pending",
+      mark_done_token: markDoneToken,
     })
     .select()
     .single();
 
   if (error) {
-    // Nothing will ever track/deliver this order if the row didn't save — refund rather than silently eat the credits.
+    // Nothing will ever notify/deliver this order if the row didn't save — refund rather than silently eat the credits.
     await refund(`Refund: failed to save order record (${error.message})`);
     return { ok: false, status: 500, error: "Failed to save order" };
   }
 
-  return { ok: true, task, queued: status === "queued" };
+  // Fulfilled by a human on the team via the Discord notification, not an
+  // automated provider — if nobody ever sees it, refund rather than leave
+  // the customer having paid for engagement that will never happen.
+  const { data: brand } = await db.from("brands").select("name").eq("id", brandId).maybeSingle();
+  const notified = await notifyDiscordOfTask({
+    taskId,
+    markDoneToken,
+    brandName: (brand as { name?: string } | null)?.name ?? "Unknown brand",
+    url,
+    serviceType,
+    quantity: effectiveQuantity,
+    commentText: serviceType === "custom_comments" ? trimmedComment : null,
+    speed: serviceType === "custom_comments" ? null : speed ?? "normal",
+    promptText: promptText ?? null,
+    engine: engine ?? null,
+  });
+
+  if (!notified) {
+    await db.from("engage_tasks").update({ status: "failed" }).eq("id", taskId);
+    await refund("Refund: failed to notify the team about this task");
+    return { ok: false, status: 502, error: "Failed to notify the team — credits refunded" };
+  }
+
+  return { ok: true, task, queued: false };
 }

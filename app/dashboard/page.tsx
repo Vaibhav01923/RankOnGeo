@@ -7206,7 +7206,8 @@ Body: {
                   {/* Ordering upvotes lives in one place — the Tasks tab. These are two
                       distinct hand-offs, kept visually and textually separate on purpose:
                       boosting the post vs. boosting your own reply are different targets
-                      on BuyUpvotes' side (different links, different services). */}
+                      (different links, different service types) for whoever picks up
+                      the task from Discord. */}
                   {engagePlatform === "reddit" && (
                     <div className="space-y-2">
                       <button
