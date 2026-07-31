@@ -974,6 +974,7 @@ function DashboardPage() {
   const [redditOrderSubreddit, setRedditOrderSubreddit] = useState("");
   const [redditOrderPostTitle, setRedditOrderPostTitle] = useState("");
   const [redditOrderMediaUrl, setRedditOrderMediaUrl] = useState("");
+  const redditOrderBodyRef = useRef<HTMLTextAreaElement>(null);
   const [redditOrderSubmitting, setRedditOrderSubmitting] = useState(false);
   const [redditOrderError, setRedditOrderError] = useState("");
   const [redditOrderSuccess, setRedditOrderSuccess] = useState("");
@@ -2104,6 +2105,28 @@ function DashboardPage() {
     } finally {
       setAddingSuggestionText(null);
     }
+  }
+
+  // Inserts Reddit-flavored markdown link syntax at the cursor (or around the
+  // current selection) — matches the link button in Reddit's own post editor.
+  // The body is passed through as plain text to whoever fulfills the task in
+  // Discord and pastes it into Reddit's own composer, where this already renders.
+  function insertBodyLink() {
+    const el = redditOrderBodyRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? redditOrderComment.length;
+    const end = el.selectionEnd ?? redditOrderComment.length;
+    const selected = redditOrderComment.slice(start, end) || "link text";
+    const insertion = `[${selected}](https://)`;
+    const next = redditOrderComment.slice(0, start) + insertion + redditOrderComment.slice(end);
+    setRedditOrderComment(next);
+    // Re-select the "https://" placeholder so the URL can be typed immediately.
+    requestAnimationFrame(() => {
+      const urlStart = start + selected.length + 3; // "[" + selected + "]("
+      const urlEnd = urlStart + "https://".length;
+      el.focus();
+      el.setSelectionRange(urlStart, urlEnd);
+    });
   }
 
   async function submitRedditOrder() {
@@ -6232,7 +6255,19 @@ function DashboardPage() {
 
                 {redditOrderService === "custom_comments" || redditOrderService === "create_post" ? (
                   <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-[var(--ink-faint)]">Markdown supported</span>
+                      <button
+                        type="button"
+                        onClick={insertBodyLink}
+                        className="flex items-center gap-1 text-[10px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] px-1.5 py-0.5 rounded hover:bg-[var(--line-soft)] transition-colors"
+                        title="Insert link"
+                      >
+                        🔗 Link
+                      </button>
+                    </div>
                     <textarea
+                      ref={redditOrderBodyRef}
                       value={redditOrderComment}
                       onChange={(e) => setRedditOrderComment(e.target.value)}
                       placeholder={redditOrderService === "create_post" ? "Post body (optional)…" : "Comment to post…"}
