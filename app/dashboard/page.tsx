@@ -28,7 +28,7 @@ const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "p
   comment_upvote: { label: "Upvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
   comment_downvote: { label: "Downvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
   custom_comments: { label: "Post a new comment", target: "post", creditsPerUnit: 5, min: 1, max: 1 },
-  create_post: { label: "Create a new post", target: "new_post", creditsPerUnit: 10, min: 1, max: 1 },
+  create_post: { label: "Create a new post", target: "new_post", creditsPerUnit: 25, min: 1, max: 1 },
 };
 const REDDIT_TARGET_SERVICES: Record<"post" | "comment" | "new_post", RedditServiceType[]> = {
   post: ["post_upvote", "post_downvote", "custom_comments"],

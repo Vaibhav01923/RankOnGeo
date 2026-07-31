@@ -14,7 +14,7 @@ const CREDIT_COST: Record<RedditServiceType, number> = {
   comment_upvote: 1,
   comment_downvote: 1,
   custom_comments: 5,
-  create_post: 10,
+  create_post: 25,
 };
 
 // Reddit's own subreddit name rules: 3-21 chars, letters/digits/underscore.
