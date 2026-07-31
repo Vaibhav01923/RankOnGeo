@@ -974,7 +974,10 @@ function DashboardPage() {
   const [redditOrderSubreddit, setRedditOrderSubreddit] = useState("");
   const [redditOrderPostTitle, setRedditOrderPostTitle] = useState("");
   const [redditOrderMediaUrl, setRedditOrderMediaUrl] = useState("");
+  const [redditOrderMediaUploading, setRedditOrderMediaUploading] = useState(false);
+  const [redditOrderMediaUploadError, setRedditOrderMediaUploadError] = useState("");
   const redditOrderBodyRef = useRef<HTMLTextAreaElement>(null);
+  const redditOrderMediaInputRef = useRef<HTMLInputElement>(null);
   const [redditOrderSubmitting, setRedditOrderSubmitting] = useState(false);
   const [redditOrderError, setRedditOrderError] = useState("");
   const [redditOrderSuccess, setRedditOrderSuccess] = useState("");
@@ -2127,6 +2130,28 @@ function DashboardPage() {
       el.focus();
       el.setSelectionRange(urlStart, urlEnd);
     });
+  }
+
+  async function uploadTaskMedia(file: File) {
+    if (!brand?.id) return;
+    setRedditOrderMediaUploadError("");
+    setRedditOrderMediaUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("brandId", brand.id);
+      const res = await fetch("/api/tasks/upload-media", { method: "POST", body: form });
+      const d = await res.json();
+      if (res.ok && d.mediaUrl) {
+        setRedditOrderMediaUrl(d.mediaUrl);
+      } else {
+        setRedditOrderMediaUploadError(d.error ?? "Upload failed");
+      }
+    } catch {
+      setRedditOrderMediaUploadError("Upload failed. Try again.");
+    } finally {
+      setRedditOrderMediaUploading(false);
+    }
   }
 
   async function submitRedditOrder() {
@@ -6277,12 +6302,32 @@ function DashboardPage() {
                     />
                     <p className="text-[10px] text-[var(--ink-faint)] mt-1">No NSFW, explicit, hateful, or illegal content — orders that violate this are rejected before any credits are charged.</p>
                     {redditOrderService === "create_post" && (
-                      <input
-                        value={redditOrderMediaUrl}
-                        onChange={(e) => setRedditOrderMediaUrl(e.target.value)}
-                        placeholder="Image or video URL (optional)"
-                        className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 mt-2"
-                      />
+                      <div className="mt-2">
+                        <div className="flex gap-2">
+                          <input
+                            value={redditOrderMediaUrl}
+                            onChange={(e) => setRedditOrderMediaUrl(e.target.value)}
+                            placeholder="Image or video URL (optional)"
+                            className="flex-1 text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                          />
+                          <input
+                            ref={redditOrderMediaInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                            className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTaskMedia(f); e.target.value = ""; }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => redditOrderMediaInputRef.current?.click()}
+                            disabled={redditOrderMediaUploading}
+                            className="shrink-0 text-xs font-medium text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+                          >
+                            {redditOrderMediaUploading ? "Uploading…" : "Upload"}
+                          </button>
+                        </div>
+                        {redditOrderMediaUploadError && <p className="text-[10px] text-red-700 mt-1">{redditOrderMediaUploadError}</p>}
+                      </div>
                     )}
                   </div>
                 ) : (
