@@ -30,6 +30,21 @@ async function newContext(): Promise<BrowserContext> {
   });
 }
 
+// Renders a standalone HTML string to a PDF buffer using the same shared
+// browser process as the AI-engine scanners — no separate PDF dependency
+// needed since Chromium's print-to-PDF already does this well.
+export async function renderPdf(html: string): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    const buffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0", bottom: "0", left: "0", right: "0" } });
+    return buffer;
+  } finally {
+    await page.close();
+  }
+}
+
 export async function scanPerplexity(query: string): Promise<string> {
   const ctx = await newContext();
 

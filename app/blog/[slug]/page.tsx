@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogCover } from "../../_components/BlogCover";
+import { DomainForm } from "../../_components/DomainForm";
 import { MarkdownArticle } from "../../_components/MarkdownArticle";
 import { getPublishedPostBySlug, getPublishedPosts, readingTimeMinutes, SITE_URL } from "@/lib/blog";
 import { DEMO_CALL_URL } from "@/lib/links";
@@ -156,24 +157,19 @@ export default async function BlogPostPage({ params }: Props) {
           Is your brand the answer when AI gets asked?
         </p>
         <p className="mt-1.5 text-sm text-[var(--ink-soft)]">
-          Run a free visibility audit and see how ChatGPT, Claude, Gemini, and Perplexity talk about you.
+          Enter your site and see how ChatGPT, Claude, Gemini, and Perplexity talk about you — free.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-          <Link
-            href="/setup"
-            className="inline-block rounded-full bg-[var(--rust)] px-5 py-2 text-sm font-semibold text-[var(--surface)] transition-colors hover:bg-[var(--rust-deep)]"
-          >
-            Get your free audit
-          </Link>
-          <a
-            href={DEMO_CALL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-[var(--rust)] underline underline-offset-2 transition-colors hover:text-[var(--rust-deep)]"
-          >
-            or book a 15-min demo →
-          </a>
+        <div className="mt-4 max-w-md">
+          <DomainForm variant="cta" />
         </div>
+        <a
+          href={DEMO_CALL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-block text-sm font-medium text-[var(--rust)] underline underline-offset-2 transition-colors hover:text-[var(--rust-deep)]"
+        >
+          or book a 15-min demo →
+        </a>
       </aside>
 
       {others.length > 0 && (

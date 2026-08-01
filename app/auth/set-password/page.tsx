@@ -45,6 +45,12 @@ function SetPasswordContent() {
       if (settled) return;
       settled = true;
       setStatus(ready ? "ready" : "expired");
+      // A live session here already proves this recovery link was opened
+      // from the real inbox it was sent to — mark the account verified
+      // right away rather than waiting on the separate custom verify-email
+      // click-through, which this signup path never triggers in the first
+      // place (see app/setup/page.tsx's throwaway-password signup).
+      if (ready) fetch("/api/verify-email/mark-verified", { method: "POST" }).catch(() => {});
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
