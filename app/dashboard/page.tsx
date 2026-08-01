@@ -798,7 +798,6 @@ function DashboardPage() {
   const [resendingVerification, setResendingVerification] = useState(false);
   const [resendEmailResult, setResendEmailResult] = useState<"sent" | "failed" | null>(null);
   const [verifyFlash, setVerifyFlash] = useState<"verified" | "expired" | null>(null);
-  const [downloadingReport, setDownloadingReport] = useState(false);
   const [confirmingSubscription, setConfirmingSubscription] = useState(false);
   // Set once reconcile-me sees a Dodo subscription stuck in "pending" (e.g.
   // an INR card mandate still clearing) rather than finding nothing at all —
@@ -1106,26 +1105,12 @@ function DashboardPage() {
     setComplaintSubmitting(false);
   }
 
-  async function downloadVisibilityReport() {
-    if (!brand || !brand.id || downloadingReport) return;
-    setDownloadingReport(true);
-    try {
-      const res = await fetch(`/api/reports/ai-visibility?brandId=${brand.id}`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        if (d.upgradeRequired) openPaywall();
-        setDownloadingReport(false);
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${brand.domain}-ai-visibility.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {}
-    setDownloadingReport(false);
+  // Renders the hidden .print-report section (below, in the main return)
+  // via the browser's own print-to-PDF — no server round trip, so it can't
+  // fail from a missing server-side browser/renderer.
+  function downloadVisibilityReport() {
+    if (isFreeTier) { openPaywall(); return; }
+    window.print();
   }
 
   async function resendVerificationEmail() {
@@ -2434,8 +2419,9 @@ function DashboardPage() {
   const draftCount = savedArticles.filter((a) => a.status === "draft" || a.status === "writing").length;
 
   return (
+    <>
     <div
-      className="dashboard-signal flex h-screen overflow-hidden bg-[var(--cream)] text-[var(--ink)]"
+      className="dashboard-signal flex h-screen overflow-hidden bg-[var(--cream)] text-[var(--ink)] print:hidden"
     >
       {/* Sidebar — fixed off-canvas drawer below lg, static column at lg+ */}
       {sidebarOpen && (
@@ -2854,19 +2840,14 @@ function DashboardPage() {
                     </div>
                     <button
                       onClick={downloadVisibilityReport}
-                      disabled={downloadingReport}
-                      className="shrink-0 flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-soft)] hover:text-[var(--ink)] border border-[var(--line)] px-4 py-2 rounded-full transition-colors disabled:opacity-50"
+                      className="shrink-0 flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-soft)] hover:text-[var(--ink)] border border-[var(--line)] px-4 py-2 rounded-full transition-colors"
                     >
-                      {downloadingReport ? (
-                        <span className="w-3.5 h-3.5 border-2 border-[var(--line)] border-t-[var(--ink-soft)] rounded-full animate-spin" />
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      )}
-                      {downloadingReport ? "Generating…" : "Download report"}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download report
                     </button>
                   </div>
 
@@ -7638,6 +7619,44 @@ Body: {
         );
       })()}
     </div>
+
+    {/* Print-only AI Visibility report — hidden on screen, shown by
+        downloadVisibilityReport()'s window.print() call. Rendered from
+        state already loaded for the Overview tab, so it needs no server
+        round trip (and can't fail the way a server-rendered PDF export can). */}
+    <div className="hidden print:block p-10">
+      <div className="text-[11px] font-semibold tracking-[1.4px] uppercase text-[var(--rust)] mb-1">RankOnGeo &middot; AI Visibility Report</div>
+      <h1 className="text-3xl font-bold text-[var(--ink)] mb-1">{brand.name}</h1>
+      <p className="text-sm text-[var(--ink-soft)] mb-6">{brand.domain} &middot; generated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+      <div className="flex items-center gap-6 border border-[var(--line)] rounded-2xl p-6 mb-6">
+        <div className="text-5xl font-bold text-[var(--ink)]">{overallScore ?? 0}%</div>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-faint)]">Composite visibility</div>
+          <div className="text-sm text-[var(--ink-soft)] mt-1">Across {scores.length} AI engine{scores.length === 1 ? "" : "s"} &middot; {brand.trackedPrompts.length} tracked prompts</div>
+        </div>
+      </div>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b-2 border-[var(--ink)]">
+            <th className="text-left py-2">Engine</th>
+            <th className="text-right py-2">Visibility</th>
+            <th className="text-right py-2">Mentions</th>
+            <th className="text-right py-2">Avg. rank</th>
+          </tr>
+        </thead>
+        <tbody>
+          {scores.map((s) => (
+            <tr key={s.engine} className="border-b border-[var(--line)]">
+              <td className="py-2">{ENGINE_LABELS[s.engine]}</td>
+              <td className="text-right py-2">{s.score}%</td>
+              <td className="text-right py-2">{s.mentionCount}/{s.totalPrompts}</td>
+              <td className="text-right py-2">{s.avgRank ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    </>
   );
 }
 
