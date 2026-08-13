@@ -1,3 +1,5 @@
+import { serverClient } from "@/lib/supabase";
+
 // Shared across app/api/setup (initial auto-generation), the add/accept
 // enforcement endpoints, and the dashboard's usage display — one source of
 // truth so these numbers can't drift out of sync with each other again.
@@ -100,12 +102,28 @@ export function gracePeriodDaysLeft(row: UserPlanRow | null | undefined): number
   return Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
 }
 
+// Admins (see lib/admin.ts) are exempt from every plan cap, not just the
+// brand limit — mirrors the isAdmin ? Infinity : ... bypass already used for
+// BRAND_LIMITS in app/api/setup and app/dashboard, extended to prompts too.
+// Looked up by owner id (not the request's session) since quota is always
+// charged to the workspace owner, who may not be the acting team member.
+async function isAdminOwner(userId: string): Promise<boolean> {
+  const admin = serverClient();
+  const { data } = await admin.auth.admin.getUserById(userId);
+  const email = data?.user?.email;
+  if (!email) return false;
+  const { data: adminRow } = await admin.from("admins").select("email").eq("email", email).maybeSingle();
+  return !!adminRow;
+}
+
 // Costs scale with how many prompts actually get scanned — paused ones are
 // skipped by every scan (see isDueForScheduledScan), so only active prompts
 // count against the limit. Existing brands already over their limit are
 // grandfathered: this only ever blocks *adding* more, never removes anything.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function assertUnderPromptLimit(db: any, userId: string, brandId: string): Promise<{ ok: true } | { ok: false; limit: number }> {
+  if (await isAdminOwner(userId)) return { ok: true };
+
   const { data: planRow } = await db.from("user_plans").select("plan, dodo_subscription_id").eq("user_id", userId).maybeSingle();
   const plan = planRow?.dodo_subscription_id ? planRow.plan : null;
   const limit = promptLimitForPlan(plan);
