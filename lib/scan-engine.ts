@@ -13,6 +13,12 @@ function dataForSEOAuth() {
   return "Basic " + Buffer.from(`${login}:${password}`).toString("base64");
 }
 
+// TEMPORARY: DataForSEO is disabled to stop burning credits while the project
+// is on hold. It backs the "claude", "perplexity", and "google" (AI Overview)
+// engines — those are skipped (unavailable) rather than queried. Re-enable by
+// setting DATAFORSEO_ENABLED=true in the environment, or flip this default back.
+const DATAFORSEO_ENABLED = process.env.DATAFORSEO_ENABLED === "true";
+
 const BLOCKED_DOMAINS = [
   // Placeholder/generic domains
   "example.com", "example.org", "example.net", "localhost", "your-domain.com", "yourdomain.com", "domain.com",
@@ -190,6 +196,12 @@ async function queryDataForSEOLLM(llmType: keyof typeof DATAFORSEO_LLM_MODELS, p
 
 export async function queryEngine(engine: AIEngine, prompt: string): Promise<EngineAnswer> {
   const systemMsg = "You are a helpful assistant. Answer the user's question thoroughly and naturally.";
+
+  // DataForSEO-backed engines are turned off (see DATAFORSEO_ENABLED). Report
+  // them as having no answer surface so callers skip them without cost or noise.
+  if (!DATAFORSEO_ENABLED && (engine === "claude" || engine === "perplexity" || engine === "google")) {
+    return { text: "", citations: [], unavailable: true };
+  }
 
   if (engine === "claude") {
     return queryDataForSEOLLM("claude", prompt);
