@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest, serverClient } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
-import { decryptToken, fetchReport, getAccessToken, gscConfigured, listSites } from "@/lib/gsc";
+import { decryptToken, fetchReport, fetchSites, getAccessToken, gscConfigured } from "@/lib/gsc";
 
 const ALLOWED_DAYS = [1, 7, 30, 90];
 
@@ -45,7 +45,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const sites = (await listSites(token.token)) ?? [];
+  const listed = await fetchSites(token.token);
+  if (!listed.ok) {
+    // Report the failure itself — an empty list would read as "you own no
+    // sites", which is a different problem with a different fix.
+    return NextResponse.json({ configured: true, connected: true, email: conn.google_email, siteUrl: conn.site_url, sites: [], siteListError: listed.reason });
+  }
+  const sites = listed.sites;
   const base = { configured: true, connected: true, email: conn.google_email, siteUrl: conn.site_url, sites };
   if (!conn.site_url) return NextResponse.json(base);
 

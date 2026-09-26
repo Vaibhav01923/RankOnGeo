@@ -151,11 +151,26 @@ export async function revokeToken(token: string): Promise<void> {
 
 export type GscSite = { siteUrl: string; permissionLevel: string };
 
-export async function listSites(accessToken: string): Promise<GscSite[] | null> {
+export type SitesResult = { ok: true; sites: GscSite[] } | { ok: false; reason: "api_disabled" | "forbidden" | "error" };
+
+// Distinguishes "this Google account has no properties" from "Google refused
+// the call" — the two need completely different fixes, and showing the first
+// message for the second sends people off verifying a domain that is fine.
+export async function fetchSites(accessToken: string): Promise<SitesResult> {
   const res = await fetch(`${API}/sites`, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) return null;
-  const json = (await res.json()) as { siteEntry?: GscSite[] };
-  return (json.siteEntry ?? []).filter((s) => s.permissionLevel !== "siteUnverifiedUser");
+  if (res.ok) {
+    const json = (await res.json()) as { siteEntry?: GscSite[] };
+    return { ok: true, sites: (json.siteEntry ?? []).filter((s) => s.permissionLevel !== "siteUnverifiedUser") };
+  }
+  const text = await res.text().catch(() => "");
+  console.error("[gsc] listing sites failed", res.status, text.slice(0, 300));
+  if (res.status === 403 && /SERVICE_DISABLED|has not been used|is disabled/i.test(text)) return { ok: false, reason: "api_disabled" };
+  return { ok: false, reason: res.status === 401 || res.status === 403 ? "forbidden" : "error" };
+}
+
+export async function listSites(accessToken: string): Promise<GscSite[] | null> {
+  const r = await fetchSites(accessToken);
+  return r.ok ? r.sites : null;
 }
 
 function normalizeHost(input: string): string {
