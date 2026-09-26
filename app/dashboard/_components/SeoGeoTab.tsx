@@ -26,6 +26,7 @@ type Data = {
   volumeAvailable: boolean;
   researchedAt: string | null;
   canRefresh: boolean;
+  usOnly?: boolean;
   autopilot?: { enabled: boolean; postsPerWeek: number; publishMode: "publish" | "draft"; nextPostAt: string | null };
 };
 type Target = Row & { kind: "keyword" | "prompt"; label: string; gap?: GapItem };
@@ -407,10 +408,11 @@ export function SeoGeoTab({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-[var(--ink-faint)] max-w-2xl">
-                  Keyword volumes are approximate monthly Google searches in the US, from Google Ads data. AI prompts are tracked questions where an AI engine answered without mentioning you.
+                  Keyword volumes are approximate monthly Google searches worldwide, from Google Ads data. AI prompts are tracked questions where an AI engine answered without mentioning you.
                   Results build over weeks and months.
                   {enabled && " Publish times are estimates: auto-publishing checks every 6 hours and follows your posts-per-week pace."}
                   {data?.researchedAt && <> Keywords researched {new Date(data.researchedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.</>}
+                  {data?.usOnly && " These volumes are from an earlier lookup and count US searches only; refresh to see worldwide numbers."}
                 </p>
                 {data?.hasResearch && data.canRefresh && (
                   <button onClick={findKeywords} disabled={finding} className="text-xs font-semibold text-[var(--rust)] hover:underline disabled:opacity-60">{finding ? "Refreshing…" : "Refresh keywords"}</button>

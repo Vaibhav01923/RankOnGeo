@@ -1,8 +1,8 @@
 import OpenAI from "openai";
 import { recordSpend } from "@/lib/dataforseo-spend";
-import { normalizeKeywords, resolveSelection, topCandidates, type KeywordOpportunity, type RelatedKeyword } from "@/lib/keyword-rules";
+import { CACHE_DAYS, VOLUME_REGION, isCacheUsable, normalizeKeywords, resolveSelection, topCandidates, type KeywordOpportunity, type RelatedKeyword } from "@/lib/keyword-rules";
 
-export { normalizeKeywords, resolveSelection, topCandidates };
+export { CACHE_DAYS, normalizeKeywords, resolveSelection, topCandidates };
 export type { KeywordOpportunity, RelatedKeyword };
 
 // "What are high-intent buyers in this niche actually searching for, and how
@@ -24,7 +24,6 @@ export type KeywordBrand = {
 
 export type KeywordResult = { keywords: KeywordOpportunity[]; volumeAvailable: boolean };
 
-export const CACHE_DAYS = 7;
 const MAX_CANDIDATES = 40;
 const SHOW = 10;
 
@@ -63,7 +62,9 @@ export async function relatedKeywords(seeds: string[], brandId?: string): Promis
     const res = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: auth },
-      body: JSON.stringify([{ keywords: seeds, location_code: 2840, language_code: "en", sort_by: "search_volume" }]),
+      // No location: volumes are worldwide. Language stays English, since the seeds
+      // are English phrases (worldwide and all-languages return the same figures).
+      body: JSON.stringify([{ keywords: seeds, language_code: "en", sort_by: "search_volume" }]),
     });
     if (!res.ok) {
       console.error("[keywords] DataForSEO HTTP", res.status);
@@ -112,8 +113,8 @@ type Db = any;
 // lookup (cache hits and the no-volume fallback never ask). When it says no,
 // the step still works, just without volumes.
 export async function findKeywordOpportunities(brand: KeywordBrand, db: Db, opts: { allowLookup?: () => Promise<boolean> } = {}): Promise<KeywordResult> {
-  const { data: cached } = await db.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brand.id).maybeSingle();
-  if (cached && Date.now() - new Date(cached.created_at).getTime() < CACHE_DAYS * 24 * 60 * 60 * 1000) {
+  const { data: cached } = await db.from("keyword_opportunity_scans").select("keywords, volume_available, volume_region, created_at").eq("brand_id", brand.id).maybeSingle();
+  if (isCacheUsable(cached)) {
     return { keywords: cached.keywords as KeywordOpportunity[], volumeAvailable: !!cached.volume_available };
   }
 
@@ -131,7 +132,7 @@ export async function findKeywordOpportunities(brand: KeywordBrand, db: Db, opts
   // A failed volume lookup isn't cached, so the next visit can try again
   // instead of pinning a numberless list for a week.
   if (result.volumeAvailable && result.keywords.length) {
-    await db.from("keyword_opportunity_scans").upsert({ brand_id: brand.id, keywords: result.keywords, volume_available: true, created_at: new Date().toISOString() }, { onConflict: "brand_id" });
+    await db.from("keyword_opportunity_scans").upsert({ brand_id: brand.id, keywords: result.keywords, volume_available: true, volume_region: VOLUME_REGION, created_at: new Date().toISOString() }, { onConflict: "brand_id" });
   }
   return result;
 }

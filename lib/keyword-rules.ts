@@ -5,6 +5,17 @@ const MAX_CANDIDATES = 40;
 
 export type KeywordOpportunity = { keyword: string; volume: number | null };
 
+// Volumes are monthly Google searches worldwide (English). A saved list is only
+// reused if it was measured that way: lists saved earlier were US-only, and showing
+// them as worldwide would understate every number.
+export const VOLUME_REGION = "worldwide";
+export const CACHE_DAYS = 7;
+
+export function isCacheUsable(cached: { created_at: string; volume_region?: string | null } | null | undefined, now = Date.now()): boolean {
+  if (!cached) return false;
+  return cached.volume_region === VOLUME_REGION && now - new Date(cached.created_at).getTime() < CACHE_DAYS * 24 * 60 * 60 * 1000;
+}
+
 // Model output arrives as loose lines: bullets, numbering, quotes, repeats.
 // Google Ads (behind the volume lookup) rejects a keyword with any symbol other
 // than letters, digits, spaces and hyphens, and DataForSEO then fails the whole
