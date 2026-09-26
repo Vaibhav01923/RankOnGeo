@@ -10,6 +10,7 @@ type GscData = {
   connected: boolean;
   reconnect?: boolean;
   error?: string;
+  siteListError?: "api_disabled" | "forbidden" | "error";
   email?: string | null;
   siteUrl?: string | null;
   sites?: Site[];
@@ -155,6 +156,28 @@ export function SearchConsolePanel({ brandId, days }: { brandId: string; domain:
   }
 
   const siteOptions = data.sites ?? [];
+
+  // Google refused to list properties at all — say so, instead of implying the
+  // account simply owns no sites.
+  if (data.siteListError && !data.siteUrl) {
+    return (
+      <div className="panel rounded-xl p-6">
+        <p className="text-base font-semibold text-[var(--ink)] mb-1">Couldn&apos;t read your Search Console properties</p>
+        <p className="text-sm text-[var(--ink-soft)] mb-4">
+          {data.siteListError === "api_disabled"
+            ? "The Search Console API isn't switched on for RankOnGeo's Google project yet, so Google refused the request. This is a setup issue on our side, not a problem with your account."
+            : data.siteListError === "forbidden"
+              ? "Google refused access for this account. Reconnect and make sure the Search Console permission box stays ticked."
+              : "Google didn't respond properly. Please try again in a moment."}
+        </p>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setReloadKey((k) => k + 1)} className="text-sm font-semibold bg-[var(--ink)] text-[var(--surface)] px-4 py-2.5 rounded-lg hover:opacity-90 transition-opacity">Try again</button>
+          <a href={connectHref} className="text-xs font-semibold text-[var(--rust)] hover:underline">Reconnect</a>
+          <button onClick={disconnect} disabled={busy} className="text-xs font-semibold text-[var(--ink-faint)] hover:text-[var(--ink-soft)] underline disabled:opacity-50">Disconnect</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!data.siteUrl) {
     return (
