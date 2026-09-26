@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnalyticsSeriesChart } from "./AnalyticsSeriesChart";
 
 type Row = { label: string; clicks: number; impressions: number; ctr: number; position: number };
@@ -64,13 +64,16 @@ function RowsTable({ title, hint, rows, mono }: { title: string; hint: string; r
   );
 }
 
-export function SearchConsolePanel({ brandId, days }: { brandId: string; domain: string; days: number; onOpenSetup: () => void }) {
+export function SearchConsolePanel({ brandId, days, onTotals }: { brandId: string; domain: string; days: number; onOpenSetup: () => void; onTotals?: (t: { clicks: number; impressions: number } | null) => void }) {
   const [data, setData] = useState<GscData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [pickError, setPickError] = useState("");
   const [choice, setChoice] = useState("");
+  // Held in a ref so an inline callback from the parent doesn't re-trigger the fetch.
+  const onTotalsRef = useRef(onTotals);
+  onTotalsRef.current = onTotals;
 
   useEffect(() => {
     if (!brandId) return;
@@ -78,8 +81,12 @@ export function SearchConsolePanel({ brandId, days }: { brandId: string; domain:
     setLoading(true);
     fetch(`/api/gsc/data?brandId=${brandId}&days=${days}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setData(d.error && !("configured" in d) ? { configured: true, connected: false, error: d.error } : d); })
-      .catch(() => { if (!cancelled) setData({ configured: true, connected: false, error: "Couldn't load Search Console data." }); })
+      .then((d) => {
+        if (cancelled) return;
+        setData(d.error && !("configured" in d) ? { configured: true, connected: false, error: d.error } : d);
+        onTotalsRef.current?.(d.totals ? { clicks: d.totals.clicks, impressions: d.totals.impressions } : null);
+      })
+      .catch(() => { if (!cancelled) { setData({ configured: true, connected: false, error: "Couldn't load Search Console data." }); onTotalsRef.current?.(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [brandId, days, reloadKey]);
