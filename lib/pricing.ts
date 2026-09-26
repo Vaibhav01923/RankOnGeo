@@ -4,6 +4,10 @@
 // file doesn't work: Next.js wraps every export of a client module in a
 // client reference, even non-component data, so a server component sees a
 // proxy rather than the real array.
+// Length of the free trial the setup wizard starts, in days. Long enough for
+// Autopilot to publish a first blog post once it is switched on.
+export const TRIAL_DAYS = 4;
+
 export const PRICING = [
   {
     name: "Pro",

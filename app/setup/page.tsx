@@ -6,7 +6,7 @@ import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
-import { PRICING, formatPlanPrice } from "@/lib/pricing";
+import { PRICING, TRIAL_DAYS, formatPlanPrice } from "@/lib/pricing";
 import type { OfferAction } from "@/lib/setup-funnel";
 import OfferStep from "./OfferStep";
 import { stashPendingBrandEdits } from "@/lib/pending-brand";
@@ -558,7 +558,7 @@ function SetupContent() {
     const res = await fetch("/api/dodo/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: trialPlan, trialDays: 1, cancelPath: "/setup" }),
+      body: JSON.stringify({ plan: trialPlan, trialDays: TRIAL_DAYS, cancelPath: "/setup" }),
     });
     const checkoutData = await res.json();
     if (!res.ok || !checkoutData.url) {
@@ -1265,33 +1265,6 @@ function SetupContent() {
         {/* Step 8: Trial signup */}
         {step === "trial" && (
           <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--olive-wash)] px-3 py-1 text-xs font-medium text-[var(--olive)] mb-3">
-              <span>✓</span>
-              <span>Free trial granted specially for {editedName || brand?.name || "your brand"}</span>
-            </div>
-            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">See what AI says about you — free</h1>
-            <p className="text-[var(--ink-soft)] text-sm mb-8">
-              ChatGPT, Gemini, Google AI Search, Perplexity, and Claude — we&apos;ll show you exactly what each one
-              says about your brand for every prompt above, and whether you get mentioned at all. Then we help close
-              the gap — RankOnGeo improves your odds of actually getting mentioned, not just measures them.
-            </p>
-
-            <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--ink)] mb-2">Your plan</p>
-              <div className="rounded-lg border border-[var(--rust)] bg-[var(--rust-wash)] px-4 py-3.5">
-                <p className="text-sm font-semibold text-[var(--ink)]">
-                  {PRICING[0].name} — {formatPlanPrice(PRICING[0].price)}/mo after trial
-                </p>
-                <p className="text-xs text-[var(--ink-soft)] mt-1">
-                  Get access to the app, your AI visibility report, and Reddit marketing for your brand.
-                </p>
-                <p className="text-xs text-[var(--ink-faint)] mt-2">
-                  We&apos;ve run Reddit marketing for Cluely, Tsenta, Affogato AI, and Interview Coder, and helped
-                  them grow.
-                </p>
-              </div>
-            </div>
-
             <form onSubmit={handleClaimTrial} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-[var(--ink)]/80 mb-1.5">Email</label>
@@ -1333,7 +1306,7 @@ function SetupContent() {
               </div>
 
               <p className="text-xs text-[var(--ink-faint)] text-center">
-                You won&apos;t be charged today — card required to prevent abuse. After your 1-day free trial ends,
+                You won&apos;t be charged today — card required to prevent abuse. After your {TRIAL_DAYS}-day free trial ends,
                 you&apos;ll be charged{" "}
                 {formatPlanPrice(PRICING.find((p) => p.planKey === trialPlan)?.price ?? PRICING[0].price)}/mo unless you cancel
                 before then. Cancel anytime from Settings.
