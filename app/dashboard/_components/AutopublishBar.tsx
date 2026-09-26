@@ -21,6 +21,12 @@ const COPY = {
     onBody: "RankOnGeo is writing and publishing blogs to target these keywords and rank on them.",
     offBody: "Switch on and RankOnGeo will write and publish blogs that target these keywords and rank on them.",
   },
+  seoGeo: {
+    setupTitle: "Turn on auto-publishing",
+    setupBody: "Connect your website once, and RankOnGeo writes and publishes articles for these keywords and AI prompts, automatically.",
+    onBody: "RankOnGeo is writing and publishing articles for these keywords and AI prompts.",
+    offBody: "Switch on and RankOnGeo will write and publish articles for these keywords and AI prompts. Or write each one yourself.",
+  },
   research: {
     setupTitle: "Publish these articles automatically",
     setupBody: "Connect your website once and RankOnGeo writes and publishes articles for you, or write and publish each one yourself below.",

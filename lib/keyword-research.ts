@@ -1,4 +1,5 @@
 import { normalizeKeyword } from "@/lib/autopilot-rules";
+import { ENGINE_NAMES, gapsFromScanRows, type GapScanRow, type ServerGap } from "@/lib/gaps";
 import type { KeywordOpportunity } from "@/lib/keyword-rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,4 +36,51 @@ export async function syncResearchTopics(db: Db, brandId: string, keywords: Keyw
     if (error) throw new Error(error.message);
   }
   return inserts.length;
+}
+
+// The AI-visibility gaps from the brand's latest scan: tracked prompts that AI
+// engines answer without mentioning the brand.
+export async function latestGaps(db: Db, brandId: string): Promise<ServerGap[]> {
+  const { data: run } = await db.from("scan_runs").select("id").eq("brand_id", brandId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!run) return [];
+  const { data: rows } = await db
+    .from("scan_results")
+    .select("prompt_id, prompt_text, engine, response, brand_mentioned, competitor_mentions")
+    .eq("scan_run_id", run.id);
+  return gapsFromScanRows((rows ?? []) as GapScanRow[]);
+}
+
+// Queues those prompts for Autopilot next to the keywords, so articles are
+// written for what AI is missing you on as well as for what buyers search.
+// Prompts that already have a topic or an article are skipped.
+export async function syncGapTopics(db: Db, brandId: string, limit = 30): Promise<number> {
+  const gaps = await latestGaps(db, brandId);
+  if (!gaps.length) return 0;
+  const [{ data: topics }, { data: articles }] = await Promise.all([
+    db.from("autopilot_topics").select("keyword").eq("brand_id", brandId),
+    db.from("articles").select("keyword").eq("brand_id", brandId),
+  ]);
+  const seen = new Set<string>([...(topics ?? []), ...(articles ?? [])].map((r: { keyword: string | null }) => normalizeKeyword(r.keyword ?? "")).filter(Boolean));
+  const base = Date.now();
+  const inserts: { brand_id: string; keyword: string; source: string; created_at: string }[] = [];
+  for (const g of gaps) {
+    const keyword = normalizeKeyword(g.promptText);
+    if (keyword.length < 4 || keyword.length > 200 || seen.has(keyword) || inserts.length >= limit) continue;
+    seen.add(keyword);
+    // Staggered timestamps keep the most-missed prompt first when order falls back to age.
+    inserts.push({ brand_id: brandId, keyword, source: "gap", created_at: new Date(base + inserts.length * 1000).toISOString() });
+  }
+  if (!inserts.length) return 0;
+  const { error } = await db.from("autopilot_topics").upsert(inserts, { onConflict: "brand_id,keyword", ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+  return inserts.length;
+}
+
+// For a prompt-based article: which AI engines are missing the brand and which
+// competitor they name instead, so the article can be written to win that answer.
+export async function gapContext(db: Db, brandId: string, keyword: string): Promise<{ missingEngines: string[]; topCompetitor: string | null } | null> {
+  const key = normalizeKeyword(keyword);
+  const gap = (await latestGaps(db, brandId)).find((g) => normalizeKeyword(g.promptText) === key);
+  if (!gap) return null;
+  return { missingEngines: gap.engines.map((e) => ENGINE_NAMES[e] ?? e), topCompetitor: gap.topCompetitor };
 }
