@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { buildKeywordList, normalizeKeyword } from "@/lib/keyword-list";
 import { scheduleTopics, sortTopicsForPicking } from "@/lib/autopilot-rules";
 import { findKeywordOpportunities, CACHE_DAYS, type KeywordBrand } from "@/lib/keyword-opportunities";
+import { VOLUME_REGION } from "@/lib/keyword-rules";
 import { syncGapTopics, syncResearchTopics } from "@/lib/keyword-research";
 
 export const maxDuration = 60;
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [{ data: scan }, { data: topics }, { data: articles }, { data: settings }, { data: lastPost }] = await Promise.all([
-    admin.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brandId).maybeSingle(),
+    admin.from("keyword_opportunity_scans").select("keywords, volume_available, volume_region, created_at").eq("brand_id", brandId).maybeSingle(),
     admin.from("autopilot_topics").select("keyword, volume, source, status, position, created_at").eq("brand_id", brandId),
     admin.from("articles").select("id, title, keyword, status, published_url").eq("brand_id", brandId),
     admin.from("autopilot_settings").select("enabled, posts_per_week, publish_mode").eq("brand_id", brandId).maybeSingle(),
@@ -69,13 +70,17 @@ export async function GET(req: NextRequest) {
     ? [...withSchedule.filter((r) => r.scheduledAt), ...withSchedule.filter((r) => !r.scheduledAt)].sort((a, b) => (a.queueIndex ?? Infinity) - (b.queueIndex ?? Infinity) || (b.volume ?? -1) - (a.volume ?? -1))
     : withSchedule;
   const researchedAt = scan?.created_at ?? null;
+  // Lists saved before volumes went worldwide are US-only; those can be refreshed right away.
+  const usOnly = !!scan && scan.volume_region !== VOLUME_REGION;
   return NextResponse.json({
     keywords: rows,
     hasResearch: !!scan,
     volumeAvailable: scan ? !!scan.volume_available : false,
     researchedAt,
-    // Refreshing pays for a fresh volume lookup, so it isn't offered until the saved list is a week old.
-    canRefresh: !researchedAt || Date.now() - new Date(researchedAt).getTime() > CACHE_DAYS * 24 * 60 * 60 * 1000,
+    usOnly,
+    // Refreshing pays for a fresh volume lookup, so it isn't offered until the saved list is a week old
+    // (or is an older US-only list, which the next lookup replaces).
+    canRefresh: !researchedAt || usOnly || Date.now() - new Date(researchedAt).getTime() > CACHE_DAYS * 24 * 60 * 60 * 1000,
     autopilot: {
       enabled,
       postsPerWeek,

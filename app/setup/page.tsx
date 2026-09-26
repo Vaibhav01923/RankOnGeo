@@ -803,7 +803,7 @@ function SetupContent() {
             {!kwLoading && kwList.length > 0 && (
               <p className="text-xs text-[var(--ink-faint)] mb-6">
                 {kwVolumeAvailable
-                  ? "Monthly Google searches in the US, from Google Ads data. Keywords marked low volume are too specific for Google to publish a number, though they often convert well."
+                  ? "Monthly Google searches worldwide, from Google Ads data. Keywords marked low volume are too specific for Google to publish a number, though they often convert well."
                   : "Search volumes are unavailable right now."}
                 {!kwVolumeAvailable && brand?.id && (
                   <>
