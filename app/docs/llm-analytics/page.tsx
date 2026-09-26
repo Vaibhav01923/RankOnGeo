@@ -63,7 +63,7 @@ export default function LlmAnalyticsDocsPage() {
           </p>
         </div>
         <p className="text-sm text-[var(--ink-soft)] mb-4">
-          Fastest way: open <strong className="text-[var(--ink)]">Analytics → Setup → Custom Built Site</strong> in your dashboard and copy the prompt — paste it into Claude Code, Cursor, Copilot, Lovable, Bolt or v0 and it adds both the tracking script and this server-side call for your stack. To do it by hand, pick your setup:
+          Fastest way: open <strong className="text-[var(--ink)]">Analytics → Connections → Connect → Custom Built Site</strong> in your dashboard and copy the prompt — paste it into Claude Code, Cursor, Copilot, Lovable, Bolt or v0 and it adds both the tracking script and this server-side call for your stack. To do it by hand, pick your setup:
         </p>
 
         <div className="flex gap-1 border-b border-[var(--line)] mb-4 overflow-x-auto">
@@ -126,9 +126,9 @@ export default function LlmAnalyticsDocsPage() {
         <h2 id="debugging" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Debugging</h2>
         <p className="text-sm font-semibold text-[var(--ink)]/90 mb-2">Not seeing AI traffic?</p>
         <ul className="text-sm text-[var(--ink-soft)] space-y-2 list-disc pl-5">
-          <li>Verify your <code className="text-[var(--rust-deep)]">siteKey</code> from Analytics → Setup.</li>
+          <li>Verify your <code className="text-[var(--rust-deep)]">siteKey</code> from Analytics → Connections.</li>
           <li>Add a log line to confirm your middleware is actually running on the routes you expect.</li>
-          <li>AI crawlers visit on their own schedule, not a fixed interval — it can take time before real traffic shows up. Use &quot;Send test AI-crawler hit&quot; in Analytics → Setup to confirm the pipeline itself works, or run the curl command from the REST API tab with a bot user-agent such as GPTBot/1.0.</li>
+          <li>AI crawlers visit on their own schedule, not a fixed interval — it can take time before real traffic shows up. Use &quot;Send test AI-crawler hit&quot; in Analytics → Connections to confirm the pipeline itself works, or run the curl command from the REST API tab with a bot user-agent such as GPTBot/1.0.</li>
         </ul>
       </div>
 

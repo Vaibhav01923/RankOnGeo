@@ -8,8 +8,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PricingCards } from "@/app/_components/PricingCards";
 import { ThemeToggle, useIsDarkMode } from "@/app/_components/ThemeToggle";
-import { AnalyticsSetup, type AnalyticsStatus } from "./_components/AnalyticsSetup";
-import { SearchConsolePanel } from "./_components/SearchConsolePanel";
+import { type AnalyticsStatus } from "./_components/AnalyticsSetup";
+import { SearchConsoleBanner } from "./_components/SearchConsoleBanner";
+import { ConnectionsModal, type ConnectionsView } from "./_components/ConnectionsModal";
+import { useSearchConsole, GOOGLE_DELAY_NOTE } from "./_components/useSearchConsole";
+import { PagesTable, SearchQueriesCard, SearchStatsRow } from "./_components/AnalyticsMerged";
 import { AnalyticsSeriesChart } from "./_components/AnalyticsSeriesChart";
 import { AutopilotPanel } from "./_components/AutopilotPanel";
 import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
@@ -197,14 +200,13 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "gaps", title: "Research", body: "These are real queries where competitors show up and you don't. Publishing an article for each one is a double win — on-page SEO for Google, and GEO (Generative Engine Optimization) that teaches AI engines to cite and recommend you. Publish one a day; it's one click away in the Publishing tab." },
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
   { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
-  { tab: "analytics", title: "Analytics", body: "Your traffic, the people arriving from AI answers, the AI bots crawling your site and your Google Search performance — in one place. Connect your site from the Setup tab in one step." },
+  { tab: "analytics", title: "Analytics", body: "Your traffic, the people arriving from AI answers, the AI bots crawling your site and your Google Search performance — in one place. Google Search numbers are merged right into your traffic (with a 2-day delay). Use Connections to connect or disconnect anything." },
   { tab: "alerts", title: "Alerts", body: "Get notified about changes to your AI visibility on Slack, email, or whatever channel you prefer." },
   { tab: "team", title: "Team", body: "Invite your teammates to collaborate on this workspace." },
   { tab: "feedback", title: "Feedback", body: "Request a feature, report a bug, or get help any time — right here." },
 ];
 
 type BotBreakdown = { botName: string; count: number };
-type AnalyticsView = "overview" | "setup";
 type NamedCount = { label: string; count: number };
 type SeriesPoint = { label: string; count: number };
 type PageBreakdown = { path: string; pageviews: number; bounceRate: number; avgDurationSeconds: number };
@@ -1178,7 +1180,8 @@ function DashboardPage() {
   const [webAnalyticsLoaded, setWebAnalyticsLoaded] = useState(false);
   const [webAnalyticsFetching, setWebAnalyticsFetching] = useState(false);
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
-  const [analyticsView, setAnalyticsView] = useState<AnalyticsView | null>(null);
+  // The Connections popup: the list of connections, or the install steps.
+  const [connectionsView, setConnectionsView] = useState<ConnectionsView | null>(null);
   const [analyticsStatus, setAnalyticsStatus] = useState<AnalyticsStatus | null>(null);
   const analyticsStatusRef = useRef<AnalyticsStatus | null>(null);
   const [llmAnalyticsData, setLlmAnalyticsData] = useState<LlmAnalyticsData | null>(null);
@@ -1187,16 +1190,15 @@ function DashboardPage() {
   const [sendingTestEvent, setSendingTestEvent] = useState(false);
   const [testEventError, setTestEventError] = useState("");
   const [analyticsDays, setAnalyticsDays] = useState(30);
+  // Google Search Console data, merged into the traffic charts and tables.
+  const gsc = useSearchConsole(brand?.id, analyticsDays, activeTab === "analytics");
   const [gscFlash, setGscFlash] = useState<string | null>(null);
-  // Headline Google numbers for the summary strip, reported by the Search section.
-  const [gscTotals, setGscTotals] = useState<{ clicks: number; impressions: number } | null>(null);
   // Section to scroll to once the Analytics page has rendered (e.g. the checklist's "Connect Search Console").
   const analyticsScrollTarget = useRef<string | null>(null);
   const [onboardingHidden, setOnboardingHidden] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
   const [llmDetailsExpanded, setLlmDetailsExpanded] = useState(true);
-  const [pagesDetailsExpanded, setPagesDetailsExpanded] = useState(false);
 
   useEffect(() => {
     // "webAnalytics"/"llmAnalytics" were merged into one Analytics tab; map
@@ -1559,7 +1561,7 @@ function DashboardPage() {
   }, [brand?.id]);
 
   // A different brand has a different install — forget the previous one's
-  // status so the Setup dot and default sub-view don't show stale state.
+  // status so the Connections dot doesn't show stale state.
   const prevAnalyticsBrandId = useRef<string | undefined>(undefined);
   useEffect(() => {
     const prev = prevAnalyticsBrandId.current;
@@ -1567,17 +1569,15 @@ function DashboardPage() {
     if (!prev || prev === brand?.id) return;
     analyticsStatusRef.current = null;
     setAnalyticsStatus(null);
-    setAnalyticsView(null);
-    setGscTotals(null);
+    setConnectionsView(null);
   }, [brand?.id]);
 
   // Returning from Google's consent screen lands on /dashboard?gsc=<result>:
-  // open Analytics → Search and say how it went.
+  // open Analytics at the Google Search Console bar and say how it went.
   useEffect(() => {
     const flag = searchParams.get("gsc");
     if (!flag) return;
     setActiveTab("analytics");
-    setAnalyticsView("overview");
     analyticsScrollTarget.current = "analytics-search";
     setGscFlash(flag);
     sessionStorage.setItem("dashTab", "analytics");
@@ -1588,20 +1588,17 @@ function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Land at the top when the page or its Setup switch changes — or at a
-  // specific section when something asked for one (the section sits below the
-  // fold, so give the page a moment to lay out first).
+  // Land at the top when the Analytics page opens — or at a specific part of it
+  // when something asked for one (give the page a moment to lay out first).
   useEffect(() => {
     if (activeTab !== "analytics") return;
     const target = analyticsScrollTarget.current;
     analyticsScrollTarget.current = null;
     const t = setTimeout(() => document.getElementById(target ?? "analytics-top")?.scrollIntoView({ block: "start" }), target ? 400 : 0);
-    // The "connected / denied" notice belongs to the Analytics page it was raised for.
-    if (analyticsView === "setup") setGscFlash(null);
     return () => clearTimeout(t);
-  }, [activeTab, analyticsView]);
+  }, [activeTab]);
 
-  // Polled by the Setup screen. When the first real visit arrives, reload the
+  // Polled while the Connections popup is open. When the first real visit arrives, reload the
   // analytics data as well so the charts fill in without a manual refresh.
   async function refreshAnalyticsStatus() {
     if (!brand) return;
@@ -2191,10 +2188,9 @@ function DashboardPage() {
   // guide. Status comes from /api/analytics/status; until that has loaded
   // every step simply reads as not done yet.
   const onboardingItems: OnboardingItem[] = (() => {
-    const openAnalytics = (view: AnalyticsView, section?: string) => {
+    const openAnalytics = (section?: string) => {
       analyticsScrollTarget.current = section ?? null;
       navTo("analytics");
-      setAnalyticsView(view);
     };
     return [
       {
@@ -2203,7 +2199,7 @@ function DashboardPage() {
         body: "One step — a single script tag, or one copy-paste prompt for custom-built sites. Unlocks your traffic, the visitors coming from ChatGPT and other AI answers, and which AI crawlers read your pages.",
         done: !!analyticsStatus?.web.connected,
         cta: "Connect",
-        onClick: () => (isFreeTier ? openPaywall() : openAnalytics("setup")),
+        onClick: () => (isFreeTier ? openPaywall() : (openAnalytics(), setConnectionsView("instructions"))),
       },
       ...(analyticsStatus?.gsc?.configured === false ? [] : [{
         id: "gsc",
@@ -2211,7 +2207,7 @@ function DashboardPage() {
         body: "See the searches that bring people to your site, right next to your AI visibility — and let Autopilot judge which posts to improve.",
         done: !!analyticsStatus?.gsc?.connected,
         cta: "Connect",
-        onClick: () => openAnalytics("overview", "analytics-search"),
+        onClick: () => openAnalytics("analytics-search"),
       }]),
       {
         id: "autopilot",
@@ -2311,7 +2307,7 @@ function DashboardPage() {
       });
       if (res.ok) {
         setAnalyticsRefreshKey((k) => k + 1);
-        setAnalyticsView("overview");
+        setConnectionsView(null);
       } else {
         const d = await res.json().catch(() => ({}));
         setTestEventError(d.error ?? "Failed to send test event");
@@ -5042,8 +5038,7 @@ function DashboardPage() {
 
           {/* ANALYTICS TAB — traffic, AI answers, AI crawlers, Search Console and setup in one place */}
           {activeTab === "analytics" && (() => {
-            const view: AnalyticsView = analyticsView ?? (analyticsStatus && !analyticsStatus.web.connected && !analyticsStatus.bot.connected ? "setup" : "overview");
-            const spinner = <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>;
+                        const spinner = <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>;
             const locked = <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock>;
             const webConnected = !!analyticsStatus?.web.connected;
 
@@ -5066,8 +5061,8 @@ function DashboardPage() {
 
                 {!!webAnalyticsData?.series.length && (
                   <div className="panel rounded-xl p-5 mb-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">Pageviews over time</p>
-                    <AnalyticsSeriesChart series={webAnalyticsData.series} />
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-3">{gsc.data?.connected && gsc.data.siteUrl ? "Pageviews and Google clicks over time" : "Pageviews over time"}</p>
+                    <AnalyticsSeriesChart series={webAnalyticsData.series} overlay={analyticsDays > 1 ? gsc.data?.series : undefined} />
                   </div>
                 )}
 
@@ -5154,66 +5149,9 @@ function DashboardPage() {
                   </div>
                 )}
 
-                {!!webAnalyticsData?.topPages.length && (
-                  <div className="panel rounded-xl p-5 mb-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-1">Top Pages</p>
-                    <p className="text-xs text-[var(--ink-faint)] mb-3">Your most-visited pages over this period.</p>
-                    <div className="space-y-2">
-                      {webAnalyticsData.topPages.map((p) => (
-                        <div key={p.label} className="flex items-center gap-3">
-                          <span className="text-xs text-[var(--ink)]/80 font-mono w-28 shrink-0 truncate">{p.label}</span>
-                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
-                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((p.count / webAnalyticsData.topPages[0].count) * 100)}%` }} />
-                          </div>
-                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{p.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {gsc.data?.siteUrl && <SearchQueriesCard rows={gsc.data.queries ?? []} />}
 
-                {!!webAnalyticsData?.pagesBreakdown.length && (
-                  <div className="panel rounded-xl overflow-hidden mb-5">
-                    {/* div, not button — InfoTooltip renders its own button and nested buttons are invalid HTML */}
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setPagesDetailsExpanded((v) => !v)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPagesDetailsExpanded((v) => !v); } }}
-                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1">
-                        <span className="text-sm font-semibold text-[var(--ink)]">Page Performance</span>
-                        <InfoTooltip text="Bounce rate and duration here are measured for sessions that started on each page — not total time spent on that one page across a session." />
-                      </span>
-                      <svg className={`w-4 h-4 text-[var(--ink-faint)] transition-transform ${pagesDetailsExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                    {pagesDetailsExpanded && (
-                      <div className="border-t border-[var(--line)] overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-left text-[var(--ink-faint)]">
-                              <th className="px-5 py-2 font-medium">Page</th>
-                              <th className="px-5 py-2 font-medium text-right">Pageviews</th>
-                              <th className="px-5 py-2 font-medium text-right">Bounce Rate</th>
-                              <th className="px-5 py-2 font-medium text-right">Avg. Duration</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {webAnalyticsData.pagesBreakdown.map((p) => (
-                              <tr key={p.path} className="border-t border-[var(--line)]">
-                                <td className="px-5 py-2 font-mono text-[var(--ink)]/80 truncate max-w-[240px]">{p.path}</td>
-                                <td className="px-5 py-2 text-right font-semibold text-[var(--ink)]">{p.pageviews}</td>
-                                <td className="px-5 py-2 text-right text-[var(--ink-soft)]">{p.bounceRate}%</td>
-                                <td className="px-5 py-2 text-right text-[var(--ink-soft)]">{p.avgDurationSeconds}s</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <PagesTable ours={webAnalyticsData?.pagesBreakdown ?? []} google={gsc.data?.siteUrl ? gsc.data.pages ?? [] : null} />
 
                 {!!webAnalyticsData?.countries.length && (
                   <div className="panel rounded-xl p-5 mb-5">
@@ -5292,7 +5230,7 @@ function DashboardPage() {
                       {webConnected ? "Your site is connected — visits from the selected period will appear here." : "Connect your site and your first visit shows up here within seconds."}
                     </p>
                     {!webConnected && (
-                      <button onClick={() => setAnalyticsView("setup")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                      <button onClick={() => setConnectionsView("instructions")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
                         Connect your site
                       </button>
                     )}
@@ -5375,9 +5313,9 @@ function DashboardPage() {
                   <div className="panel rounded-xl p-6 text-center">
                     <p className="text-base font-semibold text-[var(--ink)] mb-1">No AI crawler visits yet</p>
                     <p className="text-sm text-[var(--ink-faint)] mb-4">
-                      Crawlers don&apos;t run JavaScript, so tracking them needs a small server-side step. The Setup tab gives you one prompt that does it for you.
+                      Crawlers don&apos;t run JavaScript, so tracking them needs a small server-side step. Connections has one prompt that does it for you.
                     </p>
-                    <button onClick={() => setAnalyticsView("setup")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                    <button onClick={() => setConnectionsView("instructions")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
                       Set up AI-crawler tracking
                     </button>
                   </div>
@@ -5385,24 +5323,6 @@ function DashboardPage() {
               </div>
             );
 
-            const setupBody = !webAnalyticsLoaded ? spinner : webAnalyticsData?.siteKey ? (
-              <AnalyticsSetup
-                siteKey={webAnalyticsData.siteKey}
-                domain={webAnalyticsData.domain}
-                status={analyticsStatus}
-                onTest={sendTestEvent}
-                testing={sendingTestEvent}
-                testError={testEventError}
-                onRefreshStatus={refreshAnalyticsStatus}
-              />
-            ) : (
-              <p className="text-sm text-[var(--ink-soft)]">Couldn&apos;t load your website ID. Reload the page and try again.</p>
-            );
-
-            const views: { id: AnalyticsView; label: string }[] = [
-              { id: "overview", label: "Analytics" },
-              { id: "setup", label: "Setup" },
-            ];
             const sectionHeading = (title: string, sub: string) => (
               <div className="mt-9 mb-3">
                 <h3 className="text-base font-semibold text-[var(--ink)]">{title}</h3>
@@ -5420,7 +5340,7 @@ function DashboardPage() {
                     </h2>
                     <p className="text-sm text-[var(--ink-soft)] mt-0.5">Traffic, AI answers and search performance, privacy first</p>
                   </div>
-                  {view !== "setup" && (
+                  <div className="flex items-center gap-2">
                     <select
                       value={analyticsDays}
                       onChange={(e) => setAnalyticsDays(Number(e.target.value))}
@@ -5431,37 +5351,44 @@ function DashboardPage() {
                       <option value={30}>Last 30 Days</option>
                       <option value={90}>Last 90 Days</option>
                     </select>
-                  )}
-                </div>
-
-                <div className="flex gap-1 border-b border-[var(--line)] mb-5 overflow-x-auto">
-                  {views.map((v) => (
                     <button
-                      key={v.id}
-                      onClick={() => setAnalyticsView(v.id)}
-                      className={`px-3.5 py-2 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5 transition-colors ${
-                        view === v.id ? "border-[var(--rust)] text-[var(--rust-deep)]" : "border-transparent text-[var(--ink-faint)] hover:text-[var(--ink-soft)]"
-                      }`}
+                      onClick={() => setConnectionsView("list")}
+                      className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 hover:bg-[var(--line-soft)] inline-flex items-center gap-1.5 transition-colors"
                     >
-                      {v.label}
-                      {v.id === "setup" && analyticsStatus && (
-                        <span className={`w-1.5 h-1.5 rounded-full ${webConnected ? "bg-[var(--olive)]" : "bg-[var(--rust)]"}`} />
-                      )}
+                      Connections
+                      {analyticsStatus && <span className={`w-1.5 h-1.5 rounded-full ${webConnected ? "bg-[var(--olive)]" : "bg-[var(--rust)]"}`} />}
                     </button>
-                  ))}
+                  </div>
                 </div>
 
-
-                {view === "setup" ? (
-                  setupBody
-                ) : (
+                {(
                   <>
+                    <div id="analytics-search" className="scroll-mt-4">
+                      {gscFlash && (() => {
+                        const msg: Record<string, [string, boolean]> = {
+                          connected: ["Google Search Console connected.", true],
+                          pick_site: ["Google Search Console connected — now choose which property is this site.", true],
+                          denied: ["Google didn't grant access, so nothing was connected. Make sure the Search Console box stays ticked on the consent screen.", false],
+                          unavailable: ["Search Console connection isn't available yet.", false],
+                          error: ["Something went wrong connecting Search Console. Please try again.", false],
+                        };
+                        const [text, ok] = msg[gscFlash] ?? msg.error;
+                        return (
+                          <div className={`flex items-start justify-between gap-3 text-xs rounded-lg px-3 py-2.5 mb-4 ${ok ? "bg-[var(--olive)]/10 text-[var(--olive)]" : "bg-red-500/10 text-red-700"}`}>
+                            <span>{text}</span>
+                            <button onClick={() => setGscFlash(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">✕</button>
+                          </div>
+                        );
+                      })()}
+                      {brand?.id && <SearchConsoleBanner gsc={gsc} brandId={brand.id} />}
+                    </div>
+
                     {!isFreeTier && (
                       <>
                         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
                           <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
                           <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
-                          <StatCard label="From Google" value={gscTotals ? gscTotals.clicks.toLocaleString() : "—"} sub={gscTotals ? "search clicks" : "not connected"} />
+                          <StatCard label="From Google" value={gsc.data?.totals ? gsc.data.totals.clicks.toLocaleString() : "—"} sub={gsc.data?.totals ? `search clicks · ${GOOGLE_DELAY_NOTE}` : "not connected"} />
                           <StatCard label="From AI answers" value={webAnalyticsData?.stats.aiReferrals ?? 0} sub="ChatGPT, Perplexity…" />
                           <StatCard label="AI crawler visits" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
                         </div>
@@ -5470,40 +5397,15 @@ function DashboardPage() {
                     )}
 
                     {isFreeTier ? (
-                      locked
-                    ) : (
                       <>
-                        {sectionHeading("Traffic", "Real visitors to your site, including people who arrive from AI answers.")}
-                        {trafficBody}
+                        {gsc.data?.siteUrl && gsc.data.totals && <SearchStatsRow totals={gsc.data.totals} />}
+                        {gsc.data?.siteUrl && <SearchQueriesCard rows={gsc.data.queries ?? []} />}
+                        <PagesTable ours={null} google={gsc.data?.siteUrl ? gsc.data.pages ?? [] : null} />
+                        {locked}
                       </>
+                    ) : (
+                      trafficBody
                     )}
-
-                    <div id="analytics-search" className="scroll-mt-4">
-                      {sectionHeading("Google Search", "The searches that bring people to your site, from Google Search Console.")}
-                    {gscFlash && (() => {
-                      const msg: Record<string, [string, boolean]> = {
-                        connected: ["Google Search Console connected.", true],
-                        pick_site: ["Google Search Console connected — now choose which property is this site.", true],
-                        denied: ["Google didn't grant access, so nothing was connected. Make sure the Search Console box stays ticked on the consent screen.", false],
-                        unavailable: ["Search Console connection isn't available yet.", false],
-                        error: ["Something went wrong connecting Search Console. Please try again.", false],
-                      };
-                      const [text, ok] = msg[gscFlash] ?? msg.error;
-                      return (
-                        <div className={`flex items-start justify-between gap-3 text-xs rounded-lg px-3 py-2.5 mb-4 ${ok ? "bg-[var(--olive)]/10 text-[var(--olive)]" : "bg-red-500/10 text-red-700"}`}>
-                          <span>{text}</span>
-                          <button onClick={() => setGscFlash(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">✕</button>
-                        </div>
-                      );
-                    })()}
-                      <SearchConsolePanel
-                        brandId={brand?.id ?? ""}
-                        domain={webAnalyticsData?.domain ?? ""}
-                        days={analyticsDays}
-                        onOpenSetup={() => setAnalyticsView("setup")}
-                        onTotals={setGscTotals}
-                      />
-                    </div>
 
                     {!isFreeTier && (
                       <>
@@ -8025,6 +7927,23 @@ Body: {
           <span className="text-sm font-medium text-[var(--ink)]">Confirming your subscription…</span>
         </div>
       )}
+      <ConnectionsModal
+        view={connectionsView}
+        onView={setConnectionsView}
+        onClose={() => setConnectionsView(null)}
+        status={analyticsStatus}
+        gsc={gsc}
+        brandId={brand?.id ?? ""}
+        siteKey={webAnalyticsData?.siteKey ?? ""}
+        domain={webAnalyticsData?.domain ?? brand?.domain ?? ""}
+        isFree={isFreeTier}
+        onUpgrade={() => { setConnectionsView(null); openPaywall(); }}
+        onTest={sendTestEvent}
+        testing={sendingTestEvent}
+        testError={testEventError}
+        onRefreshStatus={refreshAnalyticsStatus}
+        onChooseSite={() => { setConnectionsView(null); analyticsScrollTarget.current = "analytics-search"; document.getElementById("analytics-search")?.scrollIntoView({ block: "start" }); }}
+      />
       <OnboardingGuide
         open={showGuide}
         onClose={() => setShowGuide(false)}

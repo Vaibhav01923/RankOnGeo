@@ -43,7 +43,7 @@ export default function WebAnalyticsDocsPage() {
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">1. Get your Website ID</h3>
         <p className="text-sm text-[var(--ink-soft)] mb-4">
-          Open <strong className="text-[var(--ink)]">Analytics → Setup</strong> in your dashboard. Pick where your site is built (WordPress, Webflow, Shopify, Wix, GoHighLevel, Sanity, Framer, Squarespace, a custom-built site or anything else) and you get exact steps with your ID already filled in. Building a custom site with an AI coding assistant? Copy the one prompt under &quot;Custom Built Site&quot; and it does everything below — including AI-crawler tracking — for you.
+          Open <strong className="text-[var(--ink)]">Analytics → Connections</strong> in your dashboard, then click Connect next to Website tracking. Pick where your site is built (WordPress, Webflow, Shopify, Wix, GoHighLevel, Sanity, Framer, Squarespace, a custom-built site or anything else) and you get exact steps with your ID already filled in. Building a custom site with an AI coding assistant? Copy the one prompt under &quot;Custom Built Site&quot; and it does everything below — including AI-crawler tracking — for you.
         </p>
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">2. Add the tracking script</h3>
@@ -55,7 +55,7 @@ export default function WebAnalyticsDocsPage() {
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">3. Confirm it&apos;s working</h3>
         <p className="text-sm text-[var(--ink-soft)] mb-10">
-          Visit a page on your site. The Setup screen checks automatically and turns green as soon as the first real visit arrives, and it then shows up in the Traffic section of the Analytics page within seconds. You can also click &quot;Send test pageview&quot; to see the charts populate first — test events never mark your install as connected.
+          Visit a page on your site. The Connections popup checks automatically and turns green as soon as the first real visit arrives, and it then shows up on the Analytics page within seconds. You can also click &quot;Send test pageview&quot; to see the charts populate first — test events never mark your install as connected.
         </p>
 
         <h2 id="metrics-explained" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Metrics explained</h2>

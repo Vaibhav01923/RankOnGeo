@@ -1,5 +1,5 @@
 // Single source of truth for "how do I connect RankOnGeo to my site" — used by
-// the dashboard's Analytics → Setup hub and the public docs so the steps can't
+// the dashboard's Analytics → Connections popup and the public docs so the steps can't
 // drift apart.
 //
 // What "connected" means:
@@ -286,7 +286,7 @@ STEP 3 — VERIFY
 - Confirm the <script> tag appears in the rendered HTML of a public page and NOT on authenticated pages.
 - Prove the crawler call works by running:
 ${curlTestSnippet(siteKey)}
-  Then tell me to open RankOnGeo → Analytics → Setup and press "Test", or visit the site once, to confirm the connection turns green.
+  Then tell me to open RankOnGeo → Analytics → Connections and press "Test", or visit the site once, to confirm the connection turns green.
 
 STEP 4 — REPORT
 List every file you changed and what each change does, in a short bullet list. If you had to skip or adapt any step, say why.`;
