@@ -744,7 +744,7 @@ function SetupContent() {
                   onClick={handleBrandNext}
                   className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
                 >
-                  Continue to prompts
+                  Continue to keywords
                 </button>
               </div>
             </div>
