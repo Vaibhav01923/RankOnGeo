@@ -172,7 +172,7 @@ type Tab =
   | "seoGeo" | "articles" | "tasks" | "redditMarketing"
   | "publishing"
   | "alerts" | "team"
-  | "agent" | "admin" | "feedback";
+  | "admin" | "feedback";
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
@@ -190,7 +190,6 @@ const TAB_LABELS: Record<Tab, string> = {
 
   alerts: "Alerts",
   team: "Team",
-  agent: "Agent",
   admin: "Admin",
   feedback: "Feedback",
 };
@@ -282,9 +281,6 @@ type SavedArticle = {
   publishedAt?: string | null;
   source?: string;
 };
-
-type AgentMessage = { role: "user" | "assistant"; content: string };
-type ChatSession = { id: string; title: string; created_at: string; updated_at: string };
 
 type PublishingChannel = {
   id: string;
@@ -780,13 +776,6 @@ function DashboardPage() {
   const [adminFeedbackLoaded, setAdminFeedbackLoaded] = useState(false);
   const [adminFeedbackLoading, setAdminFeedbackLoading] = useState(false);
 
-  // Agent state
-  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
-  const [agentInput, setAgentInput] = useState("");
-  const [agentLoading, setAgentLoading] = useState(false);
-  const [agentInitialized, setAgentInitialized] = useState(false);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
   const [expandedCitationDomains, setExpandedCitationDomains] = useState<Set<string>>(new Set());
   const [engageItem, setEngageItem] = useState<{ url: string; promptText: string; engine: string } | null>(null);
@@ -1052,19 +1041,6 @@ function DashboardPage() {
   const [deleteAllPromptsConfirm, setDeleteAllPromptsConfirm] = useState(false);
   const [deletingAllPrompts, setDeletingAllPrompts] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
-  const agentEndRef = useRef<HTMLDivElement>(null);
-  const agentMessagesRef = useRef<AgentMessage[]>([]);
-  agentMessagesRef.current = agentMessages;
-
-  // Load chat history from DB when brand loads
-  useEffect(() => {
-    if (!brand?.id) return;
-    fetch(`/api/agent/chats?brandId=${brand.id}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.chats) setChatSessions(d.chats); })
-      .catch(() => {});
-  }, [brand?.id]);
-
   // Articles state
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(true);
@@ -1493,10 +1469,6 @@ function DashboardPage() {
     setGaps(computeGaps(gapResults, brand));
   }, [gapResults, brand]);
 
-  useEffect(() => {
-    agentEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [agentMessages]);
-
   // Load all tasks for admin when tab opens
   useEffect(() => {
     if (activeTab !== "admin" || !isAdmin || adminTasks.length > 0) return;
@@ -1666,16 +1638,6 @@ function DashboardPage() {
     const timer = setInterval(computeCountdown, 60000);
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    if (activeTab === "agent" && !agentInitialized && brand) {
-      setAgentInitialized(true);
-      const greeting = overallScore !== null
-        ? `Based on your latest scan across ${brand.trackedPrompts.length} prompts, **${brand.name}** holds **${overallScore}% visibility** with the biggest opportunities on ${gaps.length > 0 ? `"${gaps[0].promptText}"` : "comparison queries"}. Ask about gaps, competitors, or what to write next — I have your live tracking data.`
-        : `Hi! I'm GROG, your AI visibility analyst for **${brand.name}** (${brand.domain}). Run a scan first to unlock live data insights, or ask me anything about AI visibility strategy.`;
-      setAgentMessages([{ role: "assistant", content: greeting }]);
-    }
-  }, [activeTab, agentInitialized, brand, overallScore, gaps]);
 
   async function updateArticleStatus(id: string, status: string, extra?: Record<string, unknown>) {
     await fetch(`/api/articles/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...extra }) });
@@ -2088,110 +2050,6 @@ function DashboardPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     runScan();
   }, [brand, loadingBrand, loadingResults, scanning, scanned]);
-
-  async function saveOrUpdateChat(msgs: AgentMessage[], currentChatId: string | null): Promise<string | null> {
-    if (!brand?.id) return currentChatId;
-    const userMsgs = msgs.filter((m) => m.role === "user");
-    if (!userMsgs.length) return currentChatId;
-    const title = userMsgs[0].content.slice(0, 45) + (userMsgs[0].content.length > 45 ? "…" : "");
-    try {
-      if (!currentChatId) {
-        const res = await fetch("/api/agent/chats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId: brand.id, title, messages: msgs }),
-        });
-        if (!res.ok) return null;
-        const d = await res.json();
-        return d.id as string;
-      } else {
-        await fetch(`/api/agent/chats/${currentChatId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: msgs, title }),
-        });
-        return currentChatId;
-      }
-    } catch { return currentChatId; }
-  }
-
-  function startNewChat() {
-    setActiveChatId(null);
-    setAgentMessages([]);
-    setAgentInitialized(false);
-  }
-
-  async function loadChatSession(session: ChatSession) {
-    const res = await fetch(`/api/agent/chats/${session.id}`);
-    if (!res.ok) return;
-    const d = await res.json();
-    setActiveChatId(session.id);
-    setAgentMessages(d.chat?.messages ?? []);
-    setAgentInitialized(true);
-  }
-
-  async function sendAgentMessage() {
-    if (!agentInput.trim() || agentLoading || !brand) return;
-    const userMsg: AgentMessage = { role: "user", content: agentInput.trim() };
-    const newMessages = [...agentMessages, userMsg];
-    setAgentMessages(newMessages);
-    setAgentInput("");
-    setAgentLoading(true);
-
-    // Build per-prompt breakdown for richer context
-    const promptBreakdown = brand.trackedPrompts.map((p) => {
-      const pr = results.filter((r) => r.promptId === p.id);
-      return {
-        text: p.text,
-        chatgpt: pr.find((r) => r.engine === "chatgpt")?.brandMentioned ?? null,
-        gemini: pr.find((r) => r.engine === "gemini")?.brandMentioned ?? null,
-        google: pr.find((r) => r.engine === "google")?.brandMentioned ?? null,
-      };
-    });
-
-    try {
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.slice(-20),
-          scanContext: {
-            brandName: brand.name,
-            domain: brand.domain,
-            niche: brand.niche,
-            overallScore,
-            scores,
-            gaps,
-            totalPrompts: brand.trackedPrompts.length,
-            competitors: brand.competitors,
-            promptBreakdown,
-          },
-        }),
-      });
-
-      if (!res.ok) throw new Error("Agent failed");
-      const d = await res.json();
-      const finalMessages: AgentMessage[] = [...newMessages, { role: "assistant", content: d.reply }];
-      setAgentMessages(finalMessages);
-
-      // Auto-save after each reply
-      if (brand?.id) {
-        const savedId = await saveOrUpdateChat(finalMessages, activeChatId);
-        if (savedId) {
-          if (!activeChatId) {
-            setActiveChatId(savedId);
-            const title = userMsg.content.slice(0, 45) + (userMsg.content.length > 45 ? "…" : "");
-            const now = new Date().toISOString();
-            setChatSessions((prev) => [{ id: savedId, title, created_at: now, updated_at: now }, ...prev].slice(0, 30));
-          }
-        }
-      }
-    } catch {
-      setAgentMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I couldn't reach the server. Try again in a moment." }]);
-    } finally {
-      setAgentLoading(false);
-    }
-  }
 
   function navTo(tab: Tab) {
     setActiveTab(tab);
@@ -2882,10 +2740,6 @@ function DashboardPage() {
 
         <nav className="flex-1 px-1 overflow-y-auto space-y-5">
           <div>
-            <NavItem label="Agent" active={activeTab === "agent"} onClick={() => navTo("agent")} />
-          </div>
-
-          <div>
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">Measure</p>
             <div className="space-y-0.5">
               <NavItem label="Overview" active={activeTab === "overview"} onClick={() => navTo("overview")} />
@@ -3081,7 +2935,7 @@ function DashboardPage() {
               </div>
             )}
             {/* "Next check in" countdown — shown once scanned, hidden during scan or non-scan tabs */}
-            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "admin" && (
               <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--ink-faint)] border border-[var(--line)] rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] animate-pulse" />
                 Next check in: <span className="font-medium text-[var(--ink-soft)]">{nextCheckIn}</span>
@@ -3090,7 +2944,7 @@ function DashboardPage() {
             {/* Scan button — hidden on tabs where it doesn't apply. Everyone gets the
                 one-time initial scan; after that, re-scanning is admin-only (cron
                 handles ongoing scans for everyone else — see scheduledScanAll). */}
-            {!scanning && !loadingResults && (!scanned || isAdmin) && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "agent" && activeTab !== "admin" && (
+            {!scanning && !loadingResults && (!scanned || isAdmin) && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "admin" && (
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
@@ -3118,26 +2972,18 @@ function DashboardPage() {
                 Publish now
               </button>
             )}
-            {activeTab === "agent" && (
-              <button
-                onClick={startNewChat}
-                className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] border border-[var(--line)] px-3 py-1.5 rounded-lg transition-colors"
-              >
-                + New chat
-              </button>
-            )}
           </div>
         </div>
 
         {/* Scrollable content */}
-        <div className={`flex-1 overflow-y-auto ${activeTab === "agent" ? "flex flex-col" : "px-4 py-5 sm:px-6 sm:py-6"}`}>
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
           {error && (
             <div className="px-6 pt-4">
               <div className="bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3 text-sm text-red-700 mb-5">{error}</div>
             </div>
           )}
 
-          {scanning && activeTab !== "agent" && (
+          {scanning && (
             <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-8 text-center mb-5">
               <div className="w-7 h-7 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-sm font-medium text-[var(--ink-soft)]">Scanning AI engines…</p>
@@ -5795,115 +5641,6 @@ function DashboardPage() {
             );
           })()}
 
-          {/* AGENT */}
-          {activeTab === "agent" && (
-            <div className="flex flex-1 min-h-0">
-              {/* Chat history sidebar — hidden on small screens; "+ New chat" stays in the top bar */}
-              <div className="w-52 border-r border-[var(--line)] bg-[var(--line-soft)] hidden md:flex flex-col shrink-0">
-                <div className="p-3 border-b border-[var(--line)]">
-                  <button onClick={startNewChat} className="w-full flex items-center gap-2 text-sm text-[var(--ink-soft)] hover:text-[var(--ink)] hover:panel rounded-lg px-3 py-2 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                    New chat
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                  {chatSessions.length > 0 && (
-                    <>
-                      <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-wider px-2 py-1.5">Recents</p>
-                      {chatSessions.map((session) => (
-                        <button
-                          key={session.id}
-                          onClick={() => loadChatSession(session)}
-                          className={`w-full text-left text-xs px-2.5 py-2 rounded-lg mb-0.5 transition-colors truncate ${
-                            activeChatId === session.id
-                              ? "panel text-[var(--ink)] font-medium"
-                              : "text-[var(--ink-soft)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
-                          }`}
-                        >
-                          {session.title}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {chatSessions.length === 0 && (
-                    <p className="text-[11px] text-[var(--ink-faint)] px-2 py-3">No previous chats yet</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Chat area */}
-              <div className="flex flex-col flex-1 min-h-0">
-              <div className="px-6 pt-5 pb-2 shrink-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[var(--rust)] text-lg">✳</span>
-                  <span className="font-semibold text-[var(--ink)]">GROG</span>
-                  <span className="text-xs text-[var(--ink-faint)]">· live tracking data</span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
-                {agentMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    {msg.role === "assistant" && (
-                      <span className="text-[var(--rust)] mr-2 mt-0.5 shrink-0">✳</span>
-                    )}
-                    <div
-                      className={`max-w-lg text-sm leading-relaxed rounded-2xl px-4 py-3 ${
-                        msg.role === "user"
-                          ? "bg-[var(--rust)] text-[var(--surface)]"
-                          : "bg-transparent text-[var(--ink)]/90"
-                      }`}
-                    >
-                      {msg.content.split("**").map((part, j) =>
-                        j % 2 === 1 ? <strong key={j}>{part}</strong> : <span key={j}>{part}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {agentLoading && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[var(--rust)]">✳</span>
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-[var(--line)] rounded-full typing-dot" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1.5 h-1.5 bg-[var(--line)] rounded-full typing-dot" style={{ animationDelay: "200ms" }} />
-                      <span className="w-1.5 h-1.5 bg-[var(--line)] rounded-full typing-dot" style={{ animationDelay: "400ms" }} />
-                    </div>
-                  </div>
-                )}
-                <div ref={agentEndRef} />
-              </div>
-
-              <div className="px-6 pb-5 shrink-0">
-                <div className="panel rounded-2xl shadow-sm">
-                  <textarea
-                    value={agentInput}
-                    onChange={(e) => setAgentInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } }}
-                    placeholder="Ask GROG about your AI visibility…"
-                    rows={1}
-                    className="w-full px-4 pt-3 pb-1 text-sm text-[var(--ink)]/90 placeholder-gray-400 resize-none outline-none rounded-t-2xl"
-                  />
-                  <div className="flex items-center justify-between px-4 pb-3">
-                    <span className="text-xs text-[var(--ink-faint)]">
-                      <span className="w-1.5 h-1.5 bg-[var(--line)] rounded-full inline-block mr-1" />
-                      GROG · reads your live data
-                    </span>
-                    <button
-                      onClick={sendAgentMessage}
-                      disabled={!agentInput.trim() || agentLoading}
-                      className="w-7 h-7 bg-[var(--rust)] disabled:opacity-30 text-[var(--surface)] rounded-lg flex items-center justify-center transition-opacity"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 19V5M5 12l7-7 7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              </div> {/* end chat area */}
-            </div>
-          )}
-
           {/* PUBLISHING */}
           {activeTab === "publishing" && (() => {
             const hasChannel = publishingChannels.length > 0;
@@ -7976,16 +7713,10 @@ Body: {
                       onClick={async () => {
                         setEngageGenerating(true);
                         try {
-                          const res = await fetch("/api/agent", {
+                          const res = await fetch("/api/engage/draft", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              messages: [{
-                                role: "user",
-                                content: `Write a short, helpful ${platformMeta.label} comment (2-3 sentences) that naturally and authentically mentions ${brand.name} in the context of this post. The post appeared when someone searched: "${engageItem.promptText}". Keep it genuine and conversational — not promotional. Just reply with the comment text, no preamble.`,
-                              }],
-                              scanContext: { brandName: brand.name, domain: brand.domain, niche: brand.niche },
-                            }),
+                            body: JSON.stringify({ brandId: brand.id, platform: platformMeta.label, promptText: engageItem.promptText }),
                           });
                           if (res.ok) {
                             const d = await res.json();
