@@ -13,6 +13,7 @@ import { SearchConsolePanel } from "./_components/SearchConsolePanel";
 import { AnalyticsSeriesChart } from "./_components/AnalyticsSeriesChart";
 import { AutopilotPanel } from "./_components/AutopilotPanel";
 import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
+import { OnboardingGuide } from "./_components/OnboardingGuide";
 import { promptLimitForPlan, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
 import type { RedditOpportunityThread, SuggestedRedditPost } from "@/lib/reddit-opportunities";
 
@@ -1188,6 +1189,7 @@ function DashboardPage() {
   const [analyticsDays, setAnalyticsDays] = useState(30);
   const [gscFlash, setGscFlash] = useState<string | null>(null);
   const [onboardingHidden, setOnboardingHidden] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
   const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
   const [llmDetailsExpanded, setLlmDetailsExpanded] = useState(true);
   const [pagesDetailsExpanded, setPagesDetailsExpanded] = useState(false);
@@ -1240,12 +1242,13 @@ function DashboardPage() {
       router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
     }
 
-    // First-ever dashboard load for this browser — walk the user across
-    // every tab once. Gated purely on localStorage so it fires for every
-    // account (new or existing) exactly once, then never again.
+    // First-ever dashboard load for this browser — open the guided welcome
+    // (what RankOnGeo does, how to set it up, what to expect) once; it can
+    // hand off to the quick tab tour. Gated purely on localStorage so it fires
+    // for every account (new or existing) exactly once, then never again.
     if (localStorage.getItem("dashboardTourSeen") !== "1") {
       localStorage.setItem("dashboardTourSeen", "1");
-      setTourStepIndex(0);
+      setShowGuide(true);
     }
 
     // A pending banner set during a prior visit's checkout poll (below) is
@@ -2175,6 +2178,48 @@ function DashboardPage() {
     sessionStorage.setItem("dashTab", tab);
   }
 
+  // The setup steps shown both in the Overview checklist and the first-run
+  // guide. Status comes from /api/analytics/status; until that has loaded
+  // every step simply reads as not done yet.
+  const onboardingItems: OnboardingItem[] = (() => {
+    const openAnalytics = (view: AnalyticsView) => { navTo("analytics"); setAnalyticsView(view); };
+    return [
+      {
+        id: "tracking",
+        title: "Connect your site",
+        body: "One step — a single script tag, or one copy-paste prompt for custom-built sites. Unlocks your traffic, the visitors coming from ChatGPT and other AI answers, and which AI crawlers read your pages.",
+        done: !!analyticsStatus?.web.connected,
+        cta: "Connect",
+        onClick: () => (isFreeTier ? openPaywall() : openAnalytics("setup")),
+      },
+      ...(analyticsStatus?.gsc?.configured === false ? [] : [{
+        id: "gsc",
+        title: "Connect Google Search Console",
+        body: "See the searches that bring people to your site, right next to your AI visibility — and let Autopilot judge which posts to improve.",
+        done: !!analyticsStatus?.gsc?.connected,
+        cta: "Connect",
+        onClick: () => openAnalytics("search"),
+      }]),
+      {
+        id: "autopilot",
+        title: "Turn on Autopilot for your blog",
+        body: "RankOnGeo writes high-quality, SEO-optimised articles for your niche and publishes them to your site automatically after setup — then rewrites the ones that don't perform.",
+        done: !!analyticsStatus?.autopilot?.enabled,
+        cta: "Set up",
+        onClick: () => (isFreeTier ? openPaywall() : navTo("publishing")),
+      },
+      {
+        id: "reddit",
+        title: "Build trust on Reddit yourself",
+        body: "You can also market on Reddit manually — real comments and posts in the threads AI engines cite build the trust and authority that get you recommended.",
+        done: engageTasks.length > 0,
+        cta: "Explore",
+        onClick: () => navTo("redditMarketing"),
+        optional: true,
+      },
+    ];
+  })();
+
   function tourNext() {
     if (tourStepIndex === null) return;
     if (tourStepIndex >= TOUR_STEPS.length - 1) {
@@ -3094,54 +3139,16 @@ function DashboardPage() {
           {/* OVERVIEW */}
           {activeTab === "overview" && (
             <>
-              {analyticsStatus && !onboardingHidden && (() => {
-                const openAnalytics = (view: AnalyticsView) => { navTo("analytics"); setAnalyticsView(view); };
-                const items: OnboardingItem[] = [
-                  {
-                    id: "tracking",
-                    title: "Connect your site",
-                    body: "One step — a single script tag, or one copy-paste prompt for custom-built sites. Unlocks your traffic, the visitors coming from ChatGPT and other AI answers, and which AI crawlers read your pages.",
-                    done: analyticsStatus.web.connected,
-                    cta: "Connect",
-                    onClick: () => (isFreeTier ? openPaywall() : openAnalytics("setup")),
-                  },
-                  ...(analyticsStatus.gsc?.configured === false ? [] : [{
-                    id: "gsc",
-                    title: "Connect Google Search Console",
-                    body: "See the searches that bring people to your site, right next to your AI visibility — and let Autopilot judge which posts to improve.",
-                    done: !!analyticsStatus.gsc?.connected,
-                    cta: "Connect",
-                    onClick: () => openAnalytics("search"),
-                  }]),
-                  {
-                    id: "autopilot",
-                    title: "Turn on Autopilot for your blog",
-                    body: "RankOnGeo writes high-quality, SEO-optimised articles for your niche and publishes them to your site automatically after setup — then rewrites the ones that don't perform.",
-                    done: !!analyticsStatus.autopilot?.enabled,
-                    cta: "Set up",
-                    onClick: () => (isFreeTier ? openPaywall() : navTo("publishing")),
-                  },
-                  {
-                    id: "reddit",
-                    title: "Build trust on Reddit yourself",
-                    body: "You can also market on Reddit manually — real comments and posts in the threads AI engines cite build the trust and authority that get you recommended.",
-                    done: engageTasks.length > 0,
-                    cta: "Explore",
-                    onClick: () => navTo("redditMarketing"),
-                    optional: true,
-                  },
-                ];
-                if (items.filter((i) => !i.optional).every((i) => i.done)) return null;
-                return (
-                  <OnboardingChecklist
-                    items={items}
-                    onDismiss={() => {
-                      setOnboardingHidden(true);
-                      try { localStorage.setItem(`onboardingHidden:${brand.id}`, "1"); } catch {}
-                    }}
-                  />
-                );
-              })()}
+              {analyticsStatus && !onboardingHidden && !onboardingItems.filter((i) => !i.optional).every((i) => i.done) && (
+                <OnboardingChecklist
+                  items={onboardingItems}
+                  onOpenGuide={() => setShowGuide(true)}
+                  onDismiss={() => {
+                    setOnboardingHidden(true);
+                    try { localStorage.setItem(`onboardingHidden:${brand.id}`, "1"); } catch {}
+                  }}
+                />
+              )}
               {!scanned && !scanning && loadingResults ? (
                 <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
               ) : !scanned && !scanning ? (
@@ -7983,6 +7990,13 @@ Body: {
           <span className="text-sm font-medium text-[var(--ink)]">Confirming your subscription…</span>
         </div>
       )}
+      <OnboardingGuide
+        open={showGuide}
+        onClose={() => setShowGuide(false)}
+        onStartTour={() => setTourStepIndex(0)}
+        items={onboardingItems}
+        domain={brand?.domain ?? ""}
+      />
       {tourStepIndex !== null && (() => {
         const step = TOUR_STEPS[tourStepIndex];
         return (
