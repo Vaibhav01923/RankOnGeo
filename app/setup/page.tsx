@@ -6,7 +6,9 @@ import { Instrument_Serif, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BrandData, TrackedPrompt } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { PLAN_PROMPT_LIMITS, FREE_PROMPT_LIMIT } from "@/lib/plan-limits";
-import { PRICING } from "@/lib/pricing";
+import { PRICING, formatPlanPrice } from "@/lib/pricing";
+import type { OfferAction } from "@/lib/setup-funnel";
+import OfferStep from "./OfferStep";
 import { stashPendingBrandEdits } from "@/lib/pending-brand";
 
 const instrumentSerif = Instrument_Serif({
@@ -146,6 +148,19 @@ function SetupContent() {
     trackStep("url");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // What visitors do on the offer step (watched everything, emailed for the
+  // backlink, clicked start, went back). Once per action per page load.
+  const offerActionsLoggedRef = useRef<Set<OfferAction>>(new Set());
+  function trackOfferAction(action: OfferAction) {
+    if (offerActionsLoggedRef.current.has(action)) return;
+    offerActionsLoggedRef.current.add(action);
+    fetch("/api/track/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: STEP_NUMBERS.offer, stepName: "offer", action, domain: domain.trim() }),
+    }).catch(() => {});
+  }
 
   // Optional "how did you hear about us" — pops up once analysis starts and
   // stays up (a closable corner card, not tied to the loading spinner) across
@@ -1236,57 +1251,15 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 7: Limited-time offer */}
+        {/* Step 7: What you get, the price and the limited-time backlink offer */}
         {step === "offer" && (
-          <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--rust-wash)] px-3 py-1 text-xs font-semibold text-[var(--rust-deep)] mb-3">
-              Limited-time offer · valid until October 2026
-            </div>
-            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Earn a backlink from RankOnGeo</h1>
-            <p className="text-[var(--ink-soft)] text-sm mb-7">
-              Purchase a subscription while this offer is on and we will link to {editedName || brand?.name || "your site"} from
-              RankOnGeo, a backlink that supports your search rankings.
-            </p>
-
-            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl px-5 py-4 mb-7">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-3">How to claim it</p>
-              <ol className="space-y-3">
-                <li className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                  <p className="text-sm text-[var(--ink-soft)]">Purchase a RankOnGeo subscription (the next step).</p>
-                </li>
-                <li className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                  <p className="text-sm text-[var(--ink-soft)]">
-                    After purchasing, email the founder at{" "}
-                    <a
-                      href={`mailto:vaibhavkandpal81@gmail.com?subject=${encodeURIComponent(`Backlink request: ${domain.trim() || editedName || "my site"}`)}`}
-                      className="font-semibold text-[var(--rust)] underline"
-                    >
-                      vaibhavkandpal81@gmail.com
-                    </a>{" "}
-                    to request your backlink.
-                  </p>
-                </li>
-              </ol>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStep("reddit")}
-                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => { trackStep("trial"); setStep("trial"); }}
-                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
+          <OfferStep
+            brandName={editedName || brand?.name || ""}
+            domain={domain}
+            onBack={() => setStep("reddit")}
+            onContinue={() => { trackStep("trial"); setStep("trial"); }}
+            onAction={trackOfferAction}
+          />
         )}
 
         {/* Step 8: Trial signup */}
@@ -1307,7 +1280,7 @@ function SetupContent() {
               <p className="text-sm font-medium text-[var(--ink)] mb-2">Your plan</p>
               <div className="rounded-lg border border-[var(--rust)] bg-[var(--rust-wash)] px-4 py-3.5">
                 <p className="text-sm font-semibold text-[var(--ink)]">
-                  {PRICING[0].name} — ${PRICING[0].price}/mo after trial
+                  {PRICING[0].name} — {formatPlanPrice(PRICING[0].price)}/mo after trial
                 </p>
                 <p className="text-xs text-[var(--ink-soft)] mt-1">
                   Get access to the app, your AI visibility report, and Reddit marketing for your brand.
@@ -1361,8 +1334,8 @@ function SetupContent() {
 
               <p className="text-xs text-[var(--ink-faint)] text-center">
                 You won&apos;t be charged today — card required to prevent abuse. After your 1-day free trial ends,
-                you&apos;ll be charged $
-                {PRICING.find((p) => p.planKey === trialPlan)?.price ?? PRICING[0].price}/mo unless you cancel
+                you&apos;ll be charged{" "}
+                {formatPlanPrice(PRICING.find((p) => p.planKey === trialPlan)?.price ?? PRICING[0].price)}/mo unless you cancel
                 before then. Cancel anytime from Settings.
               </p>
             </form>
