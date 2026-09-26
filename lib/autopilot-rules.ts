@@ -86,17 +86,29 @@ export function normalizeKeyword(k: string): string {
 const SOURCE_PRIORITY: Record<string, number> = { research: 0, gap: 1, search: 2, ai: 3 };
 
 // The order Autopilot works through its queue in. Shared by the picker and by the
-// schedule shown on the Keywords tab, so the two can never disagree. Topics the
-// customer has ordered by hand (a `position`) come first, in that order; the rest
-// follow by source and search volume.
-export function sortTopicsForPicking<T extends { source: string; created_at: string; volume?: number | null; position?: number | null }>(topics: T[]): T[] {
-  return [...topics].sort(
-    (a, b) =>
-      (a.position ?? Infinity) - (b.position ?? Infinity) ||
-      (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) ||
-      (b.volume ?? -1) - (a.volume ?? -1) ||
-      a.created_at.localeCompare(b.created_at),
-  );
+// schedule shown on the SEO & GEO tab, so the two can never disagree.
+//   1. Topics the customer ordered by hand (a `position`), lowest first.
+//   2. Then keywords (SEO) and AI prompts (GEO) take turns, so neither waits behind
+//      the other: best keyword, most-missed prompt, next keyword, and so on.
+//   3. Anything else (Search Console ideas, generated ideas) follows.
+type Topic = { source: string; created_at: string; volume?: number | null; position?: number | null };
+
+export function sortTopicsForPicking<T extends Topic>(topics: T[]): T[] {
+  const within = (a: T, b: T) => (b.volume ?? -1) - (a.volume ?? -1) || a.created_at.localeCompare(b.created_at);
+  const manual = topics.filter((t) => t.position != null).sort((a, b) => (a.position as number) - (b.position as number));
+  const auto = topics.filter((t) => t.position == null);
+  const of = (source: string) => auto.filter((t) => t.source === source).sort(within);
+  const keywords = of("research");
+  const prompts = of("gap");
+  const alternating: T[] = [];
+  for (let i = 0; i < Math.max(keywords.length, prompts.length); i++) {
+    if (keywords[i]) alternating.push(keywords[i]);
+    if (prompts[i]) alternating.push(prompts[i]);
+  }
+  const rest = auto
+    .filter((t) => t.source !== "research" && t.source !== "gap")
+    .sort((a, b) => (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) || within(a, b));
+  return [...manual, ...alternating, ...rest];
 }
 
 export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null; position?: number | null }>(queued: T[]): T | null {

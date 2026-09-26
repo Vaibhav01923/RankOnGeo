@@ -17,7 +17,7 @@ import { AnalyticsSeriesChart } from "./_components/AnalyticsSeriesChart";
 import { AutopilotPanel } from "./_components/AutopilotPanel";
 import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
 import { OnboardingGuide } from "./_components/OnboardingGuide";
-import { KeywordsTab } from "./_components/KeywordsTab";
+import { SeoGeoTab } from "./_components/SeoGeoTab";
 import { AutopublishBar } from "./_components/AutopublishBar";
 import { PublishedArticles } from "./_components/PublishedArticles";
 import { RankOnGeoTraffic } from "./_components/RankOnGeoTraffic";
@@ -169,7 +169,7 @@ const AVAILABLE_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexit
 type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
   | "analytics"
-  | "keywords" | "gaps" | "articles" | "tasks" | "redditMarketing"
+  | "seoGeo" | "articles" | "tasks" | "redditMarketing"
   | "publishing"
   | "alerts" | "team"
   | "agent" | "admin" | "feedback";
@@ -181,8 +181,7 @@ const TAB_LABELS: Record<Tab, string> = {
   citations: "Citations",
   competitors: "Competitors",
   analytics: "Analytics",
-  keywords: "Keywords",
-  gaps: "Research",
+  seoGeo: "SEO & GEO",
   articles: "Articles",
 
   tasks: "Tasks",
@@ -202,9 +201,8 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "results", title: "Prompts", body: "These are prompts real people might ask AI in your space. See exactly which ones you're getting mentioned on — and which you're not." },
   { tab: "citations", title: "Citations", body: "These are the sources AI uses to decide who to mention. Engage on them with your brand name to improve your odds of being cited." },
   { tab: "competitors", title: "Competitors", body: "See every competitor AI mentions alongside — or instead of — you." },
-  { tab: "keywords", title: "Keywords", body: "The searches your buyers make, how many people search each one, and whether an article is aimed at it. Switch on auto-publishing and RankOnGeo writes and publishes blogs for these keywords." },
+  { tab: "seoGeo", title: "SEO & GEO", body: "One queue for the keywords buyers search on Google and the questions AI answers without mentioning you. Switch on auto-publishing and RankOnGeo writes and publishes an article for each, and the Covered view shows what your published articles already hit." },
   { tab: "tasks", title: "Tasks", body: "Use this to boost engagement on replies that promote your brand on Reddit and other citation sources." },
-  { tab: "gaps", title: "Research", body: "These are real queries where competitors show up and you don't. Publishing an article for each one is a double win — on-page SEO for Google, and GEO (Generative Engine Optimization) that teaches AI engines to cite and recommend you. Publish one a day; it's one click away in the Publishing tab." },
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
   { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
   { tab: "analytics", title: "Analytics", body: "Your traffic, the people arriving from AI answers, the AI bots crawling your site and your Google Search performance — in one place. Google Search numbers are merged right into your traffic (with a 2-day delay). Use Connections to connect or disconnect anything." },
@@ -1218,6 +1216,8 @@ function DashboardPage() {
     // a tab remembered from before that so it doesn't land on a blank page.
     const savedTab = sessionStorage.getItem("dashTab");
     if (savedTab === "llmAnalytics" || savedTab === "webAnalytics") setActiveTab("analytics");
+    // "keywords" and "gaps" (Research) were merged into one SEO & GEO tab.
+    else if (savedTab === "keywords" || savedTab === "gaps") setActiveTab("seoGeo");
     else if (savedTab) setActiveTab(savedTab as Tab);
 
     createSupabaseBrowserClient()
@@ -2900,8 +2900,7 @@ function DashboardPage() {
           <div>
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">Create</p>
             <div className="space-y-0.5">
-              <NavItem label="Keywords" active={activeTab === "keywords"} onClick={() => navTo("keywords")} />
-              <NavItem label="Research" active={activeTab === "gaps"} onClick={() => navTo("gaps")} badge={gaps.length || undefined} />
+              <NavItem label="SEO & GEO" active={activeTab === "seoGeo"} onClick={() => navTo("seoGeo")} badge={gaps.length || undefined} />
               <NavItem label="Articles" active={activeTab === "articles"} onClick={() => navTo("articles")} badge={draftCount || undefined} />
               <NavItem label="Tasks" active={activeTab === "tasks"} onClick={() => navTo("tasks")} badge={engageTasks.filter(t => t.status === "pending" || t.status === "queued" || t.status === "running").length || undefined} />
               <NavItem label="Reddit Marketing" active={activeTab === "redditMarketing"} onClick={() => navTo("redditMarketing")} badge={redditMarketingThreads.length || undefined} />
@@ -3191,7 +3190,7 @@ function DashboardPage() {
                       )}
                       {isFreeTier && (
                         <p className="text-[13px] text-[var(--ink-faint)]">
-                          This score is just the start — Research and Tasks below turn it into content and engagement that get AI engines to actually mention you.
+                          This score is just the start — SEO & GEO and Tasks below turn it into content and engagement that get AI engines to actually mention you.
                         </p>
                       )}
                     </div>
@@ -5419,7 +5418,7 @@ function DashboardPage() {
                         <RankOnGeoTraffic
                           perf={articlePerf.data}
                           onOpenArticles={() => navTo("articles")}
-                          onOpenKeywords={() => navTo("keywords")}
+                          onOpenKeywords={() => navTo("seoGeo")}
                           onConnectTracking={() => setConnectionsView("instructions")}
                         />
                       </>
@@ -5611,109 +5610,24 @@ function DashboardPage() {
           )}
 
           {/* RESEARCH */}
-          {activeTab === "gaps" && (
-            <>
-              {brand.id && <AutopublishBar brandId={brand.id} context="research" isFreeTier={isFreeTier} onUpgrade={openPaywall} onSetup={() => navTo("publishing")} />}
-              {!scanned && loadingResults ? (
-                <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-              ) : !scanned ? (
-                <EmptyState label="No research data" sub="Run a scan to discover gaps where competitors appear but you don't" />
-              ) : gaps.length === 0 ? (
-                <div className="panel rounded-xl p-8 text-center">
-                  <p className="text-sm text-[var(--ink-soft)]">No gaps — your brand appeared in all scanned prompts.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-5">
-                    <h2 className="text-xl font-bold text-[var(--ink)] inline-flex items-center">
-                      Research
-                      <InfoTooltip text="Each of these is a real query where you're missing while a competitor shows up. Writing and publishing an article that answers it is a double win — it's on-page SEO for Google, since it builds topical relevance for that exact query, and it's GEO (Generative Engine Optimization), since it gives AI engines fresh, citable content to reference when they answer this query." />
-                    </h2>
-                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">
-                      {isFreeTier ? <BlurInline onUnlock={openPaywall}>{2 + (decoyHash(brand.id ?? brand.name) % 9)} queries where {brand.name} isn&apos;t mentioned</BlurInline> : <>{gaps.length} queries where {brand.name} isn&apos;t mentioned</>}
-                    </p>
-                    <div className="mt-3 bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3">
-                      <p className="text-xs text-[var(--ink-soft)]">
-                        <span className="font-semibold text-[var(--ink)]">Publish one gap article a day.</span> Batch-publishing several to your blog at once can read as mass-produced content to Google and hurt SEO — space them out instead.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {gaps.map((gap, i) => (
-                      <div key={i} className="panel rounded-xl p-4">
-                        <p className="text-sm font-medium text-[var(--ink)]/90 mb-2">{gap.promptText}</p>
-                        {(() => {
-                          const shownEngines = isFreeTier ? [decoyPick(gap.promptText, selectedEngines.length ? selectedEngines : (["chatgpt"] as const))] : gap.engines;
-                          const shownCompetitor = isFreeTier ? decoyPick(gap.promptText, DECOY_COMPETITORS) : gap.topCompetitor;
-                          const badges = (
-                            <div className="flex items-center gap-2 mb-3 flex-wrap">
-                              {shownEngines.map((e) => (
-                                <span key={e} className="text-xs bg-red-500/10 text-red-700 px-2 py-0.5 rounded-full">Not in {ENGINE_LABELS[e as AIEngine]}</span>
-                              ))}
-                              {shownCompetitor && (
-                                <span className="text-xs text-[var(--ink-faint)]">· <span className="font-medium text-[var(--ink-soft)]">{shownCompetitor}</span> appears instead</span>
-                              )}
-                            </div>
-                          );
-                          return isFreeTier ? <BlurInline onUnlock={openPaywall}>{badges}</BlurInline> : badges;
-                        })()}
-                        <div className="flex items-center justify-between gap-3">
-                          {isFreeTier ? (
-                            <BlurInline onUnlock={openPaywall}>
-                              <p className="text-xs text-[var(--ink-faint)] flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
-                            </BlurInline>
-                          ) : (
-                            <p className="text-xs text-[var(--ink-faint)] flex-1">Publishing an article that answers this query will teach AI engines to recommend {brand.name} for it.</p>
-                          )}
-                          {(() => {
-                            const existing = savedArticles.find((a) => a.keyword?.toLowerCase() === gap.promptText.toLowerCase());
-                            const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
-                            if (existing) {
-                              const cacheKey = `article:${existing.keyword || existing.title}:${brand.name}`;
-                              return (
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[existing.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{existing.status}</span>
-                                  <button
-                                    onClick={() => {
-                                      if (isFreeTier) { openPaywall(); return; }
-                                      if (existing.content) sessionStorage.setItem(cacheKey, JSON.stringify({ article: existing.content, title: existing.title, wordCount: existing.wordCount }));
-                                      window.open(`/article?${params}`, "_blank");
-                                    }}
-                                    className="text-xs font-medium border border-[var(--line)] text-[var(--ink)]/80 px-3 py-1.5 rounded-lg hover:bg-[var(--line-soft)] transition-colors"
-                                  >
-                                    View article ↗
-                                  </button>
-                                </div>
-                              );
-                            }
-                            return (
-                              <button
-                                onClick={() => { if (isFreeTier) { openPaywall(); return; } window.open(`/article?${params}`, "_blank"); }}
-                                className="shrink-0 text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
-                              >
-                                Write article →
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {/* KEYWORDS */}
-          {activeTab === "keywords" && brand.id && (
-            <KeywordsTab
+          {/* SEO & GEO — keywords and AI prompts in one queue */}
+          {activeTab === "seoGeo" && brand.id && (
+            <SeoGeoTab
               brandId={brand.id}
               isFreeTier={isFreeTier}
               onUpgrade={openPaywall}
               onSetupPublishing={() => navTo("publishing")}
-              onWriteArticle={(keyword) => { setNewArticleTopic(keyword); setShowNewArticleModal(true); }}
+              gaps={gaps}
+              results={results}
+              articles={savedArticles}
+              perf={articlePerf.data}
+              onWriteKeyword={(keyword) => { setNewArticleTopic(keyword); setShowNewArticleModal(true); }}
+              onWritePrompt={(gap) => {
+                // Same hand-off the Research tab used: the article studio opens in a new tab, told which engines miss you and who they name instead.
+                const params = new URLSearchParams({ gapPrompt: gap.promptText, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", engines: encodeURIComponent(JSON.stringify(gap.engines)), ...(gap.topCompetitor ? { competitor: gap.topCompetitor } : {}) });
+                window.open(`/article?${params}`, "_blank");
+              }}
               onOpenArticle={(id) => { const a = savedArticles.find((x) => x.id === id); if (a) setSelectedArticle(a); navTo("articles"); }}
-              lockedView={<BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={6} /></BlurBlock>}
             />
           )}
 
@@ -5736,7 +5650,7 @@ function DashboardPage() {
                     <h2 className="text-xl font-bold text-[var(--ink)]">Articles</h2>
                     <p className="text-sm text-[var(--ink-faint)] mt-0.5">{publishedCount} published{draftCount > 0 ? ` · ${draftCount} in draft` : ""}</p>
                   </div>
-                  <button onClick={() => navTo("keywords")} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:bg-[var(--line-soft)] transition-colors">See keywords</button>
+                  <button onClick={() => navTo("seoGeo")} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:bg-[var(--line-soft)] transition-colors">SEO &amp; GEO</button>
                 </div>
 
                 <div className="rounded-xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] px-4 py-3 mb-5">
@@ -5769,7 +5683,7 @@ function DashboardPage() {
                   <div className="bg-[var(--surface)] border border-dashed border-[var(--line)] rounded-xl p-12 text-center">
                     <p className="text-sm font-medium text-[var(--ink-soft)] mb-1">No articles yet</p>
                     <p className="text-xs text-[var(--ink-faint)] mb-4">Turn on auto-publishing and RankOnGeo writes them for you, or write one yourself from a keyword.</p>
-                    <button onClick={() => navTo("keywords")} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Go to Keywords →</button>
+                    <button onClick={() => navTo("seoGeo")} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Go to SEO &amp; GEO →</button>
                   </div>
                 ) : drafts.length > 0 && (
                   <div>

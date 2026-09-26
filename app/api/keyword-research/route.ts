@@ -6,7 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { buildKeywordList, normalizeKeyword } from "@/lib/keyword-list";
 import { scheduleTopics, sortTopicsForPicking } from "@/lib/autopilot-rules";
 import { findKeywordOpportunities, CACHE_DAYS, type KeywordBrand } from "@/lib/keyword-opportunities";
-import { syncResearchTopics } from "@/lib/keyword-research";
+import { syncGapTopics, syncResearchTopics } from "@/lib/keyword-research";
 
 export const maxDuration = 60;
 
@@ -26,6 +26,21 @@ export async function GET(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const admin = serverClient();
+
+  // While auto-publishing is on, make sure the queue holds everything this tab
+  // lists (keywords and AI prompts), so the schedule shown is the real one. Both
+  // syncs only add what is missing.
+  const { data: liveSettings } = await admin.from("autopilot_settings").select("enabled").eq("brand_id", brandId).maybeSingle();
+  if (liveSettings?.enabled) {
+    try {
+      const { data: saved } = await admin.from("keyword_opportunity_scans").select("keywords").eq("brand_id", brandId).maybeSingle();
+      if (saved?.keywords?.length) await syncResearchTopics(admin, brandId, saved.keywords);
+      await syncGapTopics(admin, brandId);
+    } catch (e) {
+      console.error("[keyword-research] queue sync failed", e instanceof Error ? e.message : e);
+    }
+  }
+
   const [{ data: scan }, { data: topics }, { data: articles }, { data: settings }, { data: lastPost }] = await Promise.all([
     admin.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brandId).maybeSingle(),
     admin.from("autopilot_topics").select("keyword, volume, source, status, position, created_at").eq("brand_id", brandId),

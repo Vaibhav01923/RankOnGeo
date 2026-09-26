@@ -4,7 +4,7 @@ import { requiresPaywall } from "@/lib/plan-limits";
 import { qualityProblems, rewriteArticle, writeArticle, type WrittenArticle } from "@/lib/article-writer";
 import { canUpdateInPlace, publishToChannel, type PublishChannel } from "@/lib/publish-article";
 import { isDueForReview, isNewPostDue, judgePerformance, normalizeKeyword, pickNextTopic, type Performance, type ReviewableArticle } from "@/lib/autopilot-rules";
-import { syncResearchTopics } from "@/lib/keyword-research";
+import { gapContext, syncGapTopics, syncResearchTopics } from "@/lib/keyword-research";
 import { findKeywordOpportunities } from "@/lib/keyword-opportunities";
 import type { KeywordOpportunity } from "@/lib/keyword-rules";
 import { decryptToken, fetchPageStats, fetchTopQueries, getAccessToken, gscConfigured, strikingDistance, type PageStats } from "@/lib/gsc";
@@ -89,6 +89,8 @@ async function ensureResearchTopics(db: Db, brand: BrandRow, allowFetch: boolean
     }
   }
   if (list?.length) await syncResearchTopics(db, brand.id, list);
+  // AI-visibility gaps join the queue next to the keywords.
+  await syncGapTopics(db, brand.id);
 }
 
 async function refillTopics(db: Db, brand: BrandRow): Promise<number> {
@@ -101,8 +103,8 @@ async function refillTopics(db: Db, brand: BrandRow): Promise<number> {
     db.from("articles").select("keyword").eq("brand_id", brand.id),
   ]);
   const seen = new Set<string>([...(existingTopics ?? []), ...(existingArticles ?? [])].map((r: { keyword: string | null }) => normalizeKeyword(r.keyword ?? "")).filter(Boolean));
-  const fresh: { keyword: string; source: "gap" | "search" | "ai" }[] = [];
-  const add = (list: string[], source: "gap" | "search" | "ai", cap: number) => {
+  const fresh: { keyword: string; source: "search" | "ai" }[] = [];
+  const add = (list: string[], source: "search" | "ai", cap: number) => {
     let n = 0;
     for (const raw of list) {
       const keyword = normalizeKeyword(raw);
@@ -112,12 +114,6 @@ async function refillTopics(db: Db, brand: BrandRow): Promise<number> {
       n++;
     }
   };
-
-  const { data: latestRun } = await db.from("scan_runs").select("id").eq("brand_id", brand.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (latestRun) {
-    const { data: gaps } = await db.from("scan_results").select("prompt_text, brand_mentioned").eq("scan_run_id", latestRun.id).eq("brand_mentioned", false);
-    add((gaps ?? []).map((g: { prompt_text: string }) => g.prompt_text), "gap", 8);
-  }
 
   const gsc = await gscAccess(db, brand.id);
   if (gsc) {
@@ -162,7 +158,10 @@ async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: 
 
   let written: WrittenArticle;
   try {
-    written = await writeWithGate({ topic: topic.keyword, brandName: brand.name, niche: brand.niche ?? "", brandDescription: brand.description });
+    // A prompt-based article is written to win that AI answer: it knows which
+    // engines are missing the brand and which competitor they name instead.
+    const gap = topic.source === "gap" ? await gapContext(db, brand.id, topic.keyword) : null;
+    written = await writeWithGate({ topic: topic.keyword, brandName: brand.name, niche: brand.niche ?? "", brandDescription: brand.description, missingEngines: gap?.missingEngines, topCompetitor: gap?.topCompetitor });
   } catch (e) {
     // A topic that can't be written to standard twice isn't retried forever.
     await db.from("autopilot_topics").update({ status: "skipped" }).eq("id", topic.id);
