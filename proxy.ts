@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server
 import { createServerClient } from "@supabase/ssr";
 
 // Our own site's Web/LLM Analytics site key (brands.site_key for the
-// RankOnGeo brand, rankongeo.com) — see app/docs/llm-analytics.
-const SITE_KEY = "6469ac374959";
+// RankOnGeo brand, rankongeo.com) — see app/docs/llm-analytics. Must match the
+// data-site in app/_components/SelfAnalytics.tsx: an unknown key is silently
+// ignored by /api/track/bot, so crawler hits would be dropped without any error.
+const SITE_KEY = "7476cc1891a6";
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   let supabaseResponse = NextResponse.next({ request });
@@ -80,6 +82,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
           userAgent,
           referrer: request.headers.get("referer") ?? "",
         }),
+        signal: AbortSignal.timeout(2000),
       }).catch(() => {})
     );
   }
