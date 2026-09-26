@@ -40,14 +40,22 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    admin.from("gsc_connections").select("site_url").eq("brand_id", brandId).maybeSingle(),
+    admin.from("gsc_connections").select("site_url, google_email").eq("brand_id", brandId).maybeSingle(),
     admin.from("autopilot_settings").select("enabled").eq("brand_id", brandId).maybeSingle(),
   ]);
 
   return NextResponse.json({
     web: { connected: !!web.data, lastSeenAt: web.data?.created_at ?? null },
     bot: { connected: !!bot.data, lastSeenAt: bot.data?.created_at ?? null },
-    gsc: { configured: gscConfigured(), connected: !!gsc.data?.site_url },
+    // connected = a property is chosen and data can flow; linked = Google account
+    // authorised but no property picked yet.
+    gsc: {
+      configured: gscConfigured(),
+      connected: !!gsc.data?.site_url,
+      linked: !!gsc.data,
+      siteUrl: gsc.data?.site_url ?? null,
+      email: gsc.data?.google_email ?? null,
+    },
     autopilot: { enabled: !!autopilot.data?.enabled },
   });
 }

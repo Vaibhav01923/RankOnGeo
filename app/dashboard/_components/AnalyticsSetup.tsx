@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   INTEGRATION_PLATFORMS,
   buildIntegrationPrompt,
@@ -15,11 +15,11 @@ import {
 export type AnalyticsStatus = {
   web: { connected: boolean; lastSeenAt: string | null };
   bot: { connected: boolean; lastSeenAt: string | null };
-  gsc?: { configured: boolean; connected: boolean };
+  gsc?: { configured: boolean; connected: boolean; linked?: boolean; siteUrl?: string | null; email?: string | null };
   autopilot?: { enabled: boolean };
 };
 
-function timeAgo(iso: string | null): string {
+export function timeAgo(iso: string | null): string {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -47,51 +47,21 @@ function CopyButton({ text, label = "Copy", className = "" }: { text: string; la
   );
 }
 
-function StatusRow({ title, connected, detail, optional }: { title: string; connected: boolean; detail: string; optional?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border border-[var(--line)] rounded-lg px-3 py-2.5 bg-[var(--surface)]">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 ${
-            connected ? "bg-[var(--olive)]" : optional ? "bg-[var(--ink-faint)]/50" : "bg-[var(--rust)] animate-pulse"
-          }`}
-        />
-        <p className="text-sm font-medium text-[var(--ink)] truncate">{title}</p>
-      </div>
-      <p className={`text-xs shrink-0 ${connected ? "text-[var(--olive)] font-medium" : "text-[var(--ink-faint)]"}`}>{detail}</p>
-    </div>
-  );
-}
-
 export function AnalyticsSetup({
   siteKey,
   domain,
-  status,
   onTest,
   testing,
   testError,
-  onRefreshStatus,
 }: {
   siteKey: string;
   domain: string;
-  status: AnalyticsStatus | null;
   onTest: (type: "web" | "bot") => void;
   testing: boolean;
   testError: string;
-  onRefreshStatus: () => void;
 }) {
   const [platformId, setPlatformId] = useState<IntegrationPlatformId | null>(null);
   const [snippetTab, setSnippetTab] = useState<"next" | "express" | "cloudflare">("next");
-
-  // Keep checking while this screen is open so the "waiting" state flips to
-  // "connected" on its own the moment the first real visit lands. The ref
-  // keeps the latest callback without restarting the timer on every render.
-  const refreshRef = useRef(onRefreshStatus);
-  refreshRef.current = onRefreshStatus;
-  useEffect(() => {
-    const t = setInterval(() => refreshRef.current(), 6000);
-    return () => clearInterval(t);
-  }, []);
 
   useEffect(() => {
     try {
@@ -116,27 +86,6 @@ export function AnalyticsSetup({
 
   return (
     <div className="space-y-5">
-      {/* Connection status */}
-      <div className="panel rounded-xl p-5">
-        <p className="text-sm font-semibold text-[var(--ink)] mb-1">Connect your site</p>
-        <p className="text-xs text-[var(--ink-faint)] mb-4">
-          One step gets you traffic analytics. Custom-built sites also get AI-crawler tracking from the same single prompt. This page checks automatically — it turns green as soon as the first real visit arrives.
-        </p>
-        <div className="space-y-2">
-          <StatusRow
-            title="Web analytics"
-            connected={!!status?.web.connected}
-            detail={status?.web.connected ? `Connected · last visit ${timeAgo(status.web.lastSeenAt)}` : "Waiting for your first visit…"}
-          />
-          <StatusRow
-            title="AI-crawler tracking"
-            connected={!!status?.bot.connected}
-            optional
-            detail={status?.bot.connected ? `Connected · last crawl ${timeAgo(status.bot.lastSeenAt)}` : "Not connected (optional)"}
-          />
-        </div>
-      </div>
-
       {/* Platform picker */}
       <div className="panel rounded-xl p-5">
         <p className="text-sm font-semibold text-[var(--ink)] mb-1">Where is your site built?</p>
