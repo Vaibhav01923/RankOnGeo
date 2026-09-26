@@ -241,3 +241,13 @@ select option {
     scroll-behavior: auto !important;
   }
 }
+
+/* Gold sheen that sweeps across the wizard's limited-time offer card. */
+@keyframes offerShine {
+  0%   { transform: translateX(-120%) skewX(-18deg); }
+  60%, 100% { transform: translateX(320%) skewX(-18deg); }
+}
+.offer-shine { animation: offerShine 3.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .offer-shine { animation: none; display: none; }
+}

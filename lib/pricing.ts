@@ -25,3 +25,14 @@ export const PRICING = [
     ],
   },
 ];
+
+// "$40" for whole-dollar prices, "$29.99" otherwise, so a plan priced at 29.99
+// doesn't render as "$29.99" in one place and "$30" in another.
+export function formatPlanPrice(price: number): string {
+  return Number.isInteger(price) ? `$${price}` : `$${price.toFixed(2)}`;
+}
+
+// What the plan works out to per day over a 30-day month, e.g. "$1.33".
+export function pricePerDay(price: number): string {
+  return `$${(price / 30).toFixed(2)}`;
+}

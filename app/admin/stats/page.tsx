@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PRICING } from "@/lib/pricing";
+import { OFFER_ACTIONS, OFFER_ACTION_LABELS, SETUP_STEPS, SETUP_STEP_LABELS } from "@/lib/setup-funnel";
 
 const PLAN_NAME: Record<string, string> = Object.fromEntries(PRICING.map((p) => [p.planKey, p.name]));
 
@@ -29,10 +30,12 @@ type Stats = {
   series: DaySeries[];
   rates: { checkoutToStartedPct: number; startedToConvertedPct: number; domainToConvertedPct: number };
   stepFunnel: { allTime: number[]; last30d: number[] };
+  offerActions: { allTime: number[]; last30d: number[] };
   domains: DomainRow[];
 };
 
-const WIZARD_STEP_LABELS = ["Website", "Brand info", "Keywords", "Blogs", "GEO prompts", "Reddit", "Offer", "Trial"];
+const WIZARD_STEP_LABELS = SETUP_STEPS.map((s) => SETUP_STEP_LABELS[s]);
+const OFFER_STEP_INDEX = SETUP_STEPS.indexOf("offer");
 
 function KpiTile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -245,6 +248,30 @@ export default function AdminStatsPage() {
             </div>
             <p className="mt-4 text-xs text-[var(--ink-faint)]">
               How many visitors reach each step of the /setup wizard — step 1 (enter a domain) through step 8 (trial signup).
+            </p>
+          </div>
+
+          {/* Offer step (step 7) engagement */}
+          <div className="mb-8 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+            <div className="mb-4 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Offer step — what visitors did</p>
+              <p className="text-xs text-[var(--ink-faint)]">{(stats.stepFunnel.allTime[OFFER_STEP_INDEX] ?? 0).toLocaleString()} reached it</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {OFFER_ACTIONS.map((action, i) => {
+                const count = stats.offerActions?.allTime[i] ?? 0;
+                const reached = stats.stepFunnel.allTime[OFFER_STEP_INDEX] ?? 0;
+                return (
+                  <div key={action} className="rounded-xl border border-[var(--line)] bg-[var(--cream)] px-4 py-3 text-center">
+                    <p className="font-signal-serif text-xl text-[var(--ink)]">{count.toLocaleString()}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-[var(--ink-faint)]">{OFFER_ACTION_LABELS[action]}</p>
+                    {reached > 0 && <p className="text-[10px] text-[var(--ink-faint)] mt-0.5">{Math.round((count / reached) * 100)}% of visitors</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-4 text-xs text-[var(--ink-faint)]">
+              &quot;Clicked start trial&quot; is the step 7 → 8 conversion; the trial step&apos;s own reach is in the funnel above.
             </p>
           </div>
 

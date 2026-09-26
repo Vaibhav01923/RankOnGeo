@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
 import { isUnpaidPlan } from "@/lib/plan-limits";
+import { OFFER_ACTIONS, SETUP_STEPS } from "@/lib/setup-funnel";
 
 type EventType = "domain_submitted" | "trial_checkout_started" | "trial_started" | "trial_converted" | "acquisition_source";
 const EVENT_TYPES: EventType[] = ["domain_submitted", "trial_checkout_started", "trial_started", "trial_converted", "acquisition_source"];
@@ -19,6 +20,20 @@ export async function GET(req: NextRequest) {
   const db = serverClient();
   const since30d = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
 
+  // Exact row counts for each value of a metadata key, in the order given.
+  async function countByMetadata(eventType: string, key: string, values: readonly string[], since: string | undefined): Promise<number[]> {
+    const counts = await Promise.all(
+      values.map(async (v) => {
+        let q = db.from("funnel_events").select("id", { count: "exact", head: true }).eq("event_type", eventType).eq(`metadata->>${key}`, v);
+        if (since) q = q.gte("created_at", since);
+        const { count, error } = await q;
+        if (error) console.error("[admin/stats] funnel count failed", eventType, v, error.message);
+        return count ?? 0;
+      })
+    );
+    return counts;
+  }
+
   const [
     allTimeCounts,
     last30dCounts,
@@ -29,8 +44,10 @@ export async function GET(req: NextRequest) {
     brandRows,
     userPlanRows,
     sourceByDomainRows,
-    stepRowsAllTime,
-    stepRows30d,
+    stepCountsAllTime,
+    stepCounts30d,
+    offerCountsAllTime,
+    offerCounts30d,
     { data: authUsers },
   ] = await Promise.all([
     Promise.all(
@@ -60,9 +77,14 @@ export async function GET(req: NextRequest) {
       .not("domain", "is", null)
       .order("created_at", { ascending: false }),
     // /setup wizard step-reach funnel (see app/api/track/step) — one row per
-    // visitor per step, deduped client-side per page load.
-    db.from("funnel_events").select("metadata").eq("event_type", "setup_step_reached"),
-    db.from("funnel_events").select("metadata").eq("event_type", "setup_step_reached").gte("created_at", since30d),
+    // visitor per step, deduped client-side per page load. Counted per step in
+    // the database rather than fetched and tallied here: a plain select stops at
+    // 1000 rows, which this funnel (8 rows per visitor) passes quickly.
+    countByMetadata("setup_step_reached", "stepName", SETUP_STEPS, undefined),
+    countByMetadata("setup_step_reached", "stepName", SETUP_STEPS, since30d),
+    // What visitors did on the offer step (step 7).
+    countByMetadata("setup_offer_action", "action", OFFER_ACTIONS, undefined),
+    countByMetadata("setup_offer_action", "action", OFFER_ACTIONS, since30d),
     db.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
@@ -100,23 +122,11 @@ export async function GET(req: NextRequest) {
 
   const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
 
-  // Step-reach counts in wizard order. Counted by step NAME, not number: the
-  // wizard grew from 5 to 8 steps, so an old row's number no longer means the
-  // same step, but "prompts", "reddit" and "trial" still do.
-  const STEP_ORDER = ["url", "brand", "keywords", "blogs", "prompts", "reddit", "offer", "trial"];
-  function countBySteps(rows: { metadata: unknown }[]): number[] {
-    const counts = STEP_ORDER.map(() => 0);
-    for (const row of rows) {
-      const name = (row.metadata as { stepName?: string } | null)?.stepName;
-      const i = name ? STEP_ORDER.indexOf(name) : -1;
-      if (i >= 0) counts[i]++;
-    }
-    return counts;
-  }
-  const stepFunnel = {
-    allTime: countBySteps(stepRowsAllTime.data ?? []),
-    last30d: countBySteps(stepRows30d.data ?? []),
-  };
+  // Counted by step NAME, not number: the wizard grew from 5 to 8 steps, so an
+  // old row's number no longer means the same step, but "prompts", "reddit" and
+  // "trial" still do.
+  const stepFunnel = { allTime: stepCountsAllTime, last30d: stepCounts30d };
+  const offerActions = { allTime: offerCountsAllTime, last30d: offerCounts30d };
 
   const emailByUserId = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email ?? null]));
   // Every signup gets a user_plans row defaulting to plan:"starter" even before
@@ -160,6 +170,7 @@ export async function GET(req: NextRequest) {
       domainToConvertedPct: rate(allTime.trial_converted, allTime.domain_submitted),
     },
     stepFunnel,
+    offerActions,
     domains,
   });
 }
