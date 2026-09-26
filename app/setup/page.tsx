@@ -28,15 +28,32 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
-type Step = "url" | "brand" | "prompts" | "reddit" | "trial";
-const STEP_NUMBERS: Record<Step, number> = { url: 1, brand: 2, prompts: 3, reddit: 4, trial: 5 };
+type Step = "url" | "brand" | "keywords" | "blogs" | "prompts" | "reddit" | "offer" | "trial";
+const STEP_NUMBERS: Record<Step, number> = { url: 1, brand: 2, keywords: 3, blogs: 4, prompts: 5, reddit: 6, offer: 7, trial: 8 };
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "url", label: "Your website" },
   { key: "brand", label: "Brand info" },
-  { key: "prompts", label: "Tracked prompts" },
-  { key: "reddit", label: "Reddit opportunities" },
+  { key: "keywords", label: "Keywords" },
+  { key: "blogs", label: "Blog autopilot" },
+  { key: "prompts", label: "GEO & AI answers" },
+  { key: "reddit", label: "Reddit" },
+  { key: "offer", label: "Limited offer" },
   { key: "trial", label: "Start free trial" },
+];
+
+type KeywordIdea = { keyword: string; volume: number | null };
+
+function formatVolume(n: number | null): string {
+  if (n === null) return "low volume";
+  return `~${n.toLocaleString()} / mo`;
+}
+
+const BLOG_FLOW: { title: string; body: string }[] = [
+  { title: "Picks a keyword buyers search", body: "From the list you just saw, plus the questions where AI answers without mentioning you." },
+  { title: "Writes a full, optimised article", body: "Structured for Google and for AI answers, in your niche's language, grounded in what your product really does." },
+  { title: "Publishes it to your website", body: "Automatically, on the schedule you choose. Prefer to approve each post first? Switch to drafts." },
+  { title: "Checks the results and rewrites", body: "Posts that are not getting seen or clicked are rewritten to win the searches they should." },
 ];
 
 type RedditOpportunityThread = {
@@ -217,7 +234,40 @@ function SetupContent() {
   const [saving, setSaving] = useState(false);
   const addPromptRef = useRef<HTMLDivElement>(null);
 
-  // Step 4: Reddit opportunities (live threads + suggested posts)
+  // Step 3: high-intent keywords with approximate monthly search volume
+  const [kwLoading, setKwLoading] = useState(false);
+  const [kwError, setKwError] = useState("");
+  const [kwList, setKwList] = useState<KeywordIdea[]>([]);
+  const [kwVolumeAvailable, setKwVolumeAvailable] = useState(false);
+  const [kwFetchedForBrandId, setKwFetchedForBrandId] = useState<string | null>(null);
+
+  async function fetchKeywords(brandId: string) {
+    setKwLoading(true);
+    setKwError("");
+    try {
+      const res = await fetch("/api/setup/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Something went wrong");
+      setKwList(data.keywords ?? []);
+      setKwVolumeAvailable(!!data.volumeAvailable);
+      setKwFetchedForBrandId(brandId);
+    } catch (err) {
+      setKwError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setKwLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (step === "keywords" && brand?.id && kwFetchedForBrandId !== brand.id) fetchKeywords(brand.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, brand?.id]);
+
+  // Step 6: Reddit opportunities (live threads + suggested posts)
   const [redditLoading, setRedditLoading] = useState(false);
   const [redditError, setRedditError] = useState("");
   const [redditThreads, setRedditThreads] = useState<RedditOpportunityThread[]>([]);
@@ -347,6 +397,16 @@ function SetupContent() {
   function handleBrandNext() {
     if (!brand) return;
     setBrand({ ...brand, name: editedName, niche: editedNiche, competitors: editedCompetitors, targetAudience: editedAudience });
+    trackStep("keywords");
+    setStep("keywords");
+  }
+
+  function handleContinueFromKeywords() {
+    trackStep("blogs");
+    setStep("blogs");
+  }
+
+  function handleContinueFromBlogs() {
     trackStep("prompts");
     setStep("prompts");
   }
@@ -429,12 +489,12 @@ function SetupContent() {
       return;
     }
 
-    // No account yet — move on to the trial signup step instead of an
-    // inline gate. The anonymous brand row stays put (RLS blocks writing to
-    // it directly); its edits get stashed right before the trial checkout
-    // redirect in handleClaimTrial.
-    trackStep("trial");
-    setStep("trial");
+    // No account yet — show the limited-time offer, then the trial signup
+    // step, instead of an inline gate. The anonymous brand row stays put (RLS
+    // blocks writing to it directly); its edits get stashed right before the
+    // trial checkout redirect in handleClaimTrial.
+    trackStep("offer");
+    setStep("offer");
   }
 
   async function handleClaimTrial(e: React.FormEvent) {
@@ -690,10 +750,150 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 3: Tracked prompts */}
+        {/* Step 3: High-intent keywords */}
+        {step === "keywords" && (
+          <div>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">The keywords your buyers are searching</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-6">
+              RankOnGeo finds the keywords that high-intent buyers in your niche search for. Then it helps your website rank
+              for them and grow your organic reach.
+            </p>
+
+            {kwLoading && (
+              <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl px-5 py-10 text-center mb-6">
+                <span className="inline-block w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin mb-3" />
+                <p className="text-sm text-[var(--ink-soft)]">Finding what buyers in your niche search for…</p>
+              </div>
+            )}
+
+            {!kwLoading && kwError && (
+              <p className="text-sm text-[var(--rust-deep)] bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-lg px-4 py-3 mb-6">
+                {kwError} You can keep going, and your keywords will be waiting in your dashboard.
+              </p>
+            )}
+
+            {!kwLoading && !kwError && kwList.length > 0 && (
+              <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden mb-4">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--line)] text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">
+                  <span>High-intent keyword</span>
+                  <span>{kwVolumeAvailable ? "Approx. monthly searches" : "Search volume"}</span>
+                </div>
+                {(() => {
+                  const max = Math.max(...kwList.map((k) => k.volume ?? 0), 1);
+                  return kwList.map((k) => (
+                    <div key={k.keyword} className="px-4 py-3 border-b border-[var(--line)] last:border-b-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-[var(--ink)]">{k.keyword}</span>
+                        <span className={`text-xs font-signal-mono shrink-0 ${k.volume === null ? "text-[var(--ink-faint)]" : "font-semibold text-[var(--olive)]"}`}>
+                          {kwVolumeAvailable ? formatVolume(k.volume) : "—"}
+                        </span>
+                      </div>
+                      {k.volume !== null && (
+                        <div className="h-1 bg-[var(--line-soft)] rounded-full mt-2 overflow-hidden">
+                          <div className="h-full bg-[var(--olive)] rounded-full" style={{ width: `${Math.max(4, Math.round((k.volume / max) * 100))}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+
+            {!kwLoading && kwList.length > 0 && (
+              <p className="text-xs text-[var(--ink-faint)] mb-6">
+                {kwVolumeAvailable
+                  ? "Monthly Google searches in the US, from Google Ads data. Keywords marked low volume are too specific for Google to publish a number, though they often convert well."
+                  : "Search volumes are unavailable right now."}
+                {!kwVolumeAvailable && brand?.id && (
+                  <>
+                    {" "}
+                    <button type="button" onClick={() => fetchKeywords(brand.id!)} className="underline font-medium text-[var(--rust)]">Try again</button>
+                  </>
+                )}
+              </p>
+            )}
+
+            <div className="bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-xl px-5 py-4 mb-7">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What RankOnGeo does with these</p>
+              <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
+                RankOnGeo will help your website rank on these keywords and increase your organic reach: it writes optimised
+                content for each one, publishes it, and keeps tracking how you move.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("brand")}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleContinueFromKeywords}
+                disabled={kwLoading}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Blog autopilot */}
+        {step === "blogs" && (
+          <div>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Blogs written and published for you</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-7">
+              RankOnGeo will publish high-quality, SEO-optimised blogs for you automatically, built to earn reach, help you
+              rank higher, and bring in high-intent buyers.
+            </p>
+
+            <div className="space-y-4 mb-7">
+              {BLOG_FLOW.map((f, i) => (
+                <div key={f.title} className="flex gap-3.5">
+                  <span className="w-7 h-7 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink)]">{f.title}</p>
+                    <p className="text-xs text-[var(--ink-soft)] leading-relaxed mt-0.5">{f.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-3 mb-7">
+              <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
+                Rankings take time. New posts need to be found and indexed, so results build up over weeks and months rather than overnight.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("keywords")}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleContinueFromBlogs}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: GEO & LLMs — tracked prompts */}
         {step === "prompts" && (
           <div>
-            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Review search queries</h1>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">RankOnGeo will also help you rank on GEO and LLMs</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-6">
+              GEO is getting recommended inside the answers ChatGPT, Claude, Gemini, Perplexity and Google AI give, which is
+              increasingly where buyers start. Alongside search rankings, we track and improve how AI talks about your brand.
+            </p>
+            <h2 className="text-lg font-semibold text-[var(--ink)] mb-2">Review search queries</h2>
             <p className="text-[var(--ink-soft)] text-sm mb-2">
               These are questions people ask AI about businesses like yours. We&apos;ll track your brand&apos;s visibility for each —
               go through the list below and deselect anything that doesn&apos;t fit before you continue. If you&apos;re not showing up
@@ -796,7 +996,7 @@ function SetupContent() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep("brand")}
+                onClick={() => setStep("blogs")}
                 disabled={saving}
                 className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
               >
@@ -813,10 +1013,10 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 4: Reddit opportunities */}
+        {/* Step 6: Reddit marketing */}
         {step === "reddit" && brand && (
           <div>
-            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Where you can get mentioned right now</h1>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">We&apos;ll also help market your SaaS on Reddit</h1>
             <p className="text-[var(--ink-soft)] text-sm mb-8">
               We searched Reddit for live threads where people in your space are comparing options, asking for
               alternatives, or looking for recommendations — a well-placed comment in one of these gets seen.
@@ -1035,7 +1235,60 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 5: Trial signup */}
+        {/* Step 7: Limited-time offer */}
+        {step === "offer" && (
+          <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--rust-wash)] px-3 py-1 text-xs font-semibold text-[var(--rust-deep)] mb-3">
+              Limited-time offer · valid until October 2026
+            </div>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Earn a backlink from RankOnGeo</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-7">
+              Purchase a subscription while this offer is on and we will link to {editedName || brand?.name || "your site"} from
+              RankOnGeo, a backlink that supports your search rankings.
+            </p>
+
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl px-5 py-4 mb-7">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-3">How to claim it</p>
+              <ol className="space-y-3">
+                <li className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                  <p className="text-sm text-[var(--ink-soft)]">Purchase a RankOnGeo subscription (the next step).</p>
+                </li>
+                <li className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[var(--rust-wash)] text-[var(--rust-deep)] text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                  <p className="text-sm text-[var(--ink-soft)]">
+                    After purchasing, email the founder at{" "}
+                    <a
+                      href={`mailto:vaibhavkandpal81@gmail.com?subject=${encodeURIComponent(`Backlink request: ${domain.trim() || editedName || "my site"}`)}`}
+                      className="font-semibold text-[var(--rust)] underline"
+                    >
+                      vaibhavkandpal81@gmail.com
+                    </a>{" "}
+                    to request your backlink.
+                  </p>
+                </li>
+              </ol>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("reddit")}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => { trackStep("trial"); setStep("trial"); }}
+                className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 8: Trial signup */}
         {step === "trial" && (
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--olive-wash)] px-3 py-1 text-xs font-medium text-[var(--olive)] mb-3">
@@ -1090,7 +1343,7 @@ function SetupContent() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep("reddit")}
+                  onClick={() => setStep("offer")}
                   disabled={trialSubmitting}
                   className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
                 >
