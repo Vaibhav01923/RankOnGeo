@@ -3,7 +3,8 @@ import { clientFromRequest, serverClient } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
 import { requiresPaywall } from "@/lib/plan-limits";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { buildKeywordList } from "@/lib/keyword-list";
+import { buildKeywordList, normalizeKeyword } from "@/lib/keyword-list";
+import { scheduleTopics, sortTopicsForPicking } from "@/lib/autopilot-rules";
 import { findKeywordOpportunities, CACHE_DAYS, type KeywordBrand } from "@/lib/keyword-opportunities";
 import { syncResearchTopics } from "@/lib/keyword-research";
 
@@ -25,13 +26,33 @@ export async function GET(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const admin = serverClient();
-  const [{ data: scan }, { data: topics }, { data: articles }] = await Promise.all([
+  const [{ data: scan }, { data: topics }, { data: articles }, { data: settings }, { data: lastPost }] = await Promise.all([
     admin.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brandId).maybeSingle(),
-    admin.from("autopilot_topics").select("keyword, volume, source, status").eq("brand_id", brandId),
+    admin.from("autopilot_topics").select("keyword, volume, source, status, created_at").eq("brand_id", brandId),
     admin.from("articles").select("id, title, keyword, status, published_url").eq("brand_id", brandId),
+    admin.from("autopilot_settings").select("enabled, posts_per_week, publish_mode").eq("brand_id", brandId).maybeSingle(),
+    admin.from("articles").select("created_at").eq("brand_id", brandId).eq("source", "autopilot").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
-  const rows = buildKeywordList({ research: (scan?.keywords ?? []) as { keyword: string; volume: number | null }[], topics: topics ?? [], articles: articles ?? [] });
+  const built = buildKeywordList({ research: (scan?.keywords ?? []) as { keyword: string; volume: number | null }[], topics: topics ?? [], articles: articles ?? [] });
+
+  // While auto-publishing is on, every queued keyword gets the time its article
+  // is expected to go out, in the order Autopilot will actually write them.
+  // Off means nothing is scheduled, so "queued" isn't shown as if it were.
+  const enabled = !!settings?.enabled;
+  const postsPerWeek = settings?.posts_per_week ?? 2;
+  const queue = sortTopicsForPicking((topics ?? []).filter((t) => t.status === "queued"));
+  const times = enabled ? scheduleTopics({ count: queue.length, lastPostAt: lastPost?.created_at ?? null, postsPerWeek }) : [];
+  const scheduleByKeyword = new Map(queue.map((t, i) => [normalizeKeyword(t.keyword), { scheduledAt: times[i] ? new Date(times[i]).toISOString() : null, queueIndex: i }]));
+
+  const withSchedule = built.map((r) => {
+    const sch = enabled && r.status === "queued" ? scheduleByKeyword.get(r.keyword) : undefined;
+    return { ...r, scheduledAt: sch?.scheduledAt ?? null, queueIndex: sch?.queueIndex ?? null };
+  });
+  // Upcoming articles first, in the order they will be written; everything else by volume as before.
+  const rows = enabled
+    ? [...withSchedule.filter((r) => r.scheduledAt), ...withSchedule.filter((r) => !r.scheduledAt)].sort((a, b) => (a.queueIndex ?? Infinity) - (b.queueIndex ?? Infinity) || (b.volume ?? -1) - (a.volume ?? -1))
+    : withSchedule;
   const researchedAt = scan?.created_at ?? null;
   return NextResponse.json({
     keywords: rows,
@@ -40,10 +61,17 @@ export async function GET(req: NextRequest) {
     researchedAt,
     // Refreshing pays for a fresh volume lookup, so it isn't offered until the saved list is a week old.
     canRefresh: !researchedAt || Date.now() - new Date(researchedAt).getTime() > CACHE_DAYS * 24 * 60 * 60 * 1000,
+    autopilot: {
+      enabled,
+      postsPerWeek,
+      publishMode: settings?.publish_mode ?? "publish",
+      nextPostAt: times[0] ? new Date(times[0]).toISOString() : null,
+    },
     summary: {
       total: rows.length,
       published: rows.filter((r) => r.status === "published").length,
-      inProgress: rows.filter((r) => r.status === "draft" || r.status === "queued").length,
+      // "Up next" only counts while auto-publishing is actually on.
+      inProgress: rows.filter((r) => r.status === "draft" || (enabled && r.status === "queued")).length,
     },
   });
 }
