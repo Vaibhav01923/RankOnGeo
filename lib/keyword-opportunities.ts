@@ -158,14 +158,18 @@ ${brandContext(brand)}`, 1200);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-export async function findKeywordOpportunities(brand: KeywordBrand, db: Db): Promise<KeywordResult> {
+// `allowLookup` is a spending gate, asked only right before a paid DataForSEO
+// lookup (cache hits and the no-volume fallback never ask). When it says no,
+// the step still works, just without volumes.
+export async function findKeywordOpportunities(brand: KeywordBrand, db: Db, opts: { allowLookup?: () => Promise<boolean> } = {}): Promise<KeywordResult> {
   const { data: cached } = await db.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brand.id).maybeSingle();
   if (cached && Date.now() - new Date(cached.created_at).getTime() < CACHE_DAYS * 24 * 60 * 60 * 1000) {
     return { keywords: cached.keywords as KeywordOpportunity[], volumeAvailable: !!cached.volume_available };
   }
 
-  const seeds = await seedsFromAi(brand);
-  const related = await relatedKeywords(seeds);
+  const lookupsEnabled = process.env.DATAFORSEO_ENABLED === "true";
+  const allowed = lookupsEnabled && (opts.allowLookup ? await opts.allowLookup() : true);
+  const related = allowed ? await relatedKeywords(await seedsFromAi(brand)) : null;
   const candidates = related ? topCandidates(related) : [];
   const picked = candidates.length ? await pickRelevant(brand, candidates) : [];
   // No usable Google data (lookup off, failed, or nothing relevant): still show
