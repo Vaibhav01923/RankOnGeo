@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { PricingCards, PRICING } from "@/app/_components/PricingCards";
 import { ThemeToggle } from "@/app/_components/ThemeToggle";
 import { BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
+import { isLiveStatus } from "@/lib/subscription-guard";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
@@ -218,7 +219,16 @@ function SettingsContent() {
         {(sub?.isFree || showPlans) && (
           <div>
             <h2 className="font-signal-serif text-xl text-[var(--ink)] mb-4">{sub?.isFree ? "Choose a plan" : "Change plan"}</h2>
-            <PricingCards compact hideTrialCta />
+            {sub?.isFree || (sub?.status && !isLiveStatus(sub.status)) ? (
+              <PricingCards compact hideTrialCta />
+            ) : (
+              // Checkout refuses a second subscription (it would bill twice), so an
+              // active subscriber gets the way to switch instead of buttons that error.
+              <p className="text-sm text-[var(--ink-soft)] bg-[var(--surface)] border border-[var(--line)] rounded-xl px-5 py-4">
+                You&apos;re subscribed. To switch between monthly and yearly billing, cancel your current plan in Manage billing. It stays active until the
+                period ends. Then subscribe to the other one.
+              </p>
+            )}
           </div>
         )}
       </main>

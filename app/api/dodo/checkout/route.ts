@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import { clientFromRequest, serverClient } from "@/lib/supabase";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { ALREADY_SUBSCRIBED_MESSAGE, hasLiveSubscription } from "@/lib/subscription-guard";
 
 const getDodo = () =>
   new DodoPayments({
@@ -28,6 +29,13 @@ export async function POST(req: NextRequest) {
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  // Someone who is already subscribed must not start a second subscription (it
+  // would bill them twice), whichever plan or billing period they picked.
+  const { data: currentPlan } = await serverClient().from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  if (await hasLiveSubscription(getDodo(), currentPlan?.dodo_subscription_id)) {
+    return NextResponse.json({ error: ALREADY_SUBSCRIBED_MESSAGE, reason: "already_subscribed" }, { status: 409 });
+  }
 
   // /early's 50% code is for the monthly plan, so it never combines with yearly billing.
   const annual = billing === "annual" && !early;
