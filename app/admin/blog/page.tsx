@@ -347,6 +347,7 @@ export default function AdminBlogPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/admin/stats" className={btnGhost}>Funnel stats →</Link>
+          <Link href="/admin/costs" className={btnGhost}>API costs →</Link>
           <Link href="/blog" className={btnGhost}>View public blog →</Link>
           <button onClick={() => openEditor()} className={btnPrimary}>New post</button>
         </div>

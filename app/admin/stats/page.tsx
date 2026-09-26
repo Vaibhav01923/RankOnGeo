@@ -123,12 +123,20 @@ export default function AdminStatsPage() {
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rust)]">Admin</p>
           <h1 className="font-signal-serif text-3xl font-[350] tracking-tight text-[var(--ink)]">Funnel stats</h1>
         </div>
-        <Link
-          href="/admin/blog"
-          className="rounded-full border border-[var(--line)] px-5 py-2 text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)]"
-        >
-          Blog studio →
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/admin/costs"
+            className="rounded-full border border-[var(--line)] px-5 py-2 text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)]"
+          >
+            API costs →
+          </Link>
+          <Link
+            href="/admin/blog"
+            className="rounded-full border border-[var(--line)] px-5 py-2 text-sm font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--ink-faint)] hover:text-[var(--ink)]"
+          >
+            Blog studio →
+          </Link>
+        </div>
       </header>
 
       {error && (

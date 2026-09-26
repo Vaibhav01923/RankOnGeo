@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import { recordSpend } from "@/lib/dataforseo-spend";
+import { normalizeKeywords, resolveSelection, topCandidates, type KeywordOpportunity, type RelatedKeyword } from "@/lib/keyword-rules";
+
+export { normalizeKeywords, resolveSelection, topCandidates };
+export type { KeywordOpportunity, RelatedKeyword };
 
 // "What are high-intent buyers in this niche actually searching for, and how
 // much?" — the keyword step of the setup wizard. A language model proposes seed
@@ -17,67 +22,11 @@ export type KeywordBrand = {
   target_audience: string[] | null;
 };
 
-export type KeywordOpportunity = { keyword: string; volume: number | null };
 export type KeywordResult = { keywords: KeywordOpportunity[]; volumeAvailable: boolean };
 
 export const CACHE_DAYS = 7;
 const MAX_CANDIDATES = 40;
 const SHOW = 10;
-
-// Model output arrives as loose lines: bullets, numbering, quotes, repeats.
-// Google Ads (behind the volume lookup) rejects a keyword with any symbol other
-// than letters, digits, spaces and hyphens, and DataForSEO then fails the whole
-// batch over that one keyword — so anything else is stripped or dropped here.
-export function normalizeKeywords(raw: string[], cap = MAX_CANDIDATES): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const line of raw) {
-    const k = line
-      .replace(/^[\s\-*•\d.)]+/, "")
-      .replace(/['’‘`“”"]/g, "")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .replace(/[?!.,:;]+$/, "")
-      .trim();
-    if (k.length < 3 || k.length > 80 || k.split(" ").length > 10 || !/^[\p{L}\p{N} -]+$/u.test(k) || seen.has(k)) continue;
-    seen.add(k);
-    out.push(k);
-    if (out.length >= cap) break;
-  }
-  return out;
-}
-
-export type RelatedKeyword = { keyword: string; volume: number };
-
-// Related keywords straight from Google Ads, ranked by volume. Zero-volume rows
-// and duplicates go; the cap keeps the relevance prompt short.
-export function topCandidates(rows: { keyword: string; search_volume: number | null }[], limit = 80): RelatedKeyword[] {
-  const seen = new Set<string>();
-  const out: RelatedKeyword[] = [];
-  for (const r of rows) {
-    const keyword = r.keyword.toLowerCase().replace(/\s+/g, " ").trim();
-    if (!keyword || (r.search_volume ?? 0) <= 0 || seen.has(keyword)) continue;
-    seen.add(keyword);
-    out.push({ keyword, volume: r.search_volume as number });
-  }
-  return out.sort((a, b) => b.volume - a.volume).slice(0, limit);
-}
-
-// The model answers with lines of text; only lines that exactly match a
-// candidate are accepted, so it can neither invent a keyword nor a volume.
-export function resolveSelection(lines: string[], candidates: RelatedKeyword[], limit = 12): KeywordOpportunity[] {
-  const byKeyword = new Map(candidates.map((c) => [c.keyword, c]));
-  const seen = new Set<string>();
-  const out: KeywordOpportunity[] = [];
-  for (const line of lines) {
-    const k = line.replace(/^[\s\-*•\d.)]+/, "").replace(/['’‘`“”"]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-    const hit = byKeyword.get(k) ?? byKeyword.get(line.replace(/^[\s\-*•\d.)]+/, "").toLowerCase().replace(/\s+/g, " ").trim());
-    if (!hit || seen.has(hit.keyword)) continue;
-    seen.add(hit.keyword);
-    out.push({ keyword: hit.keyword, volume: hit.volume });
-  }
-  return out.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, limit);
-}
 
 const BUYER_INTENT = /\b(alternatives?|vs|versus|best|top|software|tools?|platforms?|pricing|price|compare|comparison|reviews?)\b/;
 
@@ -107,7 +56,7 @@ ${brandContext(brand)}`, 400);
 
 // DataForSEO's related-keywords lookup: real Google Ads keyword ideas with
 // monthly US volume for a set of seeds. One task per call, so callers cache it.
-export async function relatedKeywords(seeds: string[]): Promise<{ keyword: string; search_volume: number | null }[] | null> {
+export async function relatedKeywords(seeds: string[], brandId?: string): Promise<{ keyword: string; search_volume: number | null }[] | null> {
   if (process.env.DATAFORSEO_ENABLED !== "true" || seeds.length === 0) return null;
   const auth = "Basic " + Buffer.from(`${process.env.DATAFORSEO_LOGIN ?? ""}:${process.env.DATAFORSEO_PASSWORD ?? ""}`).toString("base64");
   try {
@@ -120,8 +69,9 @@ export async function relatedKeywords(seeds: string[]): Promise<{ keyword: strin
       console.error("[keywords] DataForSEO HTTP", res.status);
       return null;
     }
-    const json = (await res.json()) as { tasks?: { status_code?: number; status_message?: string; result?: { keyword: string; search_volume: number | null }[] | null }[] };
+    const json = (await res.json()) as { cost?: number; tasks?: { cost?: number; status_code?: number; status_message?: string; result?: { keyword: string; search_volume: number | null }[] | null }[] };
     const task = json.tasks?.[0];
+    await recordSpend("keywords", task?.cost ?? json.cost, brandId);
     if (task?.status_code !== 20000 || !task.result) {
       console.error("[keywords] DataForSEO task failed", task?.status_code, task?.status_message);
       return null;
@@ -169,7 +119,7 @@ export async function findKeywordOpportunities(brand: KeywordBrand, db: Db, opts
 
   const lookupsEnabled = process.env.DATAFORSEO_ENABLED === "true";
   const allowed = lookupsEnabled && (opts.allowLookup ? await opts.allowLookup() : true);
-  const related = allowed ? await relatedKeywords(await seedsFromAi(brand)) : null;
+  const related = allowed ? await relatedKeywords(await seedsFromAi(brand), brand.id) : null;
   const candidates = related ? topCandidates(related) : [];
   const picked = candidates.length ? await pickRelevant(brand, candidates) : [];
   // No usable Google data (lookup off, failed, or nothing relevant): still show

@@ -2920,6 +2920,7 @@ function DashboardPage() {
               <div className="space-y-0.5">
                 <NavItem label="Admin" active={activeTab === "admin"} onClick={() => navTo("admin")} badge={adminTasks.filter(t => t.status === "pending").length || undefined} />
                 <NavItem label="Blog Studio" active={false} onClick={() => { window.location.href = "/admin/blog"; }} />
+                <NavItem label="API Costs" active={false} onClick={() => { window.location.href = "/admin/costs"; }} />
               </div>
             </div>
           )}
