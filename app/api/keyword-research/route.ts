@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const admin = serverClient();
   const [{ data: scan }, { data: topics }, { data: articles }, { data: settings }, { data: lastPost }] = await Promise.all([
     admin.from("keyword_opportunity_scans").select("keywords, volume_available, created_at").eq("brand_id", brandId).maybeSingle(),
-    admin.from("autopilot_topics").select("keyword, volume, source, status, created_at").eq("brand_id", brandId),
+    admin.from("autopilot_topics").select("keyword, volume, source, status, position, created_at").eq("brand_id", brandId),
     admin.from("articles").select("id, title, keyword, status, published_url").eq("brand_id", brandId),
     admin.from("autopilot_settings").select("enabled, posts_per_week, publish_mode").eq("brand_id", brandId).maybeSingle(),
     admin.from("articles").select("created_at").eq("brand_id", brandId).eq("source", "autopilot").order("created_at", { ascending: false }).limit(1).maybeSingle(),

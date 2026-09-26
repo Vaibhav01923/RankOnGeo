@@ -156,8 +156,8 @@ async function logPublish(db: Db, brandId: string, channelId: string | null, art
 }
 
 async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: PublishChannel | null): Promise<string> {
-  const { data: queued } = await db.from("autopilot_topics").select("id, keyword, source, volume, created_at").eq("brand_id", brand.id).eq("status", "queued");
-  const topic = pickNextTopic((queued ?? []) as { id: string; keyword: string; source: string; volume: number | null; created_at: string }[]);
+  const { data: queued } = await db.from("autopilot_topics").select("id, keyword, source, volume, position, created_at").eq("brand_id", brand.id).eq("status", "queued");
+  const topic = pickNextTopic((queued ?? []) as { id: string; keyword: string; source: string; volume: number | null; position: number | null; created_at: string }[]);
   if (!topic) return "No topics available to write about yet.";
 
   let written: WrittenArticle;

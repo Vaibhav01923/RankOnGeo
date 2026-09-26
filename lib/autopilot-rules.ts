@@ -86,17 +86,20 @@ export function normalizeKeyword(k: string): string {
 const SOURCE_PRIORITY: Record<string, number> = { research: 0, gap: 1, search: 2, ai: 3 };
 
 // The order Autopilot works through its queue in. Shared by the picker and by the
-// schedule shown on the Keywords tab, so the two can never disagree.
-export function sortTopicsForPicking<T extends { source: string; created_at: string; volume?: number | null }>(topics: T[]): T[] {
+// schedule shown on the Keywords tab, so the two can never disagree. Topics the
+// customer has ordered by hand (a `position`) come first, in that order; the rest
+// follow by source and search volume.
+export function sortTopicsForPicking<T extends { source: string; created_at: string; volume?: number | null; position?: number | null }>(topics: T[]): T[] {
   return [...topics].sort(
     (a, b) =>
+      (a.position ?? Infinity) - (b.position ?? Infinity) ||
       (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) ||
       (b.volume ?? -1) - (a.volume ?? -1) ||
       a.created_at.localeCompare(b.created_at),
   );
 }
 
-export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null }>(queued: T[]): T | null {
+export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null; position?: number | null }>(queued: T[]): T | null {
   return sortTopicsForPicking(queued)[0] ?? null;
 }
 
