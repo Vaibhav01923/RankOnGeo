@@ -18,6 +18,7 @@ import { AutopilotPanel } from "./_components/AutopilotPanel";
 import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
 import { OnboardingGuide } from "./_components/OnboardingGuide";
 import { SeoGeoTab } from "./_components/SeoGeoTab";
+import { ReportsTab } from "./_components/ReportsTab";
 import { AutopublishBar } from "./_components/AutopublishBar";
 import { PublishedArticles } from "./_components/PublishedArticles";
 import { RankOnGeoTraffic } from "./_components/RankOnGeoTraffic";
@@ -171,7 +172,7 @@ type Tab =
   | "analytics"
   | "seoGeo" | "articles" | "tasks" | "redditMarketing"
   | "publishing"
-  | "alerts" | "team"
+  | "reports" | "team"
   | "admin" | "feedback";
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -188,7 +189,7 @@ const TAB_LABELS: Record<Tab, string> = {
   redditMarketing: "Reddit Marketing",
   publishing: "Publishing",
 
-  alerts: "Alerts",
+  reports: "Reports",
   team: "Team",
   admin: "Admin",
   feedback: "Feedback",
@@ -205,7 +206,7 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
   { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
   { tab: "analytics", title: "Analytics", body: "Your traffic, the people arriving from AI answers, the AI bots crawling your site and your Google Search performance — in one place. Google Search numbers are merged right into your traffic (with a 2-day delay). Use Connections to connect or disconnect anything." },
-  { tab: "alerts", title: "Alerts", body: "Get notified about changes to your AI visibility on Slack, email, or whatever channel you prefer." },
+  { tab: "reports", title: "Reports", body: "A weekly and monthly report of everything RankOnGeo did for you and what came of it. Read it here, or get it sent to your email, Slack or Discord automatically." },
   { tab: "team", title: "Team", body: "Invite your teammates to collaborate on this workspace." },
   { tab: "feedback", title: "Feedback", body: "Request a feature, report a bug, or get help any time — right here." },
 ];
@@ -309,10 +310,13 @@ type AlertDestination = {
   id: string;
   name: string;
   kind: "slack" | "webhook" | "discord" | "email";
-  url?: string;
-  email?: string;
+  url?: string | null;
+  email?: string | null;
   status: "active" | "paused";
   events_count: number;
+  scan_alerts?: boolean;
+  weekly_report?: boolean;
+  monthly_report?: boolean;
   created_at: string;
 };
 
@@ -1148,6 +1152,7 @@ function DashboardPage() {
   const [alertDestinations, setAlertDestinations] = useState<AlertDestination[]>([]);
   const [alertDeliveries, setAlertDeliveries] = useState<AlertDelivery[]>([]);
   const [showAddAlert, setShowAddAlert] = useState(false);
+  const [alertError, setAlertError] = useState("");
   const [newAlert, setNewAlert] = useState({ name: "", kind: "slack", url: "", email: "" });
   const [addingAlert, setAddingAlert] = useState(false);
 
@@ -1194,6 +1199,8 @@ function DashboardPage() {
     if (savedTab === "llmAnalytics" || savedTab === "webAnalytics") setActiveTab("analytics");
     // "keywords" and "gaps" (Research) were merged into one SEO & GEO tab.
     else if (savedTab === "keywords" || savedTab === "gaps") setActiveTab("seoGeo");
+    // "alerts" became the Reports tab.
+    else if (savedTab === "alerts") setActiveTab("reports");
     else if (savedTab) setActiveTab(savedTab as Tab);
 
     createSupabaseBrowserClient()
@@ -1710,17 +1717,32 @@ function DashboardPage() {
   async function addAlertDestination() {
     if (!brand?.id || !newAlert.name || !newAlert.kind) return;
     setAddingAlert(true);
-    const res = await fetch("/api/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: brand.id, name: newAlert.name, kind: newAlert.kind, url: newAlert.url || undefined, email: newAlert.email || undefined }) });
-    const d = await res.json();
-    if (d.destination) { setAlertDestinations((prev) => [...prev, d.destination]); setShowAddAlert(false); setNewAlert({ name: "", kind: "slack", url: "", email: "" }); }
+    setAlertError("");
+    try {
+      const res = await fetch("/api/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: brand.id, name: newAlert.name, kind: newAlert.kind, url: newAlert.url || undefined, email: newAlert.email || undefined }) });
+      const d = await res.json().catch(() => ({}));
+      if (d.destination) { setAlertDestinations((prev) => [...prev, d.destination]); setShowAddAlert(false); setNewAlert({ name: "", kind: "slack", url: "", email: "" }); }
+      else setAlertError(d.error ?? "Couldn't add this destination. Please try again.");
+    } catch {
+      setAlertError("Couldn't add this destination. Please try again.");
+    }
     setAddingAlert(false);
   }
 
-  async function toggleAlertDestination(id: string, currentStatus: string) {
-    const status = currentStatus === "active" ? "paused" : "active";
-    const res = await fetch("/api/alerts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-    const d = await res.json();
-    if (d.destination) setAlertDestinations((prev) => prev.map((dest) => dest.id === id ? d.destination : dest));
+  // Destinations and the delivery log, from the server.
+  async function refreshAlerts() {
+    if (!brand?.id) return;
+    const d = await fetch(`/api/alerts?brandId=${brand.id}`).then((r) => r.json()).catch(() => null);
+    if (d) { setAlertDestinations(d.destinations ?? []); setAlertDeliveries(d.deliveries ?? []); }
+  }
+
+  // Switches and pause/resume on a destination: shown at once, put back if the server says no.
+  async function updateAlertDestination(id: string, patch: Partial<AlertDestination>) {
+    setAlertDestinations((prev) => prev.map((dest) => (dest.id === id ? { ...dest, ...patch } : dest)));
+    const res = await fetch("/api/alerts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (d.destination) setAlertDestinations((prev) => prev.map((dest) => (dest.id === id ? d.destination : dest)));
+    else await refreshAlerts();
   }
 
   async function deleteAlertDestination(id: string) {
@@ -2772,7 +2794,7 @@ function DashboardPage() {
           <div>
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">On Page</p>
             <div className="space-y-0.5">
-              <NavItem label="Alerts" active={activeTab === "alerts"} onClick={() => navTo("alerts")} />
+              <NavItem label="Reports" active={activeTab === "reports"} onClick={() => navTo("reports")} />
               <NavItem label="Team" active={activeTab === "team"} onClick={() => navTo("team")} />
               <NavItem label="Feedback" active={activeTab === "feedback"} onClick={() => navTo("feedback")} />
             </div>
@@ -2935,7 +2957,7 @@ function DashboardPage() {
               </div>
             )}
             {/* "Next check in" countdown — shown once scanned, hidden during scan or non-scan tabs */}
-            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "admin" && (
+            {scanned && !scanning && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "reports" && activeTab !== "admin" && (
               <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--ink-faint)] border border-[var(--line)] rounded-lg px-3 py-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--olive)] animate-pulse" />
                 Next check in: <span className="font-medium text-[var(--ink-soft)]">{nextCheckIn}</span>
@@ -2944,7 +2966,7 @@ function DashboardPage() {
             {/* Scan button — hidden on tabs where it doesn't apply. Everyone gets the
                 one-time initial scan; after that, re-scanning is admin-only (cron
                 handles ongoing scans for everyone else — see scheduledScanAll). */}
-            {!scanning && !loadingResults && (!scanned || isAdmin) && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "alerts" && activeTab !== "admin" && (
+            {!scanning && !loadingResults && (!scanned || isAdmin) && activeTab !== "tasks" && activeTab !== "articles" && activeTab !== "publishing" && activeTab !== "reports" && activeTab !== "admin" && (
               <button
                 onClick={runScan}
                 disabled={selectedEngines.length === 0}
@@ -5777,85 +5799,19 @@ function DashboardPage() {
             );
           })()}
 
-          {/* ALERTS */}
-          {activeTab === "alerts" && (
-            <>
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-[var(--ink)]">Alerts</h2>
-                  <p className="text-sm text-[var(--ink-faint)] mt-0.5">Webhook, Slack, Discord and email destinations plus a live delivery log</p>
-                </div>
-                <button onClick={() => setShowAddAlert(true)} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-3 py-1.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">+ New destination</button>
-              </div>
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                <StatCard label="Destinations" value={alertDestinations.length} sub="channels wired" />
-                <StatCard label="Active" value={alertDestinations.filter(d => d.status === "active").length} sub="enabled" />
-                <StatCard label="Recent Deliveries" value={alertDeliveries.length} sub="last 20" />
-                <StatCard label="Failed" value={alertDeliveries.filter(d => d.status === "failed").length} sub="need attention" />
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="panel rounded-xl overflow-hidden">
-                  <div className="px-5 py-4 border-b border-[var(--line)]">
-                    <p className="text-sm font-semibold text-[var(--ink)]">Destinations · {alertDestinations.length}</p>
-                  </div>
-                  {alertDestinations.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <p className="text-sm text-[var(--ink-faint)] mb-3">No destinations yet</p>
-                      <button onClick={() => setShowAddAlert(true)} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add Slack or webhook →</button>
-                    </div>
-                  ) : (
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-[var(--line)]">
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Destination</th>
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Kind</th>
-                          <th className="px-5 py-3 text-right text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Status</th>
-                          <th className="px-5 py-3" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line">
-                        {alertDestinations.map((dest) => (
-                          <tr key={dest.id} className="hover:bg-[var(--line-soft)]">
-                            <td className="px-5 py-3 text-sm font-medium text-[var(--ink)]/90">{dest.name}</td>
-                            <td className="px-5 py-3">
-                              <span className="text-[10px] font-medium bg-[var(--line)] text-[var(--ink-soft)] px-2 py-0.5 rounded">{dest.kind}</span>
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <button onClick={() => toggleAlertDestination(dest.id, dest.status)} className={`text-[10px] font-medium px-2 py-0.5 rounded ${dest.status === "active" ? "bg-[var(--rust)]/10 text-[var(--rust)]" : "bg-[var(--line)] text-[var(--ink)]/80"}`}>{dest.status === "active" ? "Active" : "Paused"}</button>
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <button onClick={() => deleteAlertDestination(dest.id)} className="text-[10px] text-red-700/80 hover:text-red-700">Remove</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                <div className="panel rounded-xl p-5">
-                  <p className="text-sm font-semibold text-[var(--ink)] mb-4">Recent deliveries</p>
-                  {alertDeliveries.length === 0 ? (
-                    <p className="text-xs text-[var(--ink-faint)] py-4 text-center">No deliveries yet — alerts fire when scans detect significant changes</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {alertDeliveries.map((d) => (
-                        <div key={d.id} className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-mono text-[var(--ink-soft)]">{d.alert_destinations?.kind ?? "—"} · {d.event_type}</p>
-                            {d.error_detail && <p className="text-[10px] text-red-700 mt-0.5">{d.error_detail}</p>}
-                          </div>
-                          <span className="text-[10px] text-[var(--ink-faint)] shrink-0">{timeAgo(d.created_at)}</span>
-                          <span className={`text-[10px] font-medium shrink-0 ${d.status === "succeeded" ? "text-[var(--rust)]" : "text-red-700"}`}>{d.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
+          {/* REPORTS */}
+          {activeTab === "reports" && brand?.id && (
+            <ReportsTab
+              brandId={brand.id}
+              isFreeTier={isFreeTier}
+              onUpgrade={openPaywall}
+              destinations={alertDestinations}
+              deliveries={alertDeliveries}
+              onAddDestination={() => { setAlertError(""); setShowAddAlert(true); }}
+              onUpdateDestination={updateAlertDestination}
+              onDeleteDestination={deleteAlertDestination}
+              onDeliveriesChanged={refreshAlerts}
+            />
           )}
 
           {/* TEAM TAB */}
@@ -7206,8 +7162,8 @@ Body: {
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-base font-semibold text-[var(--ink)]">Add alert destination</h3>
-                  <p className="text-xs text-[var(--ink-faint)] mt-0.5">Get notified when your visibility changes, drops, or you gain new mentions</p>
+                  <h3 className="text-base font-semibold text-[var(--ink)]">Add a destination</h3>
+                  <p className="text-xs text-[var(--ink-faint)] mt-0.5">Get your weekly and monthly reports here, plus a ping when a scan finishes. You can choose which in the Reports tab.</p>
                 </div>
                 <button onClick={() => setShowAddAlert(false)} className="text-[var(--ink-faint)]/70 hover:text-[var(--ink-soft)] text-xl leading-none ml-4 shrink-0">×</button>
               </div>
@@ -7215,7 +7171,7 @@ Body: {
               <div className="space-y-4">
                 {/* Kind selector — clickable cards */}
                 <div>
-                  <p className="text-xs font-semibold text-[var(--ink-soft)] uppercase tracking-widest mb-2">Where to send alerts</p>
+                  <p className="text-xs font-semibold text-[var(--ink-soft)] uppercase tracking-widest mb-2">Where to send</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {([
                       { value: "discord", label: "Discord", icon: (
@@ -7311,6 +7267,7 @@ Body: {
                 )}
               </div>
 
+              {alertError && <p role="alert" className="text-xs text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2 mt-4">{alertError}</p>}
               <div className="flex gap-2 mt-5">
                 <button onClick={() => setShowAddAlert(false)} className="flex-1 text-sm border border-[var(--line)] rounded-xl py-2.5 hover:bg-[var(--line-soft)] transition-colors text-[var(--ink-soft)]">Cancel</button>
                 <button onClick={addAlertDestination} disabled={addingAlert || !newAlert.name} className="flex-1 text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-xl py-2.5 hover:bg-[var(--rust-deep)] disabled:opacity-40 transition-colors">
