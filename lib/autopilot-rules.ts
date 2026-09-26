@@ -85,11 +85,47 @@ export function normalizeKeyword(k: string): string {
 // is what the customer sees on the Keywords tab and expects posts to target.
 const SOURCE_PRIORITY: Record<string, number> = { research: 0, gap: 1, search: 2, ai: 3 };
 
-export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null }>(queued: T[]): T | null {
-  return [...queued].sort(
+// The order Autopilot works through its queue in. Shared by the picker and by the
+// schedule shown on the Keywords tab, so the two can never disagree.
+export function sortTopicsForPicking<T extends { source: string; created_at: string; volume?: number | null }>(topics: T[]): T[] {
+  return [...topics].sort(
     (a, b) =>
       (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) ||
       (b.volume ?? -1) - (a.volume ?? -1) ||
       a.created_at.localeCompare(b.created_at),
-  )[0] ?? null;
+  );
+}
+
+export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null }>(queued: T[]): T | null {
+  return sortTopicsForPicking(queued)[0] ?? null;
+}
+
+// ---- when each queued keyword will be written -------------------------------
+
+// Autopilot wakes on the 6-hour marks in UTC (00:00, 06:00, 12:00, 18:00; see
+// inngest/functions/autopilot.ts) and writes one new post per wake-up at most,
+// only once the weekly pace says another is due.
+export const AUTOPILOT_TICK_MS = 6 * 60 * 60 * 1000;
+const POST_SLACK_MS = 2 * 60 * 60 * 1000; // same slack isNewPostDue allows
+const GENERATION_MS = 2 * 60 * 1000; // a post is stamped a couple of minutes after its wake-up
+
+export function nextTickAtOrAfter(ms: number): number {
+  return Math.ceil(ms / AUTOPILOT_TICK_MS) * AUTOPILOT_TICK_MS;
+}
+
+// Estimated publish time (epoch ms) for each queued topic, in queue order. It
+// replays the cadence rule forward: each post can only go out once the interval
+// since the previous one has passed, and only on a wake-up.
+export function scheduleTopics(opts: { count: number; lastPostAt: string | null; postsPerWeek: number; now?: number }): number[] {
+  const now = opts.now ?? Date.now();
+  const interval = (7 * DAY_MS) / Math.max(1, Math.min(7, opts.postsPerWeek));
+  let last = opts.lastPostAt ? Date.parse(opts.lastPostAt) : null;
+  const times: number[] = [];
+  for (let i = 0; i < opts.count; i++) {
+    const earliest = last === null ? now : Math.max(now, last + interval - POST_SLACK_MS);
+    const t = nextTickAtOrAfter(earliest);
+    times.push(t);
+    last = t + GENERATION_MS;
+  }
+  return times;
 }

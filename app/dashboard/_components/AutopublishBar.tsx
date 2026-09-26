@@ -37,12 +37,15 @@ export function AutopublishBar({
   isFreeTier,
   onUpgrade,
   onSetup,
+  onChange,
 }: {
   brandId: string;
   context: keyof typeof COPY;
   isFreeTier: boolean;
   onUpgrade: () => void;
   onSetup: () => void;
+  // Called after the switch flips, so the list around it can refresh.
+  onChange?: () => void;
 }) {
   const [state, setState] = useState<State | null>(null);
   const [saving, setSaving] = useState(false);
@@ -84,6 +87,7 @@ export function AutopublishBar({
         else setError(d.error ?? "Couldn't change that");
       }
       await load();
+      if (res.ok) onChange?.();
     } finally {
       setSaving(false);
     }
