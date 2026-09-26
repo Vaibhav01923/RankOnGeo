@@ -252,7 +252,8 @@ function SetupContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
-      setKwList(data.keywords ?? []);
+      // The research list can hold more than the wizard needs to make its point.
+      setKwList((data.keywords ?? []).slice(0, 10));
       setKwVolumeAvailable(!!data.volumeAvailable);
       setKwFetchedForBrandId(brandId);
     } catch (err) {

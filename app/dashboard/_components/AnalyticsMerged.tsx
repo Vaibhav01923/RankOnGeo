@@ -82,7 +82,7 @@ function pathOf(url: string): string {
 // One row per page, with the site's own numbers and Google's side by side.
 // Either side can be missing: `ours` is null for accounts without site
 // analytics, `google` is null until Search Console is connected.
-export function PagesTable({ ours, google }: { ours: OwnPage[] | null; google: GscRow[] | null }) {
+export function PagesTable({ ours, google, highlightPaths }: { ours: OwnPage[] | null; google: GscRow[] | null; highlightPaths?: Set<string> }) {
   const rows = new Map<string, { path: string; own?: OwnPage; g?: GscRow }>();
   for (const p of ours ?? []) rows.set(pathOf(p.path), { path: pathOf(p.path), own: p });
   for (const g of google ?? []) {
@@ -122,8 +122,11 @@ export function PagesTable({ ours, google }: { ours: OwnPage[] | null; google: G
         </thead>
         <tbody>
           {merged.map((r) => (
-            <tr key={r.path} className="border-t border-[var(--line)]">
-              <td className="py-2 font-mono text-[var(--ink)]/80 truncate max-w-[220px]">{r.path}</td>
+            <tr key={r.path} className={`border-t border-[var(--line)] ${highlightPaths?.has(r.path) ? "bg-[var(--rust-wash)]" : ""}`}>
+              <td className="py-2 font-mono text-[var(--ink)]/80 truncate max-w-[220px]">
+                {r.path}
+                {highlightPaths?.has(r.path) && <span className="ml-2 align-middle rounded bg-[var(--rust)] px-1.5 py-0.5 font-sans text-[9px] font-semibold uppercase tracking-wide text-[var(--surface)]">RankOnGeo</span>}
+              </td>
               {showOwn && <td className="py-2 text-right font-semibold text-[var(--ink)]">{r.own ? num(r.own.pageviews) : "—"}</td>}
               {showOwn && <td className="py-2 text-right text-[var(--ink-soft)]">{r.own ? `${r.own.bounceRate}%` : "—"}</td>}
               {showGoogle && <td className="py-2 text-right font-semibold text-[var(--ink)]">{r.g ? num(r.g.clicks) : "—"}</td>}

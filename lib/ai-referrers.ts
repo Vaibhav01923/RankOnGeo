@@ -56,3 +56,17 @@ export function aiEngineForVisit(referrerHost: string, utmSource: string | null 
   if (u.includes(".")) return engineForHost(u);
   return UTM_ALIASES[u] ?? null;
 }
+
+export function referrerHost(referrer: string | null): string {
+  if (!referrer) return "Direct";
+  try {
+    let host = new URL(referrer).hostname.replace(/^www\./, "");
+    // t.co (Twitter/X's link shortener, what ad clicks actually arrive
+    // through) and the legacy twitter.com domain are the same traffic
+    // source as x.com — merge them so campaign counts aren't split three ways.
+    if (host === "t.co" || host === "twitter.com") host = "x.com";
+    return host;
+  } catch {
+    return "Direct";
+  }
+}

@@ -4,6 +4,9 @@ import { requiresPaywall } from "@/lib/plan-limits";
 import { qualityProblems, rewriteArticle, writeArticle, type WrittenArticle } from "@/lib/article-writer";
 import { canUpdateInPlace, publishToChannel, type PublishChannel } from "@/lib/publish-article";
 import { isDueForReview, isNewPostDue, judgePerformance, normalizeKeyword, pickNextTopic, type Performance, type ReviewableArticle } from "@/lib/autopilot-rules";
+import { syncResearchTopics } from "@/lib/keyword-research";
+import { findKeywordOpportunities } from "@/lib/keyword-opportunities";
+import type { KeywordOpportunity } from "@/lib/keyword-rules";
 import { decryptToken, fetchPageStats, fetchTopQueries, getAccessToken, gscConfigured, strikingDistance, type PageStats } from "@/lib/gsc";
 
 // Blog autopilot: keeps a steady stream of on-topic, SEO/GEO-optimised posts
@@ -25,7 +28,7 @@ const MIN_QUEUED_TOPICS = 3;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-type BrandRow = { id: string; user_id: string; name: string; domain: string; niche: string | null; description: string | null; competitors: string[] | null };
+type BrandRow = { id: string; user_id: string; name: string; domain: string; niche: string | null; description: string | null; competitors: string[] | null; target_audience: string[] | null };
 type Settings = {
   brand_id: string;
   enabled: boolean;
@@ -72,9 +75,26 @@ async function gscAccess(db: Db, brandId: string): Promise<{ token: string; site
 // without mentioning the brand (its visibility gaps), searches Google already
 // half-associates the site with, and finally fresh ideas for the niche — so
 // the queue works from day one and gets sharper as data arrives.
+// The brand's keyword research (what buyers search, with volume) is the first
+// thing Autopilot writes for. Use the saved list; only when there is none, and
+// the queue is running low, build it now (one paid lookup, then cached).
+async function ensureResearchTopics(db: Db, brand: BrandRow, allowFetch: boolean): Promise<void> {
+  const { data: scan } = await db.from("keyword_opportunity_scans").select("keywords").eq("brand_id", brand.id).maybeSingle();
+  let list = (scan?.keywords ?? null) as KeywordOpportunity[] | null;
+  if (!list && allowFetch) {
+    try {
+      list = (await findKeywordOpportunities(brand, db)).keywords;
+    } catch (e) {
+      console.error("[autopilot] keyword research failed", e instanceof Error ? e.message : e);
+    }
+  }
+  if (list?.length) await syncResearchTopics(db, brand.id, list);
+}
+
 async function refillTopics(db: Db, brand: BrandRow): Promise<number> {
-  const { count } = await db.from("autopilot_topics").select("id", { count: "exact", head: true }).eq("brand_id", brand.id).eq("status", "queued");
-  if ((count ?? 0) >= MIN_QUEUED_TOPICS) return 0;
+  const queuedNow = async () => (await db.from("autopilot_topics").select("id", { count: "exact", head: true }).eq("brand_id", brand.id).eq("status", "queued")).count ?? 0;
+  await ensureResearchTopics(db, brand, (await queuedNow()) < MIN_QUEUED_TOPICS);
+  if ((await queuedNow()) >= MIN_QUEUED_TOPICS) return 0;
 
   const [{ data: existingTopics }, { data: existingArticles }] = await Promise.all([
     db.from("autopilot_topics").select("keyword").eq("brand_id", brand.id),
@@ -136,8 +156,8 @@ async function logPublish(db: Db, brandId: string, channelId: string | null, art
 }
 
 async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: PublishChannel | null): Promise<string> {
-  const { data: queued } = await db.from("autopilot_topics").select("id, keyword, source, created_at").eq("brand_id", brand.id).eq("status", "queued");
-  const topic = pickNextTopic((queued ?? []) as { id: string; keyword: string; source: string; created_at: string }[]);
+  const { data: queued } = await db.from("autopilot_topics").select("id, keyword, source, volume, created_at").eq("brand_id", brand.id).eq("status", "queued");
+  const topic = pickNextTopic((queued ?? []) as { id: string; keyword: string; source: string; volume: number | null; created_at: string }[]);
   if (!topic) return "No topics available to write about yet.";
 
   let written: WrittenArticle;
@@ -261,7 +281,7 @@ export async function runAutopilot(brandId: string, opts: { force?: boolean } = 
   const { data: settings } = await db.from("autopilot_settings").select("*").eq("brand_id", brandId).maybeSingle();
   if (!settings || (!settings.enabled && !opts.force)) return { ...summary, skipped: "not enabled" };
 
-  const { data: brand } = await db.from("brands").select("id, user_id, name, domain, niche, description, competitors").eq("id", brandId).maybeSingle();
+  const { data: brand } = await db.from("brands").select("id, user_id, name, domain, niche, description, competitors, target_audience").eq("id", brandId).maybeSingle();
   if (!brand) return { ...summary, skipped: "brand not found" };
   if (await requiresPaywall(db, brand.user_id)) return { ...summary, skipped: "plan" };
 

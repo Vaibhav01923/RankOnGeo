@@ -81,8 +81,15 @@ export function normalizeKeyword(k: string): string {
   return k.toLowerCase().replace(/\s+/g, " ").trim().replace(/[?.!]+$/, "").trim();
 }
 
-const SOURCE_PRIORITY: Record<string, number> = { gap: 0, search: 1, ai: 2 };
+// Keyword research (what buyers search, biggest volume first) leads, since that
+// is what the customer sees on the Keywords tab and expects posts to target.
+const SOURCE_PRIORITY: Record<string, number> = { research: 0, gap: 1, search: 2, ai: 3 };
 
-export function pickNextTopic<T extends { source: string; created_at: string }>(queued: T[]): T | null {
-  return [...queued].sort((a, b) => (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) || a.created_at.localeCompare(b.created_at))[0] ?? null;
+export function pickNextTopic<T extends { source: string; created_at: string; volume?: number | null }>(queued: T[]): T | null {
+  return [...queued].sort(
+    (a, b) =>
+      (SOURCE_PRIORITY[a.source] ?? 9) - (SOURCE_PRIORITY[b.source] ?? 9) ||
+      (b.volume ?? -1) - (a.volume ?? -1) ||
+      a.created_at.localeCompare(b.created_at),
+  )[0] ?? null;
 }

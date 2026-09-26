@@ -17,6 +17,11 @@ import { AnalyticsSeriesChart } from "./_components/AnalyticsSeriesChart";
 import { AutopilotPanel } from "./_components/AutopilotPanel";
 import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
 import { OnboardingGuide } from "./_components/OnboardingGuide";
+import { KeywordsTab } from "./_components/KeywordsTab";
+import { AutopublishBar } from "./_components/AutopublishBar";
+import { PublishedArticles } from "./_components/PublishedArticles";
+import { RankOnGeoTraffic } from "./_components/RankOnGeoTraffic";
+import { useArticlePerformance } from "./_components/useArticlePerformance";
 import { promptLimitForPlan, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
 import type { RedditOpportunityThread, SuggestedRedditPost } from "@/lib/reddit-opportunities";
 
@@ -164,7 +169,7 @@ const AVAILABLE_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexit
 type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
   | "analytics"
-  | "gaps" | "articles" | "tasks" | "redditMarketing"
+  | "keywords" | "gaps" | "articles" | "tasks" | "redditMarketing"
   | "publishing"
   | "alerts" | "team"
   | "agent" | "admin" | "feedback";
@@ -176,6 +181,7 @@ const TAB_LABELS: Record<Tab, string> = {
   citations: "Citations",
   competitors: "Competitors",
   analytics: "Analytics",
+  keywords: "Keywords",
   gaps: "Research",
   articles: "Articles",
 
@@ -196,6 +202,7 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "results", title: "Prompts", body: "These are prompts real people might ask AI in your space. See exactly which ones you're getting mentioned on — and which you're not." },
   { tab: "citations", title: "Citations", body: "These are the sources AI uses to decide who to mention. Engage on them with your brand name to improve your odds of being cited." },
   { tab: "competitors", title: "Competitors", body: "See every competitor AI mentions alongside — or instead of — you." },
+  { tab: "keywords", title: "Keywords", body: "The searches your buyers make, how many people search each one, and whether an article is aimed at it. Switch on auto-publishing and RankOnGeo writes and publishes blogs for these keywords." },
   { tab: "tasks", title: "Tasks", body: "Use this to boost engagement on replies that promote your brand on Reddit and other citation sources." },
   { tab: "gaps", title: "Research", body: "These are real queries where competitors show up and you don't. Publishing an article for each one is a double win — on-page SEO for Google, and GEO (Generative Engine Optimization) that teaches AI engines to cite and recommend you. Publish one a day; it's one click away in the Publishing tab." },
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
@@ -273,6 +280,9 @@ type SavedArticle = {
   updatedAt: string;
   brandId: string;
   content?: string;
+  publishedUrl?: string | null;
+  publishedAt?: string | null;
+  source?: string;
 };
 
 type AgentMessage = { role: "user" | "assistant"; content: string };
@@ -580,13 +590,17 @@ function mapArticleFromDb(a: Record<string, unknown>): SavedArticle {
     id: a.id as string,
     title: a.title as string,
     keyword: (a.keyword as string) ?? "",
-    status: (a.status as SavedArticle["status"]) ?? "draft",
+    // Manual scheduling was removed; anything left over from it is just a draft.
+    status: a.status === "scheduled" ? "draft" : ((a.status as SavedArticle["status"]) ?? "draft"),
     seoScore: (a.seo_score as number) ?? 0,
     wordCount: (a.word_count as number) ?? 0,
     createdAt: a.created_at as string,
     updatedAt: (a.updated_at as string) ?? (a.created_at as string),
     brandId: a.brand_id as string,
     content: a.content as string | undefined,
+    publishedUrl: (a.published_url as string | null) ?? null,
+    publishedAt: (a.published_at as string | null) ?? null,
+    source: (a.source as string) ?? "manual",
   };
 }
 
@@ -1057,11 +1071,8 @@ function DashboardPage() {
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<SavedArticle | null>(null);
-  const [articleFilter, setArticleFilter] = useState<"all" | "draft" | "review" | "published" | "scheduled">("all");
   const [showNewArticleModal, setShowNewArticleModal] = useState(false);
   const [newArticleTopic, setNewArticleTopic] = useState("");
-  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState("");
 
   // Keywords state
   const [keywordSearch, setKeywordSearch] = useState("");
@@ -1192,6 +1203,8 @@ function DashboardPage() {
   const [analyticsDays, setAnalyticsDays] = useState(30);
   // Google Search Console data, merged into the traffic charts and tables.
   const gsc = useSearchConsole(brand?.id, analyticsDays, activeTab === "analytics");
+  // Traffic to the articles RankOnGeo published (Articles tab + Analytics highlight).
+  const articlePerf = useArticlePerformance(brand?.id, activeTab === "analytics" ? (analyticsDays === 1 ? 7 : analyticsDays) : 30, activeTab === "analytics" || activeTab === "articles");
   const [gscFlash, setGscFlash] = useState<string | null>(null);
   // Section to scroll to once the Analytics page has rendered (e.g. the checklist's "Connect Search Console").
   const analyticsScrollTarget = useRef<string | null>(null);
@@ -1519,6 +1532,15 @@ function DashboardPage() {
     loadTeam();
   }, [activeTab, teamLoaded]);
 
+  // Autopilot writes and publishes in the background, so reload the list when the Articles tab opens.
+  useEffect(() => {
+    if (activeTab !== "articles" || !brand?.id) return;
+    fetch(`/api/articles?brandId=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.articles) setSavedArticles((d.articles as Record<string, unknown>[]).map(mapArticleFromDb)); })
+      .catch(() => {});
+  }, [activeTab, brand?.id]);
+
   // Load persisted discovery-prompt suggestions when the Prompts tab opens —
   // a pure DB read after the first-ever visit, no LLM call.
   useEffect(() => {
@@ -1659,13 +1681,6 @@ function DashboardPage() {
     await fetch(`/api/articles/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...extra }) });
     setSavedArticles((prev) => prev.map((a) => a.id === id ? { ...a, status: status as SavedArticle["status"] } : a));
     setSelectedArticle((prev) => prev?.id === id ? { ...prev, status: status as SavedArticle["status"] } : prev);
-  }
-
-  async function scheduleArticle(id: string, dateStr: string) {
-    await fetch(`/api/articles/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "scheduled", scheduledAt: new Date(dateStr).toISOString() }) });
-    setSavedArticles((prev) => prev.map((a) => a.id === id ? { ...a, status: "scheduled" as SavedArticle["status"] } : a));
-    setSelectedArticle((prev) => prev?.id === id ? { ...prev, status: "scheduled" as SavedArticle["status"] } : prev);
-    setShowSchedulePicker(false);
   }
 
   async function deleteArticle(id: string) {
@@ -2744,7 +2759,6 @@ function DashboardPage() {
     return { text: p.text, hasGap: !!gap, vis, topCompetitor: gap?.topCompetitor ?? null, promptId: p.id };
   }).filter((k) => k.text.toLowerCase().includes(keywordSearch.toLowerCase()));
 
-  const filteredArticles = articleFilter === "all" ? savedArticles : savedArticles.filter((a) => a.status === articleFilter);
 
   const publishedCount = savedArticles.filter((a) => a.status === "published").length;
   const draftCount = savedArticles.filter((a) => a.status === "draft" || a.status === "writing").length;
@@ -2886,6 +2900,7 @@ function DashboardPage() {
           <div>
             <p className="text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest px-3 mb-1.5">Create</p>
             <div className="space-y-0.5">
+              <NavItem label="Keywords" active={activeTab === "keywords"} onClick={() => navTo("keywords")} />
               <NavItem label="Research" active={activeTab === "gaps"} onClick={() => navTo("gaps")} badge={gaps.length || undefined} />
               <NavItem label="Articles" active={activeTab === "articles"} onClick={() => navTo("articles")} badge={draftCount || undefined} />
               <NavItem label="Tasks" active={activeTab === "tasks"} onClick={() => navTo("tasks")} badge={engageTasks.filter(t => t.status === "pending" || t.status === "queued" || t.status === "running").length || undefined} />
@@ -5152,7 +5167,14 @@ function DashboardPage() {
 
                 {gsc.data?.siteUrl && <SearchQueriesCard rows={gsc.data.queries ?? []} />}
 
-                <PagesTable ours={webAnalyticsData?.pagesBreakdown ?? []} google={gsc.data?.siteUrl ? gsc.data.pages ?? [] : null} />
+                <PagesTable
+                  ours={webAnalyticsData?.pagesBreakdown ?? []}
+                  google={gsc.data?.siteUrl ? gsc.data.pages ?? [] : null}
+                  highlightPaths={new Set((articlePerf.data?.articles ?? []).flatMap((a) => {
+                    if (!a.url) return [];
+                    try { const p = new URL(a.url).pathname; return [p.length > 1 ? p.replace(/\/+$/, "") : p]; } catch { return []; }
+                  }))}
+                />
 
                 {!!webAnalyticsData?.countries.length && (
                   <div className="panel rounded-xl p-5 mb-5">
@@ -5394,6 +5416,12 @@ function DashboardPage() {
                           <StatCard label="AI crawler visits" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
                         </div>
                         {renderAnalyticsUsageBar()}
+                        <RankOnGeoTraffic
+                          perf={articlePerf.data}
+                          onOpenArticles={() => navTo("articles")}
+                          onOpenKeywords={() => navTo("keywords")}
+                          onConnectTracking={() => setConnectionsView("instructions")}
+                        />
                       </>
                     )}
 
@@ -5585,6 +5613,7 @@ function DashboardPage() {
           {/* RESEARCH */}
           {activeTab === "gaps" && (
             <>
+              {brand.id && <AutopublishBar brandId={brand.id} context="research" isFreeTier={isFreeTier} onUpgrade={openPaywall} onSetup={() => navTo("publishing")} />}
               {!scanned && loadingResults ? (
                 <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
               ) : !scanned ? (
@@ -5676,78 +5705,100 @@ function DashboardPage() {
           )}
 
           {/* KEYWORDS */}
+          {activeTab === "keywords" && brand.id && (
+            <KeywordsTab
+              brandId={brand.id}
+              isFreeTier={isFreeTier}
+              onUpgrade={openPaywall}
+              onSetupPublishing={() => navTo("publishing")}
+              onWriteArticle={(keyword) => { setNewArticleTopic(keyword); setShowNewArticleModal(true); }}
+              onOpenArticle={(id) => { const a = savedArticles.find((x) => x.id === id); if (a) setSelectedArticle(a); navTo("articles"); }}
+              lockedView={<BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={6} /></BlurBlock>}
+            />
+          )}
+
           {/* ARTICLES */}
-          {activeTab === "articles" && (
+          {activeTab === "articles" && (() => {
+            const drafts = savedArticles.filter((a) => a.status !== "published");
+            const perf = articlePerf.data;
+            const addUrl = async (articleId: string, url: string): Promise<string | null> => {
+              const res = await fetch(`/api/articles/${articleId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publishedUrl: url }) });
+              if (!res.ok) return (await res.json().catch(() => ({}))).error ?? "Couldn't save that link";
+              setSavedArticles((prev) => prev.map((x) => (x.id === articleId ? { ...x, publishedUrl: url } : x)));
+              articlePerf.reload();
+              return null;
+            };
+            return (
             <div className="flex flex-col lg:flex-row gap-5 lg:h-full">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-[var(--ink)]">Articles</h2>
-                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">{savedArticles.length} pieces{publishedCount > 0 ? ` · ${publishedCount} published` : ""}{draftCount > 0 ? ` · ${draftCount} in draft` : ""}</p>
+                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">{publishedCount} published{draftCount > 0 ? ` · ${draftCount} in draft` : ""}</p>
                   </div>
-                  <button onClick={() => navTo("gaps")} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:border-[var(--line)] transition-colors">From research</button>
+                  <button onClick={() => navTo("keywords")} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:bg-[var(--line-soft)] transition-colors">See keywords</button>
                 </div>
 
-                {savedArticles.length > 0 && (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                    <StatCard label="Published" value={publishedCount} sub="+0 this month" />
-                    <StatCard label="In Draft" value={draftCount} sub={draftCount === 1 ? "1 ready for review" : ""} />
-                    <StatCard label="Last Published" value={savedArticles.filter(a => a.status === "published").length > 0 ? "Recently" : "—"} />
+                <div className="rounded-xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] px-4 py-3 mb-5">
+                  <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
+                    <span className="font-semibold text-[var(--ink)]">Why these matter.</span> Articles like these are what AI assistants such as ChatGPT pick up and cite when they answer questions, so each one can bring you visitors from AI answers as well as from search. Below is what every article on your website is earning.
+                  </p>
+                </div>
+
+                {perf && perf.totals.articles > 0 && (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                    <StatCard label="Published" value={publishedCount} sub="live on your website" />
+                    <StatCard label="In draft" value={draftCount} sub={draftCount === 1 ? "1 ready for review" : "waiting to publish"} />
+                    <StatCard label="Views" value={perf.trackingConnected ? perf.totals.views.toLocaleString() : "—"} sub={`last ${perf.days} days`} />
+                    <StatCard label="From AI answers" value={perf.trackingConnected ? perf.totals.aiVisits.toLocaleString() : "—"} sub="ChatGPT, Perplexity…" />
                   </div>
                 )}
 
-                {savedArticles.length > 0 && (
-                  <div className="flex gap-1 mb-3">
-                    {(["all", "draft", "review", "scheduled", "published"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => setArticleFilter(f)}
-                        className={`text-xs px-3 py-1.5 rounded-lg transition-colors capitalize ${articleFilter === f ? "bg-[var(--rust)] text-[var(--surface)]" : "panel text-[var(--ink-soft)] hover:border-[var(--line)]"}`}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <PublishedArticles
+                  perf={perf}
+                  loading={articlePerf.loading}
+                  selectedId={selectedArticle?.id ?? null}
+                  onSelect={(id) => { const a = savedArticles.find((x) => x.id === id); if (a) setSelectedArticle(a); }}
+                  onAddUrl={addUrl}
+                  onConnectTracking={() => { navTo("analytics"); setConnectionsView("instructions"); }}
+                />
 
                 {loadingArticles ? (
-                  <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-                ) : filteredArticles.length === 0 ? (
+                  <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
+                ) : savedArticles.length === 0 ? (
                   <div className="bg-[var(--surface)] border border-dashed border-[var(--line)] rounded-xl p-12 text-center">
                     <p className="text-sm font-medium text-[var(--ink-soft)] mb-1">No articles yet</p>
-                    <p className="text-xs text-[var(--ink-faint)] mb-4">Articles you generate from research gaps appear here</p>
-                    <button
-                      onClick={() => navTo("gaps")}
-                      className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors"
-                    >
-                      Go to Research →
-                    </button>
+                    <p className="text-xs text-[var(--ink-faint)] mb-4">Turn on auto-publishing and RankOnGeo writes them for you, or write one yourself from a keyword.</p>
+                    <button onClick={() => navTo("keywords")} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Go to Keywords →</button>
                   </div>
-                ) : (
-                  <div className="panel rounded-xl overflow-hidden overflow-x-auto">
-                    <table className="w-full min-w-[520px]">
-                      <thead>
-                        <tr className="border-b border-[var(--line)]">
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Title</th>
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Status</th>
-                          <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Updated</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line">
-                        {filteredArticles.map((a) => (
-                          <tr key={a.id} className={`hover:bg-[var(--line-soft)] cursor-pointer ${selectedArticle?.id === a.id ? "bg-[var(--line-soft)]" : ""}`} onClick={() => { setSelectedArticle(a); setShowSchedulePicker(false); }}>
-                            <td className="px-5 py-3">
-                              <p className="text-sm font-medium text-[var(--ink)]/90 line-clamp-1">{a.title}</p>
-                              <p className="text-[10px] text-[var(--ink-faint)] mt-0.5 font-mono">{a.keyword}</p>
-                            </td>
-                            <td className="px-5 py-3">
-                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[a.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{a.status}</span>
-                            </td>
-                            <td className="px-5 py-3 text-xs text-[var(--ink-faint)]">{new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+                ) : drafts.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink)] mb-2">Drafts</p>
+                    <div className="panel rounded-xl overflow-hidden overflow-x-auto">
+                      <table className="w-full min-w-[520px]">
+                        <thead>
+                          <tr className="border-b border-[var(--line)]">
+                            <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Title</th>
+                            <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Status</th>
+                            <th className="px-5 py-3 text-left text-[10px] font-semibold text-[var(--ink-faint)] uppercase tracking-widest">Updated</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-line">
+                          {drafts.map((a) => (
+                            <tr key={a.id} className={`hover:bg-[var(--line-soft)] cursor-pointer ${selectedArticle?.id === a.id ? "bg-[var(--line-soft)]" : ""}`} onClick={() => setSelectedArticle(a)}>
+                              <td className="px-5 py-3">
+                                <p className="text-sm font-medium text-[var(--ink)]/90 line-clamp-1">{a.title}</p>
+                                <p className="text-[10px] text-[var(--ink-faint)] mt-0.5 font-mono">{a.keyword}</p>
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[a.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{a.status}</span>
+                              </td>
+                              <td className="px-5 py-3 text-xs text-[var(--ink-faint)]">{new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5764,6 +5815,7 @@ function DashboardPage() {
                     <div className="flex gap-1.5 flex-wrap">
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded capitalize ${STATUS_COLORS[selectedArticle.status] ?? "bg-[var(--line)] text-[var(--ink-soft)]"}`}>{selectedArticle.status}</span>
                       {selectedArticle.wordCount > 0 && <span className="text-[10px] bg-[var(--line)] text-[var(--ink-soft)] px-2 py-0.5 rounded">{selectedArticle.wordCount} words</span>}
+                      {selectedArticle.source === "autopilot" && <span className="text-[10px] bg-[var(--rust-wash)] text-[var(--rust-deep)] px-2 py-0.5 rounded">Written by RankOnGeo</span>}
                     </div>
                   </div>
 
@@ -5774,6 +5826,9 @@ function DashboardPage() {
                   )}
 
                   <div className="flex flex-col gap-2">
+                    {selectedArticle.publishedUrl && (
+                      <a href={selectedArticle.publishedUrl} target="_blank" rel="noopener noreferrer" className="w-full text-center text-xs font-medium border border-[var(--line)] text-[var(--ink)]/80 rounded-lg py-2.5 hover:bg-[var(--line-soft)] transition-colors">View live ↗</a>
+                    )}
                     <button
                       onClick={() => {
                         const params = new URLSearchParams({ gapPrompt: selectedArticle.keyword || selectedArticle.title, brand: brand.name, niche: brand.niche, brandId: brand.id ?? "", articleId: selectedArticle.id });
@@ -5795,38 +5850,7 @@ function DashboardPage() {
                       </button>
                     )}
 
-                    {selectedArticle.status !== "scheduled" && selectedArticle.status !== "published" && (
-                      showSchedulePicker ? (
-                        <div className="flex flex-col gap-2">
-                          <input
-                            type="datetime-local"
-                            value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
-                            min={new Date().toISOString().slice(0, 16)}
-                            className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rust)]/40"
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => setShowSchedulePicker(false)} className="flex-1 text-xs border border-[var(--line)] rounded-lg py-2 hover:bg-[var(--line-soft)] transition-colors text-[var(--ink-soft)]">Cancel</button>
-                            <button
-                              disabled={!scheduleDate}
-                              onClick={() => scheduleArticle(selectedArticle.id, scheduleDate)}
-                              className="flex-1 text-xs font-medium bg-[var(--rust)] text-[var(--surface)] rounded-lg py-2 hover:bg-[var(--rust-deep)] disabled:opacity-40 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setScheduleDate(""); setShowSchedulePicker(true); }}
-                          className="w-full text-xs font-medium border border-[var(--line)] text-[var(--ink)]/80 rounded-lg py-2.5 hover:bg-[var(--line-soft)] transition-colors"
-                        >
-                          📅 Schedule
-                        </button>
-                      )
-                    )}
-
-                    {selectedArticle.status !== "published" && !showSchedulePicker && (
+                    {selectedArticle.status !== "published" && (
                       <button
                         onClick={() => updateArticleStatus(selectedArticle.id, "published")}
                         className="w-full text-xs font-medium border border-[var(--rust)]/30 text-[var(--rust)] rounded-lg py-2.5 hover:bg-[var(--rust)]/10 transition-colors"
@@ -5835,7 +5859,7 @@ function DashboardPage() {
                       </button>
                     )}
 
-                    {selectedArticle.status !== "draft" && selectedArticle.status !== "published" && !showSchedulePicker && (
+                    {selectedArticle.status !== "draft" && selectedArticle.status !== "published" && (
                       <button
                         onClick={() => updateArticleStatus(selectedArticle.id, "draft")}
                         className="w-full text-xs border border-[var(--line)] rounded-lg py-2 hover:bg-[var(--line-soft)] transition-colors text-[var(--ink-faint)]"
@@ -5844,19 +5868,18 @@ function DashboardPage() {
                       </button>
                     )}
 
-                    {!showSchedulePicker && (
-                      <button
-                        onClick={() => { if (confirm("Delete this article?")) deleteArticle(selectedArticle.id); }}
-                        className="w-full text-xs text-red-700/80 hover:text-red-700 py-1 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    )}
+                    <button
+                      onClick={() => { if (confirm("Delete this article?")) deleteArticle(selectedArticle.id); }}
+                      className="w-full text-xs text-red-700/80 hover:text-red-700 py-1 transition-colors"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* AGENT */}
           {activeTab === "agent" && (
@@ -5969,88 +5992,71 @@ function DashboardPage() {
 
           {/* PUBLISHING */}
           {activeTab === "publishing" && (() => {
-            const activeChannels = publishingChannels.filter((c) => c.status === "active");
-            const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const publishedThisMonth = publishingLog.filter((e) => e.status === "published" && new Date(e.created_at) >= monthStart).length;
-            const upcoming = savedArticles.filter((a) => a.status === "scheduled" && a.createdAt).slice(0, 5);
+            const hasChannel = publishingChannels.length > 0;
+            const autopilotOn = !!analyticsStatus?.autopilot?.enabled;
+            const lastPublished = publishingLog.find((e) => e.status === "published");
+            const stepBadge = (done: boolean, n: number) => (
+              <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${done ? "bg-[var(--olive)] text-[var(--surface)]" : "bg-[var(--rust-wash)] text-[var(--rust-deep)]"}`}>{done ? "✓" : n}</span>
+            );
             return (
-              <>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-xl font-bold text-[var(--ink)]">Publishing</h2>
-                    <p className="text-sm text-[var(--ink-faint)] mt-0.5">Distribution status across {activeChannels.length} channel{activeChannels.length !== 1 ? "s" : ""}</p>
+              <div className="max-w-4xl mx-auto w-full">
+                <div className="mb-7">
+                  <h2 className="text-xl font-bold text-[var(--ink)]">Publishing</h2>
+                  <p className="text-sm text-[var(--ink-faint)] mt-0.5">Connect your website once. RankOnGeo publishes your articles there, on its own or when you click Publish.</p>
+                </div>
+
+                {/* 1. Where articles go */}
+                <section className="mb-8">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    {stepBadge(hasChannel, 1)}
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">Connect your website</h3>
+                    {hasChannel && <button onClick={openAddChannel} className="ml-auto text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:bg-[var(--line-soft)] transition-colors">+ Add another</button>}
                   </div>
-                </div>
-
-                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
-                  <span className="text-base shrink-0">⚡</span>
-                  <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
-                    <span className="font-semibold text-[var(--ink)]">3 ways to auto-publish:</span> WordPress (one click), Discord (post to a channel), or your own website / CMS via webhook (~5 min setup, an AI coding assistant can build it for you).{" "}
-                    <a href="/docs/autopublish" target="_blank" rel="noopener noreferrer" className="text-[var(--rust)] font-medium hover:underline">Full setup guide →</a>
-                  </p>
-                </div>
-
-                {brand.id && (
-                  <AutopilotPanel
-                    brandId={brand.id}
-                    isFreeTier={isFreeTier}
-                    onUpgrade={openPaywall}
-                    onAddChannel={openAddChannel}
-                    channelCount={publishingChannels.length}
-                  />
-                )}
-
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                  <StatCard label="Published / Mo" value={publishedThisMonth} sub={`${publishingLog.filter(e => e.status === "published").length} total`} />
-                  <StatCard label="Syndications" value={publishingLog.filter(e => e.status === "published").length} sub="across all channels" />
-                  <StatCard label="Channels Active" value={`${activeChannels.length}/${publishingChannels.length}`} sub={`${publishingChannels.filter(c => c.status === "paused").length} paused`} />
-                  <StatCard label="Failed" value={publishingLog.filter(e => e.status === "failed").length} sub="delivery errors" />
-                </div>
-
-                <div className="panel rounded-xl p-5 mb-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-[var(--ink)]">Channels · {publishingChannels.length} connected</p>
-                    <button onClick={openAddChannel} className="text-xs text-[var(--ink-soft)] border border-[var(--line)] px-3 py-1.5 rounded-lg hover:border-[var(--line)] transition-colors">+ Add channel</button>
-                  </div>
-                  {publishingChannels.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-[var(--ink-faint)] mb-3">No channels yet</p>
-                      <button onClick={openAddChannel} className="text-xs font-medium bg-[var(--rust)] text-[var(--surface)] px-4 py-2 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Add your first channel →</button>
+                  {!hasChannel ? (
+                    <div className="panel rounded-xl p-6">
+                      <p className="text-sm font-medium text-[var(--ink)] mb-1">Tell RankOnGeo where to publish</p>
+                      <p className="text-xs text-[var(--ink-soft)] leading-relaxed mb-4 max-w-xl">
+                        Connect WordPress, or your own website (an AI coding assistant can set that up in a few minutes and we give you the exact prompt). You can also send posts to a Discord channel.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <button onClick={openAddChannel} className="text-sm font-semibold bg-[var(--rust)] text-[var(--surface)] px-5 py-2.5 rounded-lg hover:bg-[var(--rust-deep)] transition-colors">Connect your website →</button>
+                        <a href="/docs/autopublish" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--rust)] hover:underline">How it works</a>
+                      </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {publishingChannels.map((ch) => {
                         const lastEntry = publishingLog
                           .filter((e) => e.channel_id === ch.id)
                           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                         return (
-                          <div key={ch.id} className="border border-[var(--line)] rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-3">
+                          <div key={ch.id} className="panel rounded-xl p-4">
+                            <div className="flex items-center gap-2">
                               <span className="text-base">{CHANNEL_ICONS[ch.type] ?? "🔗"}</span>
-                              <span className="text-sm font-semibold text-[var(--ink)]">{ch.name}</span>
-                              <button onClick={() => toggleChannel(ch.id, ch.status)} className="ml-auto text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
-                                {ch.status === "active" ? "Pause" : "Resume"}
-                              </button>
+                              <span className="text-sm font-semibold text-[var(--ink)] truncate">{ch.name}</span>
+                              <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${ch.status === "active" ? "bg-[var(--olive)]/15 text-[var(--olive)]" : "bg-[var(--line)] text-[var(--ink)]/80"}`}>{ch.status === "active" ? "Connected" : "Paused"}</span>
                             </div>
-                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${ch.status === "active" ? "bg-[var(--rust)]/10 text-[var(--rust)]" : "bg-[var(--line)] text-[var(--ink)]/80"}`}>{ch.status === "active" ? "Active" : "Paused"}</span>
-                            <p className="text-[10px] text-[var(--ink-faint)] mt-2 truncate">{ch.url}</p>
-                            <p className="text-[10px] text-[var(--ink-faint)]">Last: {ch.last_published_at ? timeAgo(ch.last_published_at) + " ago" : "—"}</p>
+                            <p className="text-[11px] text-[var(--ink-faint)] mt-2 truncate">{ch.url}</p>
+                            <p className="text-[11px] text-[var(--ink-faint)]">Last published: {ch.last_published_at ? `${timeAgo(ch.last_published_at)} ago` : "never"}</p>
                             {lastEntry?.status === "failed" && (
-                              <p className="text-[10px] text-red-700 mt-1.5 leading-snug">⚠ Last attempt failed — {(lastEntry.error_message ?? "unknown error").slice(0, 80)}</p>
+                              <p className="text-[11px] text-red-700 mt-1.5 leading-snug">Last attempt failed: {(lastEntry.error_message ?? "unknown error").slice(0, 90)}</p>
                             )}
-                            <div className="flex items-center gap-3 mt-2">
-                              {ch.type === "webhook" && (
+                            <div className="flex items-center gap-4 mt-3">
+                              <button onClick={() => toggleChannel(ch.id, ch.status)} className="text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)]">{ch.status === "active" ? "Pause" : "Resume"}</button>
+                              <button onClick={() => deleteChannel(ch.id)} className="text-xs text-red-700/80 hover:text-red-700">Remove</button>
+                            </div>
+                            {ch.type === "webhook" && (
+                              <details className="mt-2">
+                                <summary className="text-[11px] text-[var(--ink-faint)] cursor-pointer select-none">Advanced</summary>
                                 <button
                                   onClick={() => rotateChannelSecret(ch.id)}
                                   disabled={rotatingSecretId === ch.id}
-                                  className="text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)] disabled:opacity-50"
+                                  className="mt-1.5 text-[11px] text-[var(--ink-soft)] underline disabled:opacity-50"
                                 >
-                                  {rotatingSecretId === ch.id ? "Rotating…" : "Rotate secret"}
+                                  {rotatingSecretId === ch.id ? "Rotating…" : "Rotate the shared secret"}
                                 </button>
-                              )}
-                              <button onClick={() => deleteChannel(ch.id)} className="text-[10px] text-red-700/80 hover:text-red-700">Remove</button>
-                            </div>
+                              </details>
+                            )}
                             {revealedSecret?.channelId === ch.id && (
                               <div className="mt-2 bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-lg p-2.5">
                                 <p className="text-[10px] text-[var(--rust-deep)] font-medium mb-1.5">
@@ -6065,13 +6071,7 @@ function DashboardPage() {
                                   >
                                     {revealedSecretCopied ? "Copied" : "Copy"}
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setRevealedSecret(null)}
-                                    className="text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)] shrink-0"
-                                  >
-                                    Dismiss
-                                  </button>
+                                  <button type="button" onClick={() => setRevealedSecret(null)} className="text-[10px] text-[var(--ink-faint)] hover:text-[var(--ink-soft)] shrink-0">Dismiss</button>
                                 </div>
                               </div>
                             )}
@@ -6080,51 +6080,49 @@ function DashboardPage() {
                       })}
                     </div>
                   )}
-                </div>
+                </section>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="panel rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <p className="text-sm font-semibold text-[var(--ink)]">Activity log</p>
-                      <span className="w-1.5 h-1.5 bg-[var(--rust)]/100 rounded-full" />
-                      <span className="text-xs text-[var(--ink-faint)]">real-time</span>
+                {/* 2. Automatic publishing */}
+                <section className="mb-8">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    {stepBadge(autopilotOn, 2)}
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">Let RankOnGeo publish for you</h3>
+                  </div>
+                  {brand.id && (
+                    <AutopilotPanel
+                      brandId={brand.id}
+                      isFreeTier={isFreeTier}
+                      onUpgrade={openPaywall}
+                      onAddChannel={openAddChannel}
+                      channelCount={publishingChannels.length}
+                    />
+                  )}
+                </section>
+
+                {/* 3. What happened */}
+                <section>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">Recent activity</h3>
+                    {lastPublished && <p className="text-xs text-[var(--ink-faint)]">Last published {timeAgo(lastPublished.created_at)} ago</p>}
+                  </div>
+                  {publishingLog.length === 0 ? (
+                    <div className="panel rounded-xl px-5 py-8 text-center">
+                      <p className="text-xs text-[var(--ink-faint)]">Nothing published yet. Publishes and their results will show up here.</p>
                     </div>
-                    {publishingLog.length === 0 ? (
-                      <p className="text-xs text-[var(--ink-faint)] py-4 text-center">No activity yet — publish an article to see the log</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {publishingLog.slice(0, 10).map((entry) => (
-                          <div key={entry.id} className="flex items-start gap-3">
-                            <span className="text-[10px] text-[var(--ink-faint)] w-6 shrink-0 mt-0.5">{timeAgo(entry.created_at)}</span>
-                            <span className="text-xs font-medium text-blue-700 w-20 shrink-0 truncate">{entry.publishing_channels?.name ?? "—"}</span>
-                            <span className="text-xs text-[var(--ink-soft)] flex-1 truncate">{entry.article_title ?? "—"}</span>
-                            <span className={`text-[10px] font-medium shrink-0 ${entry.status === "published" ? "text-[var(--rust)]" : entry.status === "failed" ? "text-red-700" : "text-[var(--ink-soft)]"}`}>{entry.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="panel rounded-xl p-5">
-                    <p className="text-sm font-semibold text-[var(--ink)] mb-4">Upcoming · scheduled articles</p>
-                    {upcoming.length === 0 ? (
-                      <p className="text-xs text-[var(--ink-faint)] py-4 text-center">No scheduled articles — set an article&apos;s status to &quot;scheduled&quot; to see it here</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {upcoming.map((item) => {
-                          const ch = publishingChannels.find((c) => c.id === item.brandId);
-                          return (
-                            <div key={item.id} className="flex items-start gap-3">
-                              <span className="text-xs text-[var(--ink-soft)] flex-1 truncate">{item.title}</span>
-                              {ch && <span className="text-xs font-medium text-blue-700 shrink-0">{ch.name}</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
+                  ) : (
+                    <div className="panel rounded-xl divide-y divide-[var(--line)]">
+                      {publishingLog.slice(0, 8).map((entry) => (
+                        <div key={entry.id} className="flex items-center gap-3 px-5 py-3">
+                          <span className="text-xs text-[var(--ink)]/85 flex-1 truncate">{entry.article_title ?? "Untitled"}</span>
+                          <span className="text-[11px] text-[var(--ink-faint)] hidden sm:block shrink-0">{entry.publishing_channels?.name ?? ""}</span>
+                          <span className={`text-[11px] font-medium shrink-0 ${entry.status === "published" ? "text-[var(--olive)]" : entry.status === "failed" ? "text-red-700" : "text-[var(--ink-soft)]"}`}>{entry.status}</span>
+                          <span className="text-[11px] text-[var(--ink-faint)] shrink-0 w-10 text-right">{timeAgo(entry.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             );
           })()}
 

@@ -46,7 +46,7 @@ export function topCandidates(rows: { keyword: string; search_volume: number | n
 
 // The model answers with lines of text; only lines that exactly match a
 // candidate are accepted, so it can neither invent a keyword nor a volume.
-export function resolveSelection(lines: string[], candidates: RelatedKeyword[], limit = 12): KeywordOpportunity[] {
+export function resolveSelection(lines: string[], candidates: RelatedKeyword[], limit = 25): KeywordOpportunity[] {
   const byKeyword = new Map(candidates.map((c) => [c.keyword, c]));
   const seen = new Set<string>();
   const out: KeywordOpportunity[] = [];
