@@ -17,7 +17,7 @@ export const PRICING = [
     annualPrice: 299, // per year; keep in step with "RankOnGeo Pro (Annual)" in Dodo
     highlight: true,
     features: [
-      "40 credits for Reddit upvotes, comments, comment upvotes & more",
+      "10 credits for Reddit upvotes, comments, comment upvotes & more",
       "10 tracked prompts × 5 AI engines = 50 checks/scan",
       "1 website",
       "20,000 analytics events / mo — traffic, AI referrals & AI crawlers",
