@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { PRICING, formatPlanPrice, pricePerDay } from "@/lib/pricing";
+import { PRICING, TRIAL_DAYS, formatPlanPrice, pricePerDay } from "@/lib/pricing";
 import type { OfferAction } from "@/lib/setup-funnel";
 
 const FOUNDER_EMAIL = "vaibhavkandpal81@gmail.com";
@@ -118,7 +118,7 @@ export default function OfferStep({ brandName, domain, onBack, onContinue, onAct
           <span className="font-signal-serif text-5xl">{formatPlanPrice(plan.price)}</span>
           <span className="text-sm text-[var(--ink-soft)]"> /month</span>
         </p>
-        <p className="text-xs text-[var(--ink-soft)] mt-1">About {pricePerDay(plan.price)} a day. Start with a free trial, cancel anytime.</p>
+        <p className="text-xs text-[var(--ink-soft)] mt-1">About {pricePerDay(plan.price)} a day. Start with a {TRIAL_DAYS}-day free trial, cancel anytime.</p>
       </div>
 
       <div
