@@ -1,5 +1,6 @@
 import { serverClient } from "@/lib/supabase";
 import { VisibilityScore } from "@/lib/types";
+import { isSafeWebhookUrl } from "@/lib/webhook-url";
 
 type AlertPayload = {
   event: "scan_completed";
@@ -62,7 +63,10 @@ async function sendToDestination(dest: any, payload: AlertPayload, db: ReturnTyp
   let error_detail: string | null = null;
 
   try {
-    if ((dest.kind === "slack" || dest.kind === "discord" || dest.kind === "webhook") && dest.url) {
+    if ((dest.kind === "slack" || dest.kind === "discord" || dest.kind === "webhook") && !isSafeWebhookUrl(dest.kind, dest.url)) {
+      status = "failed";
+      error_detail = "This destination's URL isn't allowed. Edit it and paste the webhook URL again.";
+    } else if ((dest.kind === "slack" || dest.kind === "discord" || dest.kind === "webhook") && dest.url) {
       let body: unknown;
       if (dest.kind === "slack") body = buildSlackBlocks(payload);
       else if (dest.kind === "discord") body = buildDiscordEmbed(payload);
@@ -119,7 +123,8 @@ export async function fireAlerts(
     .from("alert_destinations")
     .select("*")
     .eq("brand_id", brandId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .eq("scan_alerts", true);
 
   if (!destinations?.length) return;
 

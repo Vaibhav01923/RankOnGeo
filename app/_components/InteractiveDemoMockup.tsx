@@ -1227,7 +1227,7 @@ export function InteractiveDemoMockup() {
               {sectionLabel("Distribute")}
               {navItem("Publishing")}
               {sectionLabel("On page")}
-              {navItem("Alerts")}
+              {navItem("Reports")}
             </div>
             <div className="flex items-center gap-2 border-t border-[var(--line)] px-3 py-2.5">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--rust-wash)] text-xs font-bold text-[var(--rust-deep)]">U</div>
@@ -1275,7 +1275,7 @@ export function InteractiveDemoMockup() {
                   <LLMAnalyticsContent />
                 </>
               )}
-              {["Publishing", "Alerts"].includes(activeTab) && (
+              {["Publishing", "Reports"].includes(activeTab) && (
                 <div className="flex h-full items-center justify-center p-5">
                   <div className="text-center">
                     <p className="mb-2 font-signal-serif text-xl italic text-[var(--ink-soft)]">This one&apos;s for the real thing.</p>

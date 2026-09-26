@@ -268,6 +268,23 @@ export async function fetchReport(accessToken: string, siteUrl: string, days: nu
   return { range: { start, end }, totals: summarizeRows(byDate), series, queries: toRows(byQuery), pages: toRows(byPage) };
 }
 
+// Totals and top searches for an exact date window (YYYY-MM-DD, both ends inclusive),
+// used by the weekly / monthly report. An empty or inverted window returns zeros
+// rather than calling Google.
+export async function fetchWindow(accessToken: string, siteUrl: string, startDate: string, endDate: string): Promise<{ totals: GscTotals; queries: GscRow[] } | null> {
+  if (startDate > endDate) return { totals: { clicks: 0, impressions: 0, ctr: 0, position: 0 }, queries: [] };
+  const base = { startDate, endDate };
+  const [byDate, byQuery] = await Promise.all([
+    query(accessToken, siteUrl, { ...base, dimensions: ["date"], rowLimit: 200 }),
+    query(accessToken, siteUrl, { ...base, dimensions: ["query"], rowLimit: 5 }),
+  ]);
+  if (!byDate || !byQuery) return null;
+  return {
+    totals: summarizeRows(byDate),
+    queries: byQuery.map((r) => ({ label: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position })),
+  };
+}
+
 // ---- per-page and site-wide queries used by the blog autopilot -------------
 
 export type PageStats = { clicks: number; impressions: number; ctr: number; position: number; queries: GscRow[] };
