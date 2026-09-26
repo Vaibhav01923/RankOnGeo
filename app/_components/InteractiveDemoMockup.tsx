@@ -1218,7 +1218,6 @@ export function InteractiveDemoMockup() {
               </div>
             </div>
             <div className="flex flex-1 flex-col gap-0.5 overflow-hidden px-2 py-2">
-              {navItem("Agent")}
               {sectionLabel("Measure")}
               {["Overview", "Engines", "Prompts", "Citations", "Competitors", "Analytics"].map((t) => navItem(t))}
               {sectionLabel("Create")}
@@ -1276,7 +1275,7 @@ export function InteractiveDemoMockup() {
                   <LLMAnalyticsContent />
                 </>
               )}
-              {["Publishing", "Agent", "Alerts"].includes(activeTab) && (
+              {["Publishing", "Alerts"].includes(activeTab) && (
                 <div className="flex h-full items-center justify-center p-5">
                   <div className="text-center">
                     <p className="mb-2 font-signal-serif text-xl italic text-[var(--ink-soft)]">This one&apos;s for the real thing.</p>
