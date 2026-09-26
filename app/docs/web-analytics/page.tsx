@@ -55,7 +55,7 @@ export default function WebAnalyticsDocsPage() {
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">3. Confirm it&apos;s working</h3>
         <p className="text-sm text-[var(--ink-soft)] mb-10">
-          Visit a page on your site. The Setup screen checks automatically and turns green as soon as the first real visit arrives, and it then shows up under Analytics → Traffic within seconds. You can also click &quot;Send test pageview&quot; to see the charts populate first — test events never mark your install as connected.
+          Visit a page on your site. The Setup screen checks automatically and turns green as soon as the first real visit arrives, and it then shows up in the Traffic section of the Analytics page within seconds. You can also click &quot;Send test pageview&quot; to see the charts populate first — test events never mark your install as connected.
         </p>
 
         <h2 id="metrics-explained" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Metrics explained</h2>

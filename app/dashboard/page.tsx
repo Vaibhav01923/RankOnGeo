@@ -204,7 +204,7 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
 ];
 
 type BotBreakdown = { botName: string; count: number };
-type AnalyticsView = "traffic" | "ai" | "search" | "setup";
+type AnalyticsView = "overview" | "setup";
 type NamedCount = { label: string; count: number };
 type SeriesPoint = { label: string; count: number };
 type PageBreakdown = { path: string; pageviews: number; bounceRate: number; avgDurationSeconds: number };
@@ -1188,6 +1188,10 @@ function DashboardPage() {
   const [testEventError, setTestEventError] = useState("");
   const [analyticsDays, setAnalyticsDays] = useState(30);
   const [gscFlash, setGscFlash] = useState<string | null>(null);
+  // Headline Google numbers for the summary strip, reported by the Search section.
+  const [gscTotals, setGscTotals] = useState<{ clicks: number; impressions: number } | null>(null);
+  // Section to scroll to once the Analytics page has rendered (e.g. the checklist's "Connect Search Console").
+  const analyticsScrollTarget = useRef<string | null>(null);
   const [onboardingHidden, setOnboardingHidden] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
@@ -1198,8 +1202,7 @@ function DashboardPage() {
     // "webAnalytics"/"llmAnalytics" were merged into one Analytics tab; map
     // a tab remembered from before that so it doesn't land on a blank page.
     const savedTab = sessionStorage.getItem("dashTab");
-    if (savedTab === "llmAnalytics") { setActiveTab("analytics"); setAnalyticsView("ai"); }
-    else if (savedTab === "webAnalytics") setActiveTab("analytics");
+    if (savedTab === "llmAnalytics" || savedTab === "webAnalytics") setActiveTab("analytics");
     else if (savedTab) setActiveTab(savedTab as Tab);
 
     createSupabaseBrowserClient()
@@ -1565,6 +1568,7 @@ function DashboardPage() {
     analyticsStatusRef.current = null;
     setAnalyticsStatus(null);
     setAnalyticsView(null);
+    setGscTotals(null);
   }, [brand?.id]);
 
   // Returning from Google's consent screen lands on /dashboard?gsc=<result>:
@@ -1573,7 +1577,8 @@ function DashboardPage() {
     const flag = searchParams.get("gsc");
     if (!flag) return;
     setActiveTab("analytics");
-    setAnalyticsView("search");
+    setAnalyticsView("overview");
+    analyticsScrollTarget.current = "analytics-search";
     setGscFlash(flag);
     sessionStorage.setItem("dashTab", "analytics");
     const params = new URLSearchParams(window.location.search);
@@ -1583,13 +1588,17 @@ function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switching sub-views (or jumping to Traffic after a test event fired from
-  // the bottom of Setup) should land at the top, not mid-page.
+  // Land at the top when the page or its Setup switch changes — or at a
+  // specific section when something asked for one (the section sits below the
+  // fold, so give the page a moment to lay out first).
   useEffect(() => {
-    if (activeTab === "analytics") document.getElementById("analytics-top")?.scrollIntoView({ block: "start" });
-    // The "connected / denied" notice only belongs to the Search view it was raised for.
-    // (null = not chosen yet, e.g. the first render before the ?gsc= redirect is applied.)
-    if (analyticsView && analyticsView !== "search") setGscFlash(null);
+    if (activeTab !== "analytics") return;
+    const target = analyticsScrollTarget.current;
+    analyticsScrollTarget.current = null;
+    const t = setTimeout(() => document.getElementById(target ?? "analytics-top")?.scrollIntoView({ block: "start" }), target ? 400 : 0);
+    // The "connected / denied" notice belongs to the Analytics page it was raised for.
+    if (analyticsView === "setup") setGscFlash(null);
+    return () => clearTimeout(t);
   }, [activeTab, analyticsView]);
 
   // Polled by the Setup screen. When the first real visit arrives, reload the
@@ -2182,7 +2191,11 @@ function DashboardPage() {
   // guide. Status comes from /api/analytics/status; until that has loaded
   // every step simply reads as not done yet.
   const onboardingItems: OnboardingItem[] = (() => {
-    const openAnalytics = (view: AnalyticsView) => { navTo("analytics"); setAnalyticsView(view); };
+    const openAnalytics = (view: AnalyticsView, section?: string) => {
+      analyticsScrollTarget.current = section ?? null;
+      navTo("analytics");
+      setAnalyticsView(view);
+    };
     return [
       {
         id: "tracking",
@@ -2198,7 +2211,7 @@ function DashboardPage() {
         body: "See the searches that bring people to your site, right next to your AI visibility — and let Autopilot judge which posts to improve.",
         done: !!analyticsStatus?.gsc?.connected,
         cta: "Connect",
-        onClick: () => openAnalytics("search"),
+        onClick: () => openAnalytics("overview", "analytics-search"),
       }]),
       {
         id: "autopilot",
@@ -2298,7 +2311,7 @@ function DashboardPage() {
       });
       if (res.ok) {
         setAnalyticsRefreshKey((k) => k + 1);
-        setAnalyticsView(type === "web" ? "traffic" : "ai");
+        setAnalyticsView("overview");
       } else {
         const d = await res.json().catch(() => ({}));
         setTestEventError(d.error ?? "Failed to send test event");
@@ -5029,7 +5042,7 @@ function DashboardPage() {
 
           {/* ANALYTICS TAB — traffic, AI answers, AI crawlers, Search Console and setup in one place */}
           {activeTab === "analytics" && (() => {
-            const view: AnalyticsView = analyticsView ?? (analyticsStatus && !analyticsStatus.web.connected && !analyticsStatus.bot.connected ? "setup" : "traffic");
+            const view: AnalyticsView = analyticsView ?? (analyticsStatus && !analyticsStatus.web.connected && !analyticsStatus.bot.connected ? "setup" : "overview");
             const spinner = <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>;
             const locked = <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock>;
             const webConnected = !!analyticsStatus?.web.connected;
@@ -5290,10 +5303,6 @@ function DashboardPage() {
 
             const aiBody = !llmAnalyticsLoaded ? spinner : (
               <div className={llmAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                <p className="text-xs text-[var(--ink-faint)] mb-4">
-                  AI crawlers such as GPTBot, ClaudeBot and PerplexityBot fetching your pages. This shows whether AI models can even see your content — it is not human traffic.
-                </p>
-
                 {!!llmAnalyticsData?.series.length && (
                   <div className="panel rounded-xl p-5 mb-5">
                     <p className="text-sm font-semibold text-[var(--ink)] mb-3">Bot pageviews over time</p>
@@ -5391,11 +5400,15 @@ function DashboardPage() {
             );
 
             const views: { id: AnalyticsView; label: string }[] = [
-              { id: "traffic", label: "Traffic" },
-              { id: "ai", label: "AI crawlers" },
-              { id: "search", label: "Search" },
+              { id: "overview", label: "Analytics" },
               { id: "setup", label: "Setup" },
             ];
+            const sectionHeading = (title: string, sub: string) => (
+              <div className="mt-9 mb-3">
+                <h3 className="text-base font-semibold text-[var(--ink)]">{title}</h3>
+                <p className="text-xs text-[var(--ink-faint)] mt-0.5">{sub}</p>
+              </div>
+            );
 
             return (
               <div id="analytics-top" className="max-w-4xl mx-auto w-full">
@@ -5438,45 +5451,67 @@ function DashboardPage() {
                   ))}
                 </div>
 
-                {gscFlash && view === "search" && (() => {
-                  const msg: Record<string, [string, boolean]> = {
-                    connected: ["Google Search Console connected.", true],
-                    pick_site: ["Google Search Console connected — now choose which property is this site.", true],
-                    denied: ["Google didn't grant access, so nothing was connected. Make sure the Search Console box stays ticked on the consent screen.", false],
-                    unavailable: ["Search Console connection isn't available yet.", false],
-                    error: ["Something went wrong connecting Search Console. Please try again.", false],
-                  };
-                  const [text, ok] = msg[gscFlash] ?? msg.error;
-                  return (
-                    <div className={`flex items-start justify-between gap-3 text-xs rounded-lg px-3 py-2.5 mb-4 ${ok ? "bg-[var(--olive)]/10 text-[var(--olive)]" : "bg-red-500/10 text-red-700"}`}>
-                      <span>{text}</span>
-                      <button onClick={() => setGscFlash(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">✕</button>
-                    </div>
-                  );
-                })()}
 
-                {!isFreeTier && (view === "traffic" || view === "ai") && (
-                  <>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                      <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
-                      <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
-                      <StatCard label="From AI answers" value={webAnalyticsData?.stats.aiReferrals ?? 0} sub="ChatGPT, Perplexity…" />
-                      <StatCard label="AI crawler visits" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
-                    </div>
-                    {renderAnalyticsUsageBar()}
-                  </>
-                )}
-
-                {view === "search" ? (
-                  <SearchConsolePanel brandId={brand?.id ?? ""} domain={webAnalyticsData?.domain ?? ""} days={analyticsDays} onOpenSetup={() => setAnalyticsView("setup")} />
-                ) : isFreeTier ? (
-                  locked
-                ) : view === "traffic" ? (
-                  trafficBody
-                ) : view === "ai" ? (
-                  aiBody
-                ) : (
+                {view === "setup" ? (
                   setupBody
+                ) : (
+                  <>
+                    {!isFreeTier && (
+                      <>
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                          <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
+                          <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
+                          <StatCard label="From Google" value={gscTotals ? gscTotals.clicks.toLocaleString() : "—"} sub={gscTotals ? "search clicks" : "not connected"} />
+                          <StatCard label="From AI answers" value={webAnalyticsData?.stats.aiReferrals ?? 0} sub="ChatGPT, Perplexity…" />
+                          <StatCard label="AI crawler visits" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
+                        </div>
+                        {renderAnalyticsUsageBar()}
+                      </>
+                    )}
+
+                    {isFreeTier ? (
+                      locked
+                    ) : (
+                      <>
+                        {sectionHeading("Traffic", "Real visitors to your site, including people who arrive from AI answers.")}
+                        {trafficBody}
+                      </>
+                    )}
+
+                    <div id="analytics-search" className="scroll-mt-4">
+                      {sectionHeading("Google Search", "The searches that bring people to your site, from Google Search Console.")}
+                    {gscFlash && (() => {
+                      const msg: Record<string, [string, boolean]> = {
+                        connected: ["Google Search Console connected.", true],
+                        pick_site: ["Google Search Console connected — now choose which property is this site.", true],
+                        denied: ["Google didn't grant access, so nothing was connected. Make sure the Search Console box stays ticked on the consent screen.", false],
+                        unavailable: ["Search Console connection isn't available yet.", false],
+                        error: ["Something went wrong connecting Search Console. Please try again.", false],
+                      };
+                      const [text, ok] = msg[gscFlash] ?? msg.error;
+                      return (
+                        <div className={`flex items-start justify-between gap-3 text-xs rounded-lg px-3 py-2.5 mb-4 ${ok ? "bg-[var(--olive)]/10 text-[var(--olive)]" : "bg-red-500/10 text-red-700"}`}>
+                          <span>{text}</span>
+                          <button onClick={() => setGscFlash(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">✕</button>
+                        </div>
+                      );
+                    })()}
+                      <SearchConsolePanel
+                        brandId={brand?.id ?? ""}
+                        domain={webAnalyticsData?.domain ?? ""}
+                        days={analyticsDays}
+                        onOpenSetup={() => setAnalyticsView("setup")}
+                        onTotals={setGscTotals}
+                      />
+                    </div>
+
+                    {!isFreeTier && (
+                      <>
+                        {sectionHeading("AI crawlers", "GPTBot, ClaudeBot, PerplexityBot and others reading your pages. This shows whether AI models can even see your content; it is not human traffic.")}
+                        {aiBody}
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             );
