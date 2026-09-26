@@ -1,3 +1,4 @@
+import { recordSpend } from "@/lib/dataforseo-spend";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AIEngine, BrandData, ScanResult, VisibilityScore } from "@/lib/types";
@@ -168,6 +169,7 @@ async function queryDataForSEOLLM(llmType: keyof typeof DATAFORSEO_LLM_MODELS, p
   const data: any = await res.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const task: any = data?.tasks?.[0];
+  await recordSpend(llmType === "claude" ? "scan_claude" : "scan_perplexity", task?.cost ?? data?.cost);
   // Same convention as the SERP endpoint: failures arrive wrapped in HTTP 200
   if (data?.status_code !== 20000 || (task && task.status_code !== 20000)) {
     throw new Error(
@@ -242,6 +244,7 @@ export async function queryEngine(engine: AIEngine, prompt: string): Promise<Eng
     const data: any = await res.json();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const task: any = data?.tasks?.[0];
+    await recordSpend("scan_google", task?.cost ?? data?.cost);
     // DataForSEO wraps failures (bad auth, no credits, bad request) in HTTP 200
     // responses — 20000 is their success code. Throw so these surface as engine
     // failures instead of being silently recorded as "brand not mentioned".
