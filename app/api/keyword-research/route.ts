@@ -31,12 +31,19 @@ export async function GET(req: NextRequest) {
   // While auto-publishing is on, make sure the queue holds everything this tab
   // lists (keywords and AI prompts), so the schedule shown is the real one. Both
   // syncs only add what is missing.
-  const { data: liveSettings } = await admin.from("autopilot_settings").select("enabled").eq("brand_id", brandId).maybeSingle();
+  // `sync=0` skips this: the page asks for it right after a reorder, when nothing new can
+  // have appeared and the customer is waiting.
+  const skipSync = req.nextUrl.searchParams.get("sync") === "0";
+  const { data: liveSettings } = skipSync ? { data: null } : await admin.from("autopilot_settings").select("enabled").eq("brand_id", brandId).maybeSingle();
   if (liveSettings?.enabled) {
     try {
-      const { data: saved } = await admin.from("keyword_opportunity_scans").select("keywords").eq("brand_id", brandId).maybeSingle();
-      if (saved?.keywords?.length) await syncResearchTopics(admin, brandId, saved.keywords);
-      await syncGapTopics(admin, brandId);
+      await Promise.all([
+        (async () => {
+          const { data: saved } = await admin.from("keyword_opportunity_scans").select("keywords").eq("brand_id", brandId).maybeSingle();
+          if (saved?.keywords?.length) await syncResearchTopics(admin, brandId, saved.keywords);
+        })(),
+        syncGapTopics(admin, brandId),
+      ]);
     } catch (e) {
       console.error("[keyword-research] queue sync failed", e instanceof Error ? e.message : e);
     }

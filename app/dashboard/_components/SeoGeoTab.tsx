@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GapItem, ScanResult } from "@/lib/types";
 import { normalizeKeyword } from "@/lib/keyword-list";
+import { createSerialSaver } from "@/lib/serial-saver";
 import { AutopublishBar } from "./AutopublishBar";
 import type { ArticlePerformance } from "./useArticlePerformance";
 
@@ -94,6 +95,11 @@ export function SeoGeoTab({
   // While a new queue order saves, show it straight away instead of waiting on the server.
   const [order, setOrder] = useState<string[] | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [orderSaved, setOrderSaved] = useState(false);
+  const orderSeq = useRef(0);
+  const orderFailed = useRef(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -102,9 +108,10 @@ export function SeoGeoTab({
     return () => clearInterval(t);
   }, []);
 
-  const load = useCallback(async () => {
+  // `sync: false` asks the server to skip its background queue sync (used right after a reorder, when it is only a refresh).
+  const load = useCallback(async (opts?: { sync?: boolean }) => {
     try {
-      const res = await fetch(`/api/keyword-research?brandId=${brandId}`);
+      const res = await fetch(`/api/keyword-research?brandId=${brandId}${opts?.sync === false ? "&sync=0" : ""}`);
       if (res.ok) setData(await res.json());
     } catch {} finally {
       setLoading(false);
@@ -167,22 +174,50 @@ export function SeoGeoTab({
   const statusOf = (r: Target): Row["status"] => (r.status === "queued" && !enabled ? "none" : r.status);
   const veil = isFreeTier ? "blur-[5px] select-none cursor-pointer" : "";
 
-  async function saveOrder(keywords: string[]) {
+  // Reordering never locks the list: each change shows at once, and saves go out one at a
+  // time with the newest order winning, so the order can be changed as often as you like.
+  type OrderSave = { brandId: string; keywords: string[]; fail: (reason?: string, message?: string) => void };
+  const orderSaver = useMemo(
+    () =>
+      createSerialSaver<OrderSave>(async ({ brandId: id, keywords, fail }) => {
+        try {
+          const res = await fetch("/api/keyword-research/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: id, keywords }) });
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            fail(d.reason, d.error);
+          }
+        } catch {
+          fail();
+        }
+      }),
+    []
+  );
+  function saveOrder(keywords: string[]) {
+    const seq = ++orderSeq.current;
     setOrder(keywords);
     setSavingOrder(true);
+    setOrderSaved(false);
     setError("");
-    try {
-      const res = await fetch("/api/keyword-research/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId, keywords }) });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        if (d.reason === "upgrade") onUpgrade();
-        else setError(d.error ?? "Couldn't save the new order.");
-      }
-      await load();
-    } finally {
-      setOrder(null);
+    orderFailed.current = false;
+    const fail = (reason?: string, message?: string) => {
+      orderFailed.current = true;
+      if (reason === "upgrade") onUpgrade();
+      else setError(message ?? "Couldn't save the new order.");
+    };
+    orderSaver.push({ brandId, keywords, fail }).then(async () => {
+      if (seq !== orderSeq.current) return; // a newer change is still on its way; it will finish the job
+      // The order is saved (or has failed): stop showing "updating" now and refresh quietly behind it.
       setSavingOrder(false);
-    }
+      if (!orderFailed.current) {
+        setOrderSaved(true);
+        clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setOrderSaved(false), 2500);
+      }
+      await load({ sync: false });
+      if (seq !== orderSeq.current) return;
+      // Back to what the server has: the saved order, or the old one if saving failed.
+      setOrder(null);
+    });
   }
   function move(key: string, toIndex: number) {
     const list = orderedQueue.map((r) => r.keyword);
@@ -309,9 +344,22 @@ export function SeoGeoTab({
                   <button key={id} onClick={() => setFilter(id)} className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${filter === id ? "bg-[var(--rust)] text-[var(--surface)]" : "panel text-[var(--ink-soft)] hover:bg-[var(--line-soft)]"}`}>{label}</button>
                 ))}
                 {enabled && orderedQueue.length > 1 && filter !== "all" && <span className="text-[11px] text-[var(--ink-faint)] ml-1">Show All to reorder.</span>}
+                {(savingOrder || orderSaved) && (
+                  <span role="status" aria-live="polite" className={`ml-auto inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium ${savingOrder ? "border-[var(--rust)]/40 bg-[var(--rust-wash)] text-[var(--rust-deep)]" : "border-[var(--olive)]/40 bg-[var(--olive-wash)] text-[var(--olive)]"}`}>
+                    {savingOrder ? (
+                      <>
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />
+                        Updating the order…
+                      </>
+                    ) : (
+                      <>✓ Order saved</>
+                    )}
+                  </span>
+                )}
               </div>
 
-              <div className="panel rounded-xl overflow-x-auto mb-3">
+              <div className="panel rounded-xl overflow-x-auto mb-3 relative">
+                {savingOrder && <div className="absolute inset-x-0 top-0 h-0.5 bg-[var(--rust)] animate-pulse" aria-hidden="true" />}
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b border-[var(--line)] text-left">
@@ -332,7 +380,7 @@ export function SeoGeoTab({
                       return (
                         <tr
                           key={`${r.kind}:${r.keyword}`}
-                          draggable={reorderable && scheduled && !savingOrder}
+                          draggable={reorderable && scheduled}
                           onDragStart={(e) => { setDragKey(r.keyword); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", r.keyword); }}
                           onDragOver={(e) => { if (dragKey && scheduled) { e.preventDefault(); setOverKey(r.keyword); } }}
                           onDrop={(e) => { e.preventDefault(); if (dragKey && scheduled && dragKey !== r.keyword) move(dragKey, r.queueIndex ?? 0); setDragKey(null); setOverKey(null); }}
@@ -344,10 +392,10 @@ export function SeoGeoTab({
                               {scheduled && (
                                 <div className="flex items-center gap-0.5 text-[var(--ink-faint)]">
                                   <span className="cursor-grab select-none px-1 text-base leading-none" title="Drag to change the order" aria-hidden="true">⋮⋮</span>
-                                  <button disabled={savingOrder || r.queueIndex === 0} onClick={() => move(r.keyword, (r.queueIndex ?? 0) - 1)} aria-label={`Move “${r.label}” earlier`} title="Publish earlier" className="w-6 h-6 rounded hover:bg-[var(--line-soft)] hover:text-[var(--ink)] disabled:opacity-25 disabled:hover:bg-transparent text-[10px]">▲</button>
-                                  <button disabled={savingOrder || r.queueIndex === orderedQueue.length - 1} onClick={() => move(r.keyword, (r.queueIndex ?? 0) + 1)} aria-label={`Move “${r.label}” later`} title="Publish later" className="w-6 h-6 rounded hover:bg-[var(--line-soft)] hover:text-[var(--ink)] disabled:opacity-25 disabled:hover:bg-transparent text-[10px]">▼</button>
+                                  <button disabled={r.queueIndex === 0} onClick={() => move(r.keyword, (r.queueIndex ?? 0) - 1)} aria-label={`Move “${r.label}” earlier`} title="Publish earlier" className="w-6 h-6 rounded hover:bg-[var(--line-soft)] hover:text-[var(--ink)] disabled:opacity-25 disabled:hover:bg-transparent text-[10px]">▲</button>
+                                  <button disabled={r.queueIndex === orderedQueue.length - 1} onClick={() => move(r.keyword, (r.queueIndex ?? 0) + 1)} aria-label={`Move “${r.label}” later`} title="Publish later" className="w-6 h-6 rounded hover:bg-[var(--line-soft)] hover:text-[var(--ink)] disabled:opacity-25 disabled:hover:bg-transparent text-[10px]">▼</button>
                                   {(r.queueIndex ?? 0) > 1 && (
-                                    <button disabled={savingOrder} onClick={() => move(r.keyword, 0)} title="Publish next" className="ml-0.5 rounded px-1 h-6 text-[10px] font-semibold hover:bg-[var(--line-soft)] hover:text-[var(--ink)] disabled:opacity-25">Top</button>
+                                    <button onClick={() => move(r.keyword, 0)} title="Publish next" className="ml-0.5 rounded px-1 h-6 text-[10px] font-semibold hover:bg-[var(--line-soft)] hover:text-[var(--ink)]">Top</button>
                                   )}
                                 </div>
                               )}
