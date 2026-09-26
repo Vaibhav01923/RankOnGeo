@@ -13,18 +13,25 @@ const PLAN_PRODUCTS: Record<string, string | undefined> = {
   starter: process.env.DODO_STARTER_PRODUCT_ID,
 };
 
+// The same plans billed yearly (a separate Dodo product per billing period).
+const ANNUAL_PLAN_PRODUCTS: Record<string, string | undefined> = {
+  starter: process.env.DODO_STARTER_ANNUAL_PRODUCT_ID,
+};
+
 // Discount code applied to purchases made through /early. Created in Dodo
 // (percentage, 5000 basis points = 50%); override via env if renamed.
 const EARLY_DISCOUNT_CODE = process.env.DODO_EARLY_DISCOUNT_CODE ?? "EARLY50";
 
 export async function POST(req: NextRequest) {
-  const { plan, cancelPath, early, trialDays } = await req.json();
+  const { plan, cancelPath, early, trialDays, billing } = await req.json();
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const productId = PLAN_PRODUCTS[plan];
+  // /early's 50% code is for the monthly plan, so it never combines with yearly billing.
+  const annual = billing === "annual" && !early;
+  const productId = (annual ? ANNUAL_PLAN_PRODUCTS : PLAN_PRODUCTS)[plan];
   if (!productId) return NextResponse.json({ error: "Invalid plan or product not configured" }, { status: 400 });
 
   const origin = req.headers.get("origin") ?? "http://localhost:3000";
@@ -78,6 +85,7 @@ export async function POST(req: NextRequest) {
     metadata: {
       userId: user.id,
       plan,
+      ...(annual ? { billing: "annual" } : {}),
       ...(early ? { early: "true" } : {}),
       ...(validTrialDays ? { trial: "true" } : {}),
       ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}),

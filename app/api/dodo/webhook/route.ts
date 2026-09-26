@@ -24,6 +24,8 @@ const getDodo = () =>
 // over metadata when a product_id is available.
 const PRODUCT_ID_TO_PLAN: Record<string, string> = {
   [process.env.DODO_STARTER_PRODUCT_ID ?? ""]: "starter",
+  // Yearly billing of the same plan.
+  [process.env.DODO_STARTER_ANNUAL_PRODUCT_ID ?? ""]: "starter",
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
