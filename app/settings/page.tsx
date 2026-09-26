@@ -178,8 +178,8 @@ function SettingsContent() {
             <div className="flex items-center justify-between bg-[var(--line-soft)] rounded-lg px-3 py-2.5 mb-4">
               <p className="text-sm text-[var(--ink-soft)]">
                 {sub && sub.purchasedEventBalance > 0
-                  ? `${sub.purchasedEventBalance.toLocaleString()} extra Web/LLM Analytics events in balance`
-                  : "No extra Web/LLM Analytics events purchased"}
+                  ? `${sub.purchasedEventBalance.toLocaleString()} extra Analytics events in balance`
+                  : "No extra Analytics events purchased"}
               </p>
               <a href="/dashboard" className="text-sm font-semibold text-[var(--rust)] hover:text-[var(--rust-deep)] shrink-0">Buy more →</a>
             </div>

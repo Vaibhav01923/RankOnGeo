@@ -102,7 +102,7 @@ export function setPasswordEmailHtml(actionUrl: string): string {
 }
 
 export function earlyWaitlistEmailHtml(plan: string): string {
-  const planNames: Record<string, string> = { starter: "Pro", growth: "Business", enterprise: "Scale" };
+  const planNames: Record<string, string> = { starter: "Pro" };
   const planName = planNames[plan] ?? plan;
   return `
 <div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Georgia,serif;color:#302821;background:#f6f2e9;">

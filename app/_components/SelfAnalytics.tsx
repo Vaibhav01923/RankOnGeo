@@ -25,7 +25,7 @@ export function SelfAnalytics() {
       <Script
         id="rankongeo-web-analytics"
         src="https://www.rankongeo.com/track.js"
-        data-site="6469ac374959"
+        data-site="7476cc1891a6"
         strategy="afterInteractive"
       />
     </>

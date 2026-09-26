@@ -3,6 +3,7 @@ import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
 import { requiresPaywall } from "@/lib/plan-limits";
 import { buildEventSeries } from "@/lib/analytics-series";
+import { aiEngineForVisit } from "@/lib/ai-referrers";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -35,8 +36,9 @@ export async function GET(req: NextRequest) {
       domain: brand.domain,
       siteKey: brand.site_key,
       isFree,
-      stats: { liveVisitors: 0, visitors: 0, pageviews: 0, avgDurationSeconds: 0, bounceRate: 0, newVisitors: 0, returningVisitors: 0 },
+      stats: { liveVisitors: 0, visitors: 0, pageviews: 0, avgDurationSeconds: 0, bounceRate: 0, newVisitors: 0, returningVisitors: 0, aiReferrals: 0 },
       live: { pages: [], referrers: [] },
+      aiReferralBreakdown: [],
       topReferrers: [],
       topPages: [],
       pagesBreakdown: [],
@@ -126,6 +128,16 @@ export async function GET(req: NextRequest) {
   const topReferrerCounts = countBy(visits, (v) => referrerHost(v.referrer));
   const topPageCounts = countBy(visits, (v) => v.path);
 
+  // Humans arriving from an AI answer (ChatGPT, Perplexity, ...) — see
+  // lib/ai-referrers.ts for why utm_source is checked alongside the referrer.
+  const aiEngineCounts = new Map<string, number>();
+  for (const v of visits) {
+    const engine = aiEngineForVisit(referrerHost(v.referrer), v.utm_source);
+    if (engine) aiEngineCounts.set(engine, (aiEngineCounts.get(engine) ?? 0) + 1);
+  }
+  const aiReferralBreakdown = toSortedList(aiEngineCounts);
+  const aiReferrals = aiReferralBreakdown.reduce((sum, e) => sum + e.count, 0);
+
   // Per-page bounce rate / avg duration — attributed to each session's ENTRY
   // page (the page it started on), not per-pageview time-on-page.
   const perPage = new Map<string, { sessions: number; bounced: number; totalDuration: number }>();
@@ -170,8 +182,9 @@ export async function GET(req: NextRequest) {
     domain: brand.domain,
     siteKey: brand.site_key,
     isFree,
-    stats: { liveVisitors, visitors, pageviews, avgDurationSeconds, bounceRate, newVisitors, returningVisitors },
+    stats: { liveVisitors, visitors, pageviews, avgDurationSeconds, bounceRate, newVisitors, returningVisitors, aiReferrals },
     live: { pages: toSortedList(pageCounts), referrers: toSortedList(referrerCounts) },
+    aiReferralBreakdown,
     topReferrers: toSortedList(topReferrerCounts).slice(0, 10),
     topPages: toSortedList(topPageCounts).slice(0, 10),
     pagesBreakdown,

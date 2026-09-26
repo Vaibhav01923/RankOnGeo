@@ -4,6 +4,7 @@ import "./globals.css";
 import { SelfAnalytics } from "./_components/SelfAnalytics";
 import { ClaimPendingBrand } from "./_components/ClaimPendingBrand";
 import { AuthErrorNotice } from "./_components/AuthErrorNotice";
+import { SupportChatWidget } from "./_components/SupportChatWidget";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -81,10 +82,13 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
-      <SelfAnalytics />
-      <ClaimPendingBrand />
-      <AuthErrorNotice />
+      <body className="min-h-full flex flex-col">
+        {children}
+        <SelfAnalytics />
+        <ClaimPendingBrand />
+        <AuthErrorNotice />
+        <SupportChatWidget />
+      </body>
     </html>
   );
 }

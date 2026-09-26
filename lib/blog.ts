@@ -45,13 +45,20 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
 }
 
 export function slugify(text: string): string {
-  return text
+  const full = text
     .toLowerCase()
     .trim()
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
+    .replace(/^-+|-+$/g, "");
+  if (full.length <= 80) return full;
+  // A hard cut mid-word ("...-answer-en") looks broken in a URL, so cut back
+  // to the last whole word. Only applies to slugs generated from now on —
+  // stored slugs are never recomputed.
+  const cut = full.slice(0, 80);
+  if (full[80] === "-") return cut;
+  const lastDash = cut.lastIndexOf("-");
+  return lastDash > 40 ? cut.slice(0, lastDash) : cut;
 }
 
 export function readingTimeMinutes(markdown: string): number {

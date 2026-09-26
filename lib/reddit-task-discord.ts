@@ -30,6 +30,9 @@ export async function notifyDiscordOfTask(params: {
   subreddit?: string | null;
   postTitle?: string | null;
   mediaUrl?: string | null;
+  // custom_comments / create_post only — upvotes to apply once this is
+  // actually posted (there's no comment/post to upvote yet at request time).
+  bonusUpvotes?: number | null;
 }): Promise<boolean> {
   const webhookUrl = process.env.DISCORD_TASKS_WEBHOOK_URL;
   if (!webhookUrl) {
@@ -55,6 +58,7 @@ export async function notifyDiscordOfTask(params: {
   if (params.promptText) fields.push({ name: "Prompt", value: params.promptText.slice(0, 200) });
   if (params.commentText) fields.push({ name: isCreatePost ? "Body" : "Comment text", value: params.commentText.slice(0, 1000) });
   if (params.mediaUrl) fields.push({ name: "Media", value: params.mediaUrl });
+  if (params.bonusUpvotes) fields.push({ name: "⬆️ Also boost with", value: `${params.bonusUpvotes} upvotes after posting`, inline: true });
 
   const isImage = !!params.mediaUrl && IMAGE_EXT_RE.test(params.mediaUrl);
 

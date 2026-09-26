@@ -6,7 +6,9 @@ import { PRICING } from "@/lib/pricing";
 import { FAQSection } from "./_components/FAQSection";
 import { SiteNav } from "./_components/SiteNav";
 import { ScrollReveal } from "./_components/ScrollReveal";
-import { InteractiveDemoMockup } from "./_components/InteractiveDemoMockup";
+// Commented out — not pulling its weight on the landing page. Component
+// kept in place in case we want to bring it back.
+// import { InteractiveDemoMockup } from "./_components/InteractiveDemoMockup";
 import { NightSky } from "./_components/NightSky";
 import { GlobeViz } from "./_components/Scenery";
 import { DEMO_CALL_URL } from "@/lib/links";
@@ -124,7 +126,7 @@ const LOOP_STEPS = [
   { n: "1", title: "Measure", desc: "Composite visibility score across 5 engines, ~60 seconds after you enter your domain." },
   { n: "2", title: "Research", desc: "Generative query mining surfaces every question where AI answers without you." },
   { n: "3", title: "Write", desc: "Source-grounded articles engineered for citation — schema, FAQs and internal links included." },
-  { n: "4", title: "Publish", desc: "One click to WordPress, Shopify or Framer. Webhooks and REST API for everything else." },
+  { n: "4", title: "Publish", desc: "One click — or fully on autopilot — to WordPress or your own site. Webhooks and REST API for everything else." },
   { n: "5", title: "Re-measure", desc: "Automatic refresh every 3 days proves the lift — watch citations appear engine by engine." },
 ];
 
@@ -214,8 +216,8 @@ function FeatureBento() {
 
   const destinations = [
     { dest: "WordPress", detail: "/blog/why-geo-is-not-seo", status: "published" },
-    { dest: "Shopify", detail: "/blogs/news/why-geo", status: "published" },
-    { dest: "Framer", detail: "Scheduled · 15:00 UTC", status: "scheduled" },
+    { dest: "Your site", detail: "/blog/why-geo · via webhook", status: "published" },
+    { dest: "Autopilot", detail: "Scheduled · 15:00 UTC", status: "scheduled" },
     { dest: "Webhook", detail: "REST · custom endpoint", status: "published" },
   ];
 
@@ -410,7 +412,7 @@ function GlobeSection() {
               {[
                 { b: "5", s: "AI engines tracked, from ChatGPT to Google AI" },
                 { b: "~60s", s: "to your first visibility score. No credit card." },
-                { b: "3-day", s: "refresh cycles on Business & Scale plans" },
+                { b: "3-day", s: "visibility refresh cycles" },
                 { b: "25", s: "competitor brands tracked side-by-side" },
               ].map((st) => (
                 <div
@@ -492,11 +494,17 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* INTERACTIVE DEMO — the real dashboard, click around */}
+          {/* INTERACTIVE DEMO — the real dashboard, click around.
+          Commented out — not very useful on the landing page for now.
           <div className="rise relative z-[6] mx-auto mt-16 max-w-5xl overflow-x-auto px-6 pb-28" style={{ "--d": ".7s" } as React.CSSProperties}>
             <InteractiveDemoMockup />
           </div>
+          */}
         </section>
+
+        <p className="px-6 pb-6 text-center text-[13.5px] text-[var(--ink-faint)]">
+          Also handles your Reddit marketing — finds the threads, posts and comments for you.
+        </p>
 
         <EngineMarquee />
 
@@ -591,7 +599,7 @@ export default function LandingPage() {
           <div>
             <div className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-faint)]">Integrations</div>
             <div className="space-y-2.5">
-              {["WordPress", "Shopify", "Framer", "Webhooks", "REST API"].map((l) => (
+              {["WordPress", "Webhooks", "REST API"].map((l) => (
                 <a key={l} href="#" className="block rounded text-sm text-[var(--ink-soft)] transition-colors hover:text-[var(--rust)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rust)]">
                   {l}
                 </a>

@@ -1,49 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
-
-async function searchReddit(keyword: string): Promise<Array<Record<string, unknown>>> {
-  // Reddit requires OAuth since mid-2023 for reliable API access.
-  // Try OAuth if credentials are available, fall back to public JSON.
-  const clientId = process.env.REDDIT_CLIENT_ID;
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
-
-  const headers: Record<string, string> = {
-    "User-Agent": "web:rankongeo:v1.0 (by /u/rankongeo_app)",
-  };
-
-  if (clientId && clientSecret) {
-    // Get OAuth token via client_credentials grant
-    const tokenRes = await fetch("https://www.reddit.com/api/v1/access_token", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": headers["User-Agent"],
-      },
-      body: "grant_type=client_credentials",
-      signal: AbortSignal.timeout(8000),
-    });
-    if (tokenRes.ok) {
-      const { access_token } = await tokenRes.json();
-      headers["Authorization"] = `bearer ${access_token}`;
-    }
-  }
-
-  const baseUrl = headers["Authorization"]
-    ? "https://oauth.reddit.com"
-    : "https://www.reddit.com";
-
-  const url = `${baseUrl}/search.json?q=${encodeURIComponent(keyword)}&sort=new&limit=25&t=month&type=link`;
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
-
-  if (!res.ok) {
-    throw new Error(`Reddit returned ${res.status} for keyword "${keyword}"`);
-  }
-
-  const data = await res.json();
-  return (data.data?.children ?? []).map((c: { data: Record<string, unknown> }) => c.data);
-}
+import { getRedditHeaders, searchReddit } from "@/lib/reddit-search";
 
 export async function POST(req: NextRequest) {
   const { brandId } = await req.json();
@@ -67,10 +25,11 @@ export async function POST(req: NextRequest) {
 
   const allRows: object[] = [];
   const errors: string[] = [];
+  const headers = await getRedditHeaders();
 
   for (const { keyword } of keywords) {
     try {
-      const posts = await searchReddit(keyword);
+      const posts = await searchReddit(keyword, headers);
       for (const post of posts) {
         allRows.push({
           brand_id: brandId,

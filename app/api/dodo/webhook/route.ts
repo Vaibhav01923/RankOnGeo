@@ -24,8 +24,6 @@ const getDodo = () =>
 // over metadata when a product_id is available.
 const PRODUCT_ID_TO_PLAN: Record<string, string> = {
   [process.env.DODO_STARTER_PRODUCT_ID ?? ""]: "starter",
-  [process.env.DODO_GROWTH_PRODUCT_ID ?? ""]: "growth",
-  [process.env.DODO_ENTERPRISE_PRODUCT_ID ?? ""]: "enterprise",
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -292,7 +290,7 @@ export async function POST(req: NextRequest) {
       // Only clear dodo_subscription_id — that's the "active paid plan?" signal
       // everywhere else in the app (see app/api/setup/route.ts, app/setup/page.tsx).
       // Leaving `plan` untouched keeps a record of what they were last on without
-      // making a cancelled user look like an active "starter" ($49) subscriber.
+      // making a cancelled user look like an active "starter" ($40) subscriber.
       // isLapsedSubscriber() now treats dodo_subscription_id=null as an
       // immediate full lockout, so also clear payment_failed_at — there's no
       // grace period left to track once Dodo itself has cancelled/expired it.

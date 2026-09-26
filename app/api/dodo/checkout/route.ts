@@ -11,8 +11,6 @@ const getDodo = () =>
 
 const PLAN_PRODUCTS: Record<string, string | undefined> = {
   starter: process.env.DODO_STARTER_PRODUCT_ID,
-  growth: process.env.DODO_GROWTH_PRODUCT_ID,
-  enterprise: process.env.DODO_ENTERPRISE_PRODUCT_ID,
 };
 
 // Discount code applied to purchases made through /early. Created in Dodo

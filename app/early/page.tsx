@@ -27,22 +27,22 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Early Access — 50% Off All Plans",
+  title: "Early Access — 50% Off",
   description:
-    "Join the RankOnGeo early list: every plan at a flat 50% off. Track how ChatGPT, Claude, Gemini, Perplexity and AI Overviews talk about your brand.",
+    "Join the RankOnGeo early list: the Pro plan at a flat 50% off. Track how ChatGPT, Claude, Gemini, Perplexity and AI Overviews talk about your brand.",
   alternates: { canonical: "/early" },
   openGraph: {
     type: "website",
     url: "https://www.rankongeo.com/early",
-    title: "RankOnGeo Early Access — 50% Off All Plans",
-    description: "Back us early, get every plan at a flat 50% off, and shape the roadmap with us.",
+    title: "RankOnGeo Early Access — 50% Off",
+    description: "Back us early, get the Pro plan at a flat 50% off, and shape the roadmap with us.",
   },
 };
 
 const PERKS = [
   {
     title: "Flat 50% off, applied at checkout",
-    body: "Every plan — Pro, Business, Scale — at half price when you buy through this page. The discount shows up right on the payment screen.",
+    body: "The Pro plan at half price when you buy through this page. The discount shows up right on the payment screen.",
   },
   {
     title: "You're on the early list",
@@ -60,7 +60,7 @@ export default function EarlyAccessPage() {
       className={`${instrumentSerif.variable} ${workSans.variable} ${ibmPlexMono.variable} min-h-screen bg-[var(--cream)] text-[var(--ink)]`}
       style={{ fontFamily: "var(--font-work-sans), sans-serif" }}
     >
-      <WebPageJsonLd name="Early Access — 50% Off All Plans" description={metadata.description as string} path="/early" />
+      <WebPageJsonLd name="Early Access — 50% Off" description={metadata.description as string} path="/early" />
       <SiteNav />
 
       <main className="px-6 pb-24 pt-36">
@@ -69,7 +69,7 @@ export default function EarlyAccessPage() {
             className="font-signal-serif text-4xl font-[350] leading-tight tracking-tight sm:text-6xl"
             style={{ textWrap: "balance" } as React.CSSProperties}
           >
-            Back us early, pay <em className="italic text-[var(--rust)]">half</em> — every plan
+            Back us early, pay <em className="italic text-[var(--rust)]">half</em>
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-[16px] leading-relaxed text-[var(--ink-soft)]">
             AI engines are already answering questions about your market. Join the early list and get the whole

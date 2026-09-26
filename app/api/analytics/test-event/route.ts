@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const { data: userPlan } = await db.from("user_plans").select("dodo_subscription_id").eq("user_id", access.ownerId).maybeSingle();
   if (!userPlan?.dodo_subscription_id) {
-    return NextResponse.json({ error: "Subscribe to a plan to use Web/LLM Analytics" }, { status: 402 });
+    return NextResponse.json({ error: "Subscribe to a plan to use Analytics" }, { status: 402 });
   }
 
   const admin = serverClient();

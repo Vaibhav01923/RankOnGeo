@@ -12,8 +12,8 @@ RankOnGeo measures brand visibility across 5 AI answer surfaces (ChatGPT, Claude
 
 ## Docs
 
-- [Web Analytics setup](https://www.rankongeo.com/docs/web-analytics): Installing the tracking snippet and what each metric means.
-- [LLM Analytics setup](https://www.rankongeo.com/docs/llm-analytics): Detecting and logging real AI-crawler traffic server-side.
+- [Web Analytics setup](https://www.rankongeo.com/docs/web-analytics): Connecting your site from the dashboard's Analytics tab (one script tag) and what each metric means, including visitors arriving from AI answers.
+- [AI crawler analytics setup](https://www.rankongeo.com/docs/llm-analytics): Detecting and logging real AI-crawler traffic server-side, with one copy-paste prompt for custom-built sites.
 
 ## Blog
 

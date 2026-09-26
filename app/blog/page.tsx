@@ -14,9 +14,14 @@ export const metadata: Metadata = {
   description:
     "Guides and research on AI search visibility, generative engine optimization (GEO), and getting your brand recommended by ChatGPT, Claude, Gemini, and Perplexity.",
   alternates: { canonical: "/blog" },
+  // Restated here because a page's openGraph fully replaces the root
+  // layout's rather than merging with it — without siteName/images this
+  // route emitted neither og:site_name nor og:image.
   openGraph: {
     type: "website",
+    siteName: "RankOnGeo",
     url: `${SITE_URL}/blog`,
+    images: [`${SITE_URL}/opengraph-image`],
     title: "RankOnGeo Blog — AI Search Visibility & GEO",
     description:
       "Guides and research on AI search visibility, generative engine optimization (GEO), and getting your brand recommended by AI engines.",

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       engine,
     });
 
-    if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: result.status });
+    if (!result.ok) return new Response(JSON.stringify({ error: result.error, reason: result.reason }), { status: result.status });
     return new Response(JSON.stringify({ task: result.task, queued: result.queued }), { status: 201, headers: { "Content-Type": "application/json" } });
   }
 

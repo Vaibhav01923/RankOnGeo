@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { WebPageJsonLd, BreadcrumbJsonLd } from "../../_components/WebPageJsonLd";
+import { cloudflareWorkerSnippet, expressSnippet, nextProxySnippet } from "@/lib/integrations";
 
 const CURL_SNIPPET = `curl -X POST https://www.rankongeo.com/api/track/bot \\
   -H "Content-Type: application/json" \\
@@ -12,22 +13,12 @@ const CURL_SNIPPET = `curl -X POST https://www.rankongeo.com/api/track/bot \\
     "referrer": "Referer header from the request"
   }'`;
 
-const NEXTJS_SNIPPET = `import { NextRequest, NextResponse } from "next/server";
+const NEXTJS_SNIPPET = nextProxySnippet("YOUR_SITE_KEY");
+const EXPRESS_SNIPPET = expressSnippet("YOUR_SITE_KEY");
+const WORKER_SNIPPET = cloudflareWorkerSnippet("YOUR_SITE_KEY");
 
-export async function middleware(req: NextRequest) {
-  fetch("https://www.rankongeo.com/api/track/bot", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      siteKey: "YOUR_SITE_KEY",
-      path: req.nextUrl.pathname,
-      userAgent: req.headers.get("user-agent") ?? "",
-      referrer: req.headers.get("referer") ?? "",
-    }),
-  }).catch(() => {}); // never let tracking break the request
-
-  return NextResponse.next();
-}`;
+type Tab = "rest" | "nextjs" | "express" | "worker";
+const TAB_LABELS: Record<Tab, string> = { rest: "REST API", nextjs: "Next.js", express: "Express", worker: "Cloudflare Worker" };
 
 const TOC = [
   { href: "#setup-guide", label: "AI Analytics Setup Guide" },
@@ -51,7 +42,7 @@ function CodeBlock({ code }: { code: string }) {
 }
 
 export default function LlmAnalyticsDocsPage() {
-  const [tab, setTab] = useState<"rest" | "nextjs">("rest");
+  const [tab, setTab] = useState<Tab>("rest");
 
   return (
     <div className="flex items-start gap-10">
@@ -68,35 +59,54 @@ export default function LlmAnalyticsDocsPage() {
         <h2 id="setup-guide" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">AI Analytics Setup Guide</h2>
         <div className="bg-[var(--rust-wash)] border border-[var(--rust)]/25 rounded-lg px-4 py-3 mb-6">
           <p className="text-sm text-[var(--rust-deep)]">
-            Server-side analytics tracks AI agents, crawlers, and other bots that don&apos;t run JavaScript. You need to add this to your server&apos;s middleware.
+            Server-side analytics tracks AI agents, crawlers, and other bots that don&apos;t run JavaScript. It has to run on your server (or in front of it), because a browser script never sees them.
           </p>
         </div>
-        <p className="text-sm text-[var(--ink-soft)] mb-4">You can use our REST API, or a Next.js middleware if that&apos;s what you&apos;re running.</p>
+        <p className="text-sm text-[var(--ink-soft)] mb-4">
+          Fastest way: open <strong className="text-[var(--ink)]">Analytics → Setup → Custom Built Site</strong> in your dashboard and copy the prompt — paste it into Claude Code, Cursor, Copilot, Lovable, Bolt or v0 and it adds both the tracking script and this server-side call for your stack. To do it by hand, pick your setup:
+        </p>
 
-        <div className="flex gap-1 border-b border-[var(--line)] mb-4">
-          {(["rest", "nextjs"] as const).map((t) => (
+        <div className="flex gap-1 border-b border-[var(--line)] mb-4 overflow-x-auto">
+          {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors ${
                 tab === t ? "border-[var(--rust)] text-[var(--rust-deep)]" : "border-transparent text-[var(--ink-faint)] hover:text-[var(--ink-soft)]"
               }`}
             >
-              {t === "rest" ? "REST API" : "Next.js"}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
 
-        {tab === "rest" ? (
+        {tab === "rest" && (
           <>
-            <p className="text-sm text-[var(--ink-soft)] mb-3">Use this endpoint from your server middleware:</p>
+            <p className="text-sm text-[var(--ink-soft)] mb-3">Call this endpoint from your server, on every page request:</p>
             <p className="text-sm text-[var(--ink-soft)] mb-3"><code className="text-[var(--rust-deep)]">POST https://www.rankongeo.com/api/track/bot</code></p>
             <CodeBlock code={CURL_SNIPPET} />
           </>
-        ) : (
+        )}
+        {tab === "nextjs" && (
           <>
-            <p className="text-sm text-[var(--ink-soft)] mb-3">Drop this in your <code className="text-[var(--rust-deep)]">middleware.ts</code> so every request gets checked:</p>
+            <p className="text-sm text-[var(--ink-soft)] mb-3">
+              Drop this in <code className="text-[var(--rust-deep)]">proxy.ts</code> (Next.js 16+ — on Next.js 15 and earlier the file is called <code className="text-[var(--rust-deep)]">middleware.ts</code> and the function <code className="text-[var(--rust-deep)]">middleware</code>). <code className="text-[var(--rust-deep)]">event.waitUntil</code> lets the call finish after the response is sent; an un-awaited fetch can be cancelled on serverless hosts.
+            </p>
             <CodeBlock code={NEXTJS_SNIPPET} />
+          </>
+        )}
+        {tab === "express" && (
+          <>
+            <p className="text-sm text-[var(--ink-soft)] mb-3">Register this before your routes (Node 18+ for the global <code className="text-[var(--rust-deep)]">fetch</code>):</p>
+            <CodeBlock code={EXPRESS_SNIPPET} />
+          </>
+        )}
+        {tab === "worker" && (
+          <>
+            <p className="text-sm text-[var(--ink-soft)] mb-3">
+              No server access — Webflow, Framer, Squarespace, Wix, Shopify and similar? If your domain is proxied through Cloudflare, this Worker adds AI-crawler tracking without touching your site.
+            </p>
+            <CodeBlock code={WORKER_SNIPPET} />
           </>
         )}
         <p className="text-xs text-[var(--ink-faint)] mb-10">
@@ -116,9 +126,9 @@ export default function LlmAnalyticsDocsPage() {
         <h2 id="debugging" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Debugging</h2>
         <p className="text-sm font-semibold text-[var(--ink)]/90 mb-2">Not seeing AI traffic?</p>
         <ul className="text-sm text-[var(--ink-soft)] space-y-2 list-disc pl-5">
-          <li>Verify your <code className="text-[var(--rust-deep)]">siteKey</code> from the LLM Analytics tab.</li>
+          <li>Verify your <code className="text-[var(--rust-deep)]">siteKey</code> from Analytics → Setup.</li>
           <li>Add a log line to confirm your middleware is actually running on the routes you expect.</li>
-          <li>AI crawlers visit on their own schedule, not a fixed interval — it can take time before real traffic shows up. Use &quot;Send test event&quot; in the dashboard to confirm the pipeline itself works.</li>
+          <li>AI crawlers visit on their own schedule, not a fixed interval — it can take time before real traffic shows up. Use &quot;Send test AI-crawler hit&quot; in Analytics → Setup to confirm the pipeline itself works, or run the curl command from the REST API tab with a bot user-agent such as GPTBot/1.0.</li>
         </ul>
       </div>
 

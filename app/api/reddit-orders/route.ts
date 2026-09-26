@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
   }
-  const { brandId, url, serviceType, quantity, commentText, speed, subreddit, postTitle, mediaUrl } = body;
+  const { brandId, url, serviceType, quantity, commentText, speed, subreddit, postTitle, mediaUrl, bonusUpvotes } = body;
 
   if (!SERVICE_TYPES.includes(serviceType)) {
     return new Response(JSON.stringify({ error: "Invalid service type" }), { status: 400 });
@@ -44,8 +44,9 @@ export async function POST(req: NextRequest) {
     subreddit,
     postTitle,
     mediaUrl,
+    bonusUpvotes,
   });
 
-  if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: result.status });
+  if (!result.ok) return new Response(JSON.stringify({ error: result.error, reason: result.reason }), { status: result.status });
   return new Response(JSON.stringify({ task: result.task, queued: result.queued }), { status: 201, headers: { "Content-Type": "application/json" } });
 }
