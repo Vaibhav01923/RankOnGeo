@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import { clientFromRequest, serverClient } from "@/lib/supabase";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { ALREADY_SUBSCRIBED_MESSAGE, hasLiveSubscription } from "@/lib/subscription-guard";
 
 const getDodo = () =>
   new DodoPayments({
@@ -13,18 +14,32 @@ const PLAN_PRODUCTS: Record<string, string | undefined> = {
   starter: process.env.DODO_STARTER_PRODUCT_ID,
 };
 
+// The same plans billed yearly (a separate Dodo product per billing period).
+const ANNUAL_PLAN_PRODUCTS: Record<string, string | undefined> = {
+  starter: process.env.DODO_STARTER_ANNUAL_PRODUCT_ID,
+};
+
 // Discount code applied to purchases made through /early. Created in Dodo
 // (percentage, 5000 basis points = 50%); override via env if renamed.
 const EARLY_DISCOUNT_CODE = process.env.DODO_EARLY_DISCOUNT_CODE ?? "EARLY50";
 
 export async function POST(req: NextRequest) {
-  const { plan, cancelPath, early, trialDays } = await req.json();
+  const { plan, cancelPath, early, trialDays, billing } = await req.json();
 
   const db = clientFromRequest(req);
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const productId = PLAN_PRODUCTS[plan];
+  // Someone who is already subscribed must not start a second subscription (it
+  // would bill them twice), whichever plan or billing period they picked.
+  const { data: currentPlan } = await serverClient().from("user_plans").select("dodo_subscription_id").eq("user_id", user.id).maybeSingle();
+  if (await hasLiveSubscription(getDodo(), currentPlan?.dodo_subscription_id)) {
+    return NextResponse.json({ error: ALREADY_SUBSCRIBED_MESSAGE, reason: "already_subscribed" }, { status: 409 });
+  }
+
+  // /early's 50% code is for the monthly plan, so it never combines with yearly billing.
+  const annual = billing === "annual" && !early;
+  const productId = (annual ? ANNUAL_PLAN_PRODUCTS : PLAN_PRODUCTS)[plan];
   if (!productId) return NextResponse.json({ error: "Invalid plan or product not configured" }, { status: 400 });
 
   const origin = req.headers.get("origin") ?? "http://localhost:3000";
@@ -78,6 +93,7 @@ export async function POST(req: NextRequest) {
     metadata: {
       userId: user.id,
       plan,
+      ...(annual ? { billing: "annual" } : {}),
       ...(early ? { early: "true" } : {}),
       ...(validTrialDays ? { trial: "true" } : {}),
       ...(datafastVisitorId ? { datafast_visitor_id: datafastVisitorId } : {}),

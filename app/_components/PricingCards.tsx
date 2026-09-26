@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PRICING, formatPlanPrice } from "@/lib/pricing";
+import { PRICING, annualPerMonth, annualSavingsPct, formatPlanPrice } from "@/lib/pricing";
 
 export { PRICING };
 
@@ -29,7 +29,7 @@ export function PricingCards({
       const res = await fetch("/api/dodo/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, cancelPath: window.location.pathname, ...(early ? { early: true } : {}) }),
+        body: JSON.stringify({ plan, cancelPath: window.location.pathname, ...(early ? { early: true } : billing === "annual" ? { billing: "annual" } : {}) }),
       });
       const data = await res.json();
       if (data.url) {
@@ -68,16 +68,17 @@ export function PricingCards({
               billing === "annual" ? "bg-[var(--rust-wash)] text-[var(--rust-deep)]" : "text-[var(--ink-faint)] hover:text-[var(--ink-soft)]"
             }`}
           >
-            Annual <span className="ml-1 text-xs font-semibold text-[var(--olive)]">−17%</span>
+            Annual <span className="ml-1 text-xs font-semibold text-[var(--olive)]">−{annualSavingsPct(PRICING[0])}%</span>
           </button>
         </div>
       </div>
 
       <div className={`grid grid-cols-1 items-stretch gap-6 md:grid-cols-3`}>
         {PRICING.map((plan) => {
-          // Rounded to the cent, not the dollar: the plan is $29.99, so whole-dollar rounding would show $25 / $15.
+          // Rounded to the cent, not the dollar: the plan is $29.99, so whole-dollar rounding would show $15.
           const cents = (n: number) => Math.round(n * 100) / 100;
-          const base = billing === "annual" && !early ? cents(plan.price * 0.83) : plan.price;
+          const yearly = billing === "annual" && !early;
+          const base = yearly ? annualPerMonth(plan) : plan.price;
           const price = early ? cents(plan.price / 2) : base;
           return (
             <div
@@ -109,6 +110,7 @@ export function PricingCards({
                 <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">{formatPlanPrice(price)}</span>
                 <span className="text-sm text-[var(--ink-faint)]">/ month</span>
               </div>
+              {yearly && <p className="mb-1 text-xs text-[var(--ink-faint)]">Billed {formatPlanPrice(plan.annualPrice)} once a year</p>}
               <p className="mb-7 text-sm text-[var(--ink-soft)]">{plan.desc}</p>
               <ul className="mb-8 flex-1 space-y-2.5">
                 {plan.features.map((f) => (

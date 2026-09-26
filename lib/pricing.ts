@@ -14,6 +14,7 @@ export const PRICING = [
     planKey: "starter",
     desc: "Everything RankOnGeo does, one plan.",
     price: 29.99, // keep in step with the "RankOnGeo Pro" product price in Dodo, which is what checkout charges
+    annualPrice: 299, // per year; keep in step with "RankOnGeo Pro (Annual)" in Dodo
     highlight: true,
     features: [
       "40 credits for Reddit upvotes, comments, comment upvotes & more",
@@ -39,4 +40,14 @@ export function formatPlanPrice(price: number): string {
 // What the plan works out to per day over a 30-day month, e.g. "$1.33".
 export function pricePerDay(price: number): string {
   return `$${(price / 30).toFixed(2)}`;
+}
+
+// What billing yearly works out to per month, to the cent ($299 a year is $24.92).
+export function annualPerMonth(plan: { annualPrice: number }): number {
+  return Math.round((plan.annualPrice / 12) * 100) / 100;
+}
+
+// Whole-number percentage saved by paying yearly instead of monthly.
+export function annualSavingsPct(plan: { price: number; annualPrice: number }): number {
+  return Math.round((1 - plan.annualPrice / (plan.price * 12)) * 100);
 }
