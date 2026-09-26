@@ -3,7 +3,7 @@ import { clientFromRequest } from "@/lib/supabase";
 import { requireBrandAccess } from "@/lib/team";
 import { requiresPaywall } from "@/lib/plan-limits";
 import { buildEventSeries } from "@/lib/analytics-series";
-import { aiEngineForVisit } from "@/lib/ai-referrers";
+import { aiEngineForVisit, referrerHost } from "@/lib/ai-referrers";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -195,18 +195,4 @@ export async function GET(req: NextRequest) {
     topCampaigns,
     series: buildEventSeries(visits.map((v) => v.created_at), days),
   });
-}
-
-function referrerHost(referrer: string | null): string {
-  if (!referrer) return "Direct";
-  try {
-    let host = new URL(referrer).hostname.replace(/^www\./, "");
-    // t.co (Twitter/X's link shortener, what ad clicks actually arrive
-    // through) and the legacy twitter.com domain are the same traffic
-    // source as x.com — merge them so campaign counts aren't split three ways.
-    if (host === "t.co" || host === "twitter.com") host = "x.com";
-    return host;
-  } catch {
-    return "Direct";
-  }
 }

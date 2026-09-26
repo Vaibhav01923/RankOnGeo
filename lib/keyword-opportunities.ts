@@ -84,7 +84,7 @@ export async function relatedKeywords(seeds: string[], brandId?: string): Promis
 }
 
 async function pickRelevant(brand: KeywordBrand, candidates: RelatedKeyword[]): Promise<KeywordOpportunity[]> {
-  const out = await chat(`From the keyword list below, choose the 12 that a HIGH-INTENT BUYER for this company would search when comparing or shopping for a product like it: category searches, "[competitor] alternative(s)", "best ... for ...", comparisons, pricing. Exclude anything unrelated to this company's product, and anything informational, academic, job-related or about a different kind of tool. Reply with the chosen keywords copied EXACTLY as written, one per line, nothing else.
+  const out = await chat(`From the keyword list below, choose the 25 that a HIGH-INTENT BUYER for this company would search when comparing or shopping for a product like it: category searches, "[competitor] alternative(s)", "best ... for ...", comparisons, pricing. Exclude anything unrelated to this company's product, and anything informational, academic, job-related or about a different kind of tool. Reply with the chosen keywords copied EXACTLY as written, one per line, nothing else.
 
 ${brandContext(brand)}
 

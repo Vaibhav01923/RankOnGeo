@@ -7,8 +7,11 @@ import { requireBrandAccess } from "@/lib/team";
 async function requireArticleAccess(db: ReturnType<typeof clientFromRequest>, userId: string, articleId: string) {
   const { data: article } = await db.from("articles").select("id, brand_id").eq("id", articleId).maybeSingle();
   if (!article) return null;
-  return requireBrandAccess(db, userId, article.brand_id);
+  return requireBrandAccess(db, userId, article.brand_id, "id, user_id, domain");
 }
+
+// "https://www.example.com/blog/x" and "example.com" are the same site.
+const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, "");
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const db = clientFromRequest(req);
@@ -33,6 +36,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.description !== undefined) updates.description = body.description;
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
   if (body.imageUrl !== undefined) updates.image_url = body.imageUrl;
+
+  // The live address of a published article, so its views can be counted. Only
+  // an address on the customer's own website is accepted.
+  if (body.publishedUrl !== undefined) {
+    if (body.publishedUrl === null || body.publishedUrl === "") {
+      updates.published_url = null;
+    } else {
+      let host = "";
+      try {
+        const u = new URL(String(body.publishedUrl));
+        if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("protocol");
+        host = bareHost(u.hostname);
+      } catch {
+        return NextResponse.json({ error: "Enter the full web address, starting with https://" }, { status: 400 });
+      }
+      const site = bareHost(String((access.brand as unknown as { domain?: string }).domain ?? "").replace(/^https?:\/\//, "").replace(/[/?#].*$/, ""));
+      if (!site || (host !== site && !host.endsWith(`.${site}`))) {
+        return NextResponse.json({ error: `That address isn't on ${site || "your website"}.` }, { status: 400 });
+      }
+      updates.published_url = String(body.publishedUrl).trim();
+    }
+  }
 
   const { data, error } = await db
     .from("articles")
