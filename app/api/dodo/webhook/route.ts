@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
       // Only clear dodo_subscription_id — that's the "active paid plan?" signal
       // everywhere else in the app (see app/api/setup/route.ts, app/setup/page.tsx).
       // Leaving `plan` untouched keeps a record of what they were last on without
-      // making a cancelled user look like an active "starter" ($40) subscriber.
+      // making a cancelled user look like an active "starter" subscriber.
       // isLapsedSubscriber() now treats dodo_subscription_id=null as an
       // immediate full lockout, so also clear payment_failed_at — there's no
       // grace period left to track once Dodo itself has cancelled/expired it.

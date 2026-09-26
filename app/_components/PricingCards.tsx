@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PRICING } from "@/lib/pricing";
+import { PRICING, formatPlanPrice } from "@/lib/pricing";
 
 export { PRICING };
 
@@ -75,8 +75,10 @@ export function PricingCards({
 
       <div className={`grid grid-cols-1 items-stretch gap-6 md:grid-cols-3`}>
         {PRICING.map((plan) => {
-          const base = billing === "annual" && !early ? Math.round(plan.price * 0.83) : plan.price;
-          const price = early ? Math.round(plan.price / 2) : base;
+          // Rounded to the cent, not the dollar: the plan is $29.99, so whole-dollar rounding would show $25 / $15.
+          const cents = (n: number) => Math.round(n * 100) / 100;
+          const base = billing === "annual" && !early ? cents(plan.price * 0.83) : plan.price;
+          const price = early ? cents(plan.price / 2) : base;
           return (
             <div
               key={plan.name}
@@ -101,10 +103,10 @@ export function PricingCards({
               <div className="mb-1 mt-5 flex items-baseline gap-2">
                 {early && (
                   <span className="font-signal-mono text-2xl text-[var(--ink-faint)] line-through decoration-[var(--rust)]/60">
-                    {`$${plan.price}`}
+                    {formatPlanPrice(plan.price)}
                   </span>
                 )}
-                <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">{`$${price}`}</span>
+                <span className="font-signal-mono text-5xl font-semibold tracking-tight text-[var(--ink)]">{formatPlanPrice(price)}</span>
                 <span className="text-sm text-[var(--ink-faint)]">/ month</span>
               </div>
               <p className="mb-7 text-sm text-[var(--ink-soft)]">{plan.desc}</p>
