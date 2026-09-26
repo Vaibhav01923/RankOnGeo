@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
+import { publishToChannel } from "@/lib/publish-article";
 
 export async function POST(req: NextRequest) {
   const db = clientFromRequest(req);
@@ -31,84 +32,9 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  let success = false;
-  let errorMessage: string | null = null;
-
-  try {
-    if (channel.type === "webhook") {
-      // api_key doubles as a shared secret for webhook channels (unused by
-      // this type otherwise) — sent so the receiver can verify the request
-      // actually came from RankOnGeo. See the "Copy AI setup prompt" flow
-      // in the dashboard's Add Channel modal, which generates this secret
-      // and tells the user's endpoint to check for it.
-      const res = await fetch(channel.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(channel.api_key ? { "X-RankOnGeo-Secret": channel.api_key } : {}),
-        },
-        body: JSON.stringify({
-          title: article.title,
-          content: article.content,
-          keyword: article.keyword,
-          // Optional — receivers built before these existed can ignore them.
-          description: article.description ?? "",
-          tags: Array.isArray(article.tags) ? article.tags : [],
-          image_url: article.image_url ?? "",
-          status: "publish",
-          source: "rankongeo",
-        }),
-      });
-      if (!res.ok) throw new Error(`Webhook returned ${res.status} ${res.statusText}`);
-      success = true;
-    } else if (channel.type === "discord") {
-      const preview = (article.content as string)?.substring(0, 2000) ?? "";
-      const res = await fetch(channel.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          embeds: [{
-            title: article.title,
-            description: preview,
-            color: 0xc8372d,
-            footer: { text: `Published via RankOnGeo · Keyword: ${article.keyword}` },
-            timestamp: new Date().toISOString(),
-          }],
-        }),
-      });
-      if (!res.ok) throw new Error(`Discord returned ${res.status} ${res.statusText}`);
-      success = true;
-    } else if (channel.type === "wordpress") {
-      // username wasn't collected from the user before — hardcoding "admin"
-      // silently 401s for anyone whose WP admin username isn't literally
-      // that. Existing channels with no username saved keep the old
-      // behavior via this fallback.
-      const wpUser = (channel.username as string) || "admin";
-      const auth = Buffer.from(`${wpUser}:${channel.api_key ?? ""}`).toString("base64");
-      const wpUrl = (channel.url as string).replace(/\/$/, "") + "/wp-json/wp/v2/posts";
-      const res = await fetch(wpUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Basic ${auth}`,
-        },
-        body: JSON.stringify({
-          title: article.title,
-          content: article.content,
-          status: "publish",
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`WordPress ${res.status}: ${body.substring(0, 200)}`);
-      }
-      success = true;
-    } else {
-      throw new Error(`${channel.type} requires manual publish — copy the article content and paste it into your CMS`);
-    }
-  } catch (err) {
-    errorMessage = err instanceof Error ? err.message : "Unknown error";
-  }
+  const result = await publishToChannel(channel, article);
+  const success = result.success;
+  const errorMessage = result.error;
 
   if (logEntry) {
     await db.from("publishing_log").update({
@@ -120,7 +46,13 @@ export async function POST(req: NextRequest) {
   if (success) {
     await Promise.all([
       db.from("publishing_channels").update({ last_published_at: new Date().toISOString() }).eq("id", channelId),
-      db.from("articles").update({ status: "published", published_at: new Date().toISOString() }).eq("id", articleId),
+      db.from("articles").update({
+        status: "published",
+        published_at: new Date().toISOString(),
+        // Remember where it went so it can be reviewed and updated in place later.
+        ...(result.publishedUrl ? { published_url: result.publishedUrl } : {}),
+        ...(result.remoteId ? { remote_id: result.remoteId, channel_id: channelId } : {}),
+      }).eq("id", articleId),
     ]);
   }
 

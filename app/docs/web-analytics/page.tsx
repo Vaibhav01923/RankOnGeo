@@ -43,7 +43,7 @@ export default function WebAnalyticsDocsPage() {
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">1. Get your Website ID</h3>
         <p className="text-sm text-[var(--ink-soft)] mb-4">
-          Open the Web Analytics tab in your dashboard — your site&apos;s ID is shown there, and gets substituted into the snippet below automatically.
+          Open <strong className="text-[var(--ink)]">Analytics → Setup</strong> in your dashboard. Pick where your site is built (WordPress, Webflow, Shopify, Wix, GoHighLevel, Sanity, Framer, Squarespace, a custom-built site or anything else) and you get exact steps with your ID already filled in. Building a custom site with an AI coding assistant? Copy the one prompt under &quot;Custom Built Site&quot; and it does everything below — including AI-crawler tracking — for you.
         </p>
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">2. Add the tracking script</h3>
@@ -55,7 +55,7 @@ export default function WebAnalyticsDocsPage() {
 
         <h3 className="text-sm font-semibold text-[var(--ink)]/90 mb-2">3. Confirm it&apos;s working</h3>
         <p className="text-sm text-[var(--ink-soft)] mb-10">
-          Visit a page on your site, then check the Web Analytics tab — a pageview should show up within a few seconds. You can also click &quot;Send test event&quot; in the dashboard to see the layout populate before deploying the script.
+          Visit a page on your site. The Setup screen checks automatically and turns green as soon as the first real visit arrives, and it then shows up under Analytics → Traffic within seconds. You can also click &quot;Send test pageview&quot; to see the charts populate first — test events never mark your install as connected.
         </p>
 
         <h2 id="metrics-explained" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Metrics explained</h2>
@@ -65,6 +65,7 @@ export default function WebAnalyticsDocsPage() {
           <li><strong className="text-[var(--ink)]">Pageviews</strong> — total page loads in the last 30 days.</li>
           <li><strong className="text-[var(--ink)]">Visit Duration</strong> — average time between a session&apos;s first and last pageview.</li>
           <li><strong className="text-[var(--ink)]">Bounce Rate</strong> — share of sessions with only a single pageview.</li>
+          <li><strong className="text-[var(--ink)]">From AI answers</strong> — visitors who clicked through from ChatGPT, Perplexity, Claude, Gemini and similar. Detected from the referrer, or the <code className="text-[var(--rust-deep)]">utm_source</code> that ChatGPT appends to the links it shows.</li>
         </ul>
 
         <h2 id="debugging" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Debugging</h2>

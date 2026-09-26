@@ -28,8 +28,11 @@ type Stats = {
   sourceCounts: Record<string, number>;
   series: DaySeries[];
   rates: { checkoutToStartedPct: number; startedToConvertedPct: number; domainToConvertedPct: number };
+  stepFunnel: { allTime: number[]; last30d: number[] };
   domains: DomainRow[];
 };
+
+const WIZARD_STEP_LABELS = ["Website", "Brand info", "Prompts", "Reddit", "Trial"];
 
 function KpiTile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -203,6 +206,38 @@ export default function AdminStatsPage() {
                 {stats.rates.domainToConvertedPct}% of domain submissions eventually convert to a paying trial.
               </p>
             </div>
+          </div>
+
+          {/* Setup wizard step funnel */}
+          <div className="mb-8 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+            <div className="mb-4 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--ink-faint)]">Setup wizard — step reach</p>
+              <p className="text-xs text-[var(--ink-faint)]">{stats.stepFunnel.last30d[0]?.toLocaleString() ?? 0} started last 30d</p>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto text-sm">
+              {WIZARD_STEP_LABELS.map((label, i) => {
+                const count = stats.stepFunnel.allTime[i] ?? 0;
+                const prev = i > 0 ? stats.stepFunnel.allTime[i - 1] ?? 0 : null;
+                const dropPct = prev && prev > 0 ? Math.round((1 - count / prev) * 1000) / 10 : null;
+                return (
+                  <div key={label} className="flex items-center gap-2">
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--cream)] px-4 py-3 text-center">
+                      <p className="font-signal-serif text-xl text-[var(--ink)]">{count.toLocaleString()}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-[var(--ink-faint)]">{i + 1}. {label}</p>
+                    </div>
+                    {i < WIZARD_STEP_LABELS.length - 1 && (
+                      <div className="flex flex-col items-center text-[var(--ink-faint)]">
+                        <span>→</span>
+                        {dropPct !== null && dropPct > 0 && <span className="text-[9px] text-red-700/70 whitespace-nowrap">-{dropPct}%</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-4 text-xs text-[var(--ink-faint)]">
+              How many visitors reach each step of the /setup wizard — step 1 (enter a domain) through step 5 (trial signup).
+            </p>
           </div>
 
           {/* Acquisition source */}

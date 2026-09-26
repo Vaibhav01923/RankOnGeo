@@ -8,7 +8,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PricingCards } from "@/app/_components/PricingCards";
 import { ThemeToggle, useIsDarkMode } from "@/app/_components/ThemeToggle";
+import { AnalyticsSetup, type AnalyticsStatus } from "./_components/AnalyticsSetup";
+import { SearchConsolePanel } from "./_components/SearchConsolePanel";
+import { AnalyticsSeriesChart } from "./_components/AnalyticsSeriesChart";
+import { AutopilotPanel } from "./_components/AutopilotPanel";
+import { OnboardingChecklist, type OnboardingItem } from "./_components/OnboardingChecklist";
+import { OnboardingGuide } from "./_components/OnboardingGuide";
 import { promptLimitForPlan, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
+import type { RedditOpportunityThread, SuggestedRedditPost } from "@/lib/reddit-opportunities";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
   chatgpt: "ChatGPT",
@@ -25,16 +32,31 @@ const REDDIT_SERVICE_META: Record<RedditServiceType, { label: string; target: "p
     label: "Downvotes", target: "post", creditsPerUnit: 0.5, min: 5, max: 1000,
     caveat: "Only works on posts less than 24 hours old — on older posts the vote count may not visibly change, but it still limits the post's reach.",
   },
-  comment_upvote: { label: "Upvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
+  comment_upvote: { label: "Upvotes", target: "comment", creditsPerUnit: 2, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
   comment_downvote: { label: "Downvotes", target: "comment", creditsPerUnit: 1, min: 5, max: 1000, caveat: "Only works on comments less than 24 hours old." },
-  custom_comments: { label: "Post a new comment", target: "post", creditsPerUnit: 5, min: 1, max: 1 },
-  create_post: { label: "Create a new post", target: "new_post", creditsPerUnit: 25, min: 1, max: 1 },
+  custom_comments: { label: "Post a new comment", target: "post", creditsPerUnit: 10, min: 1, max: 1 },
+  create_post: { label: "Create a new post", target: "new_post", creditsPerUnit: 50, min: 1, max: 1 },
 };
 const REDDIT_TARGET_SERVICES: Record<"post" | "comment" | "new_post", RedditServiceType[]> = {
   post: ["post_upvote", "post_downvote", "custom_comments"],
   comment: ["comment_upvote", "comment_downvote"],
   new_post: ["create_post"],
 };
+
+function formatCompactNumber(n: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+function formatTimeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 const TASK_STATUS_BADGE: Record<string, { label: string; className: string; dotClassName: string }> = {
   queued: { label: "Queued — high demand", className: "bg-[var(--rust-wash)]/10 text-[var(--rust-deep)] border-[var(--rust)]/25", dotClassName: "bg-[var(--rust-wash)]/100 animate-pulse" },
@@ -138,8 +160,8 @@ const AVAILABLE_ENGINES: AIEngine[] = ["chatgpt", "claude", "gemini", "perplexit
 
 type Tab =
   | "overview" | "history" | "results" | "citations" | "competitors"
-  | "webAnalytics" | "llmAnalytics"
-  | "gaps" | "articles" | "tasks"
+  | "analytics"
+  | "gaps" | "articles" | "tasks" | "redditMarketing"
   | "publishing"
   | "alerts" | "team"
   | "agent" | "admin" | "feedback";
@@ -150,12 +172,12 @@ const TAB_LABELS: Record<Tab, string> = {
   results: "Prompts",
   citations: "Citations",
   competitors: "Competitors",
-  webAnalytics: "Web Analytics",
-  llmAnalytics: "LLM Analytics",
+  analytics: "Analytics",
   gaps: "Research",
   articles: "Articles",
 
   tasks: "Tasks",
+  redditMarketing: "Reddit Marketing",
   publishing: "Publishing",
 
   alerts: "Alerts",
@@ -175,14 +197,14 @@ const TOUR_STEPS: { tab: Tab; title: string; body: string }[] = [
   { tab: "gaps", title: "Research", body: "These are real queries where competitors show up and you don't. Publishing an article for each one is a double win — on-page SEO for Google, and GEO (Generative Engine Optimization) that teaches AI engines to cite and recommend you. Publish one a day; it's one click away in the Publishing tab." },
   { tab: "publishing", title: "Publishing", body: "Click \"Add Channel\" to connect where your articles get published automatically. We've defaulted to \"My website / CMS\" — pick whichever fits your setup." },
   { tab: "publishing", title: "Connect your website", body: "With \"My website / CMS\" selected, copy the AI setup prompt and paste it into your preferred AI coding assistant (Claude Code, Cursor, ChatGPT). It connects RankOnGeo to your site so every article publishes with one click." },
-  { tab: "webAnalytics", title: "Web Analytics", body: "Track your website's own traffic and search performance here too." },
-  { tab: "llmAnalytics", title: "LLM Analytics", body: "See which AI bots — GPTBot, ClaudeBot, and more — are crawling your site." },
+  { tab: "analytics", title: "Analytics", body: "Your traffic, the people arriving from AI answers, the AI bots crawling your site and your Google Search performance — in one place. Connect your site from the Setup tab in one step." },
   { tab: "alerts", title: "Alerts", body: "Get notified about changes to your AI visibility on Slack, email, or whatever channel you prefer." },
   { tab: "team", title: "Team", body: "Invite your teammates to collaborate on this workspace." },
   { tab: "feedback", title: "Feedback", body: "Request a feature, report a bug, or get help any time — right here." },
 ];
 
 type BotBreakdown = { botName: string; count: number };
+type AnalyticsView = "traffic" | "ai" | "search" | "setup";
 type NamedCount = { label: string; count: number };
 type SeriesPoint = { label: string; count: number };
 type PageBreakdown = { path: string; pageviews: number; bounceRate: number; avgDurationSeconds: number };
@@ -191,8 +213,9 @@ type WebAnalyticsData = {
   domain: string;
   siteKey: string;
   isFree: boolean;
-  stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number; newVisitors: number; returningVisitors: number };
+  stats: { liveVisitors: number; visitors: number; pageviews: number; avgDurationSeconds: number; bounceRate: number; newVisitors: number; returningVisitors: number; aiReferrals: number };
   live: { pages: NamedCount[]; referrers: NamedCount[] };
+  aiReferralBreakdown: NamedCount[];
   topReferrers: NamedCount[];
   topPages: NamedCount[];
   pagesBreakdown: PageBreakdown[];
@@ -361,52 +384,6 @@ function MiniTrendChart({ runs }: { runs: ScanRun[] }) {
           <circle key={i} cx={(i / (scores.length - 1)) * width} cy={height - (s / max) * height} r="2.5" fill={rustStroke} fillOpacity="0.6" />
         ))}
       </svg>
-    </div>
-  );
-}
-
-// Trend chart for Web/LLM Analytics — a plain bar-per-bucket chart (hourly
-// buckets for the 1-day range, daily otherwise; see lib/analytics-series.ts)
-// with a hover tooltip. Deliberately simpler than the Top Citations chart
-// (single series, no per-domain breakdown) so it doesn't need that chart's
-// multi-series color palette or its cursor-following tooltip complexity.
-function AnalyticsSeriesChart({ series }: { series: { label: string; count: number }[] }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  if (series.length === 0) return null;
-  const max = Math.max(...series.map((s) => s.count), 1);
-  const W = 600, H = 140, padT = 8, padB = 20;
-  const barW = W / series.length;
-  const labelStep = Math.max(1, Math.ceil(series.length / 8));
-  const hovered = hoverIdx !== null ? series[hoverIdx] : null;
-  const hoverLeftPct = hoverIdx !== null ? Math.min(92, Math.max(8, ((hoverIdx + 0.5) / series.length) * 100)) : 0;
-
-  return (
-    <div className="relative" onMouseLeave={() => setHoverIdx(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
-        {series.map((s, i) => {
-          const barH = s.count > 0 ? Math.max((s.count / max) * (H - padT - padB), 2) : 0;
-          const x = i * barW;
-          const y = H - padB - barH;
-          return (
-            <g key={i} onMouseEnter={() => setHoverIdx(i)}>
-              <rect x={x} y={padT} width={barW} height={H - padT - padB} fill="transparent" />
-              <rect x={x + barW * 0.15} y={y} width={Math.max(barW * 0.7, 1)} height={barH} rx="2" fill="var(--rust)" opacity={hoverIdx === i ? 1 : 0.55} />
-              {i % labelStep === 0 && (
-                <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill="var(--ink-faint)">{s.label}</text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      {hovered && (
-        <div
-          className="absolute top-0 pointer-events-none panel rounded-lg shadow-lg px-2.5 py-1.5 text-xs -translate-x-1/2"
-          style={{ left: `${hoverLeftPct}%` }}
-        >
-          <p className="font-semibold text-[var(--ink)]">{hovered.count.toLocaleString()}</p>
-          <p className="text-[var(--ink-faint)] whitespace-nowrap">{hovered.label}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -753,6 +730,32 @@ function DashboardPage() {
   const [draftingReply, setDraftingReply] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
+  // Reddit Marketing tab — high-intent threads + suggested posts, scanned
+  // on demand (each scan costs an OpenAI call + Reddit searches, so it's not
+  // auto-refreshed every tab visit) and requested via the same credit-based
+  // engage_tasks pipeline as the Tasks tab (Discord-fulfilled, 24h).
+  const [redditMarketingThreads, setRedditMarketingThreads] = useState<RedditOpportunityThread[]>([]);
+  const [redditMarketingSuggested, setRedditMarketingSuggested] = useState<SuggestedRedditPost[]>([]);
+  const [redditMarketingTotalFound, setRedditMarketingTotalFound] = useState(0);
+  const [redditMarketingLoading, setRedditMarketingLoading] = useState(false);
+  const [redditMarketingError, setRedditMarketingError] = useState("");
+  const [redditMarketingScanned, setRedditMarketingScanned] = useState(false);
+  const [redditMarketingScannedAt, setRedditMarketingScannedAt] = useState<string | null>(null);
+  const [redditMarketingCachedForBrandId, setRedditMarketingCachedForBrandId] = useState<string | null>(null);
+  // True only while the initial cache lookup is in flight — distinct from
+  // redditMarketingLoading (an actual scan running) so the tab doesn't flash
+  // "Scan Reddit" for a beat before a brand's already-cached results show up.
+  const [redditMarketingCacheChecking, setRedditMarketingCacheChecking] = useState(false);
+  const [redditRequestedKeys, setRedditRequestedKeys] = useState<Set<string>>(new Set());
+  type RedditRequestDraft =
+    | { kind: "comment"; thread: RedditOpportunityThread; text: string; drafting: boolean; bonusUpvotes: number }
+    // suggestion is null for a self-authored post (blank subreddit/title/body
+    // the user fills in themselves) vs. one started from a suggested-post card
+    | { kind: "post"; suggestion: SuggestedRedditPost | null; subreddit: string; title: string; body: string; mediaUrl: string; bonusUpvotes: number };
+  const [redditRequest, setRedditRequest] = useState<RedditRequestDraft | null>(null);
+  const [redditRequestSubmitting, setRedditRequestSubmitting] = useState(false);
+  const [redditRequestError, setRedditRequestError] = useState("");
+
   // Admin state
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
@@ -982,7 +985,11 @@ function DashboardPage() {
   const [redditOrderMediaUploading, setRedditOrderMediaUploading] = useState(false);
   const [redditOrderMediaUploadError, setRedditOrderMediaUploadError] = useState("");
   const redditOrderBodyRef = useRef<HTMLTextAreaElement>(null);
+  const redditRequestBodyRef = useRef<HTMLTextAreaElement>(null);
   const redditOrderMediaInputRef = useRef<HTMLInputElement>(null);
+  const [redditRequestMediaUploading, setRedditRequestMediaUploading] = useState(false);
+  const [redditRequestMediaUploadError, setRedditRequestMediaUploadError] = useState("");
+  const redditRequestMediaInputRef = useRef<HTMLInputElement>(null);
   const [redditOrderSubmitting, setRedditOrderSubmitting] = useState(false);
   const [redditOrderError, setRedditOrderError] = useState("");
   const [redditOrderSuccess, setRedditOrderSuccess] = useState("");
@@ -1166,29 +1173,34 @@ function DashboardPage() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
 
-  // Web/LLM analytics state
+  // Analytics tab state (web traffic + AI crawlers + setup status)
   const [webAnalyticsData, setWebAnalyticsData] = useState<WebAnalyticsData | null>(null);
   const [webAnalyticsLoaded, setWebAnalyticsLoaded] = useState(false);
   const [webAnalyticsFetching, setWebAnalyticsFetching] = useState(false);
-  const [webAnalyticsRefreshKey, setWebAnalyticsRefreshKey] = useState(0);
+  const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
+  const [analyticsView, setAnalyticsView] = useState<AnalyticsView | null>(null);
+  const [analyticsStatus, setAnalyticsStatus] = useState<AnalyticsStatus | null>(null);
+  const analyticsStatusRef = useRef<AnalyticsStatus | null>(null);
   const [llmAnalyticsData, setLlmAnalyticsData] = useState<LlmAnalyticsData | null>(null);
   const [llmAnalyticsLoaded, setLlmAnalyticsLoaded] = useState(false);
   const [llmAnalyticsFetching, setLlmAnalyticsFetching] = useState(false);
-  const [llmAnalyticsRefreshKey, setLlmAnalyticsRefreshKey] = useState(0);
   const [sendingTestEvent, setSendingTestEvent] = useState(false);
   const [testEventError, setTestEventError] = useState("");
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
-  const [webAnalyticsDays, setWebAnalyticsDays] = useState(30);
-  const [llmAnalyticsDays, setLlmAnalyticsDays] = useState(30);
-  const [websiteIdModal, setWebsiteIdModal] = useState<"web" | "bot" | null>(null);
-  const [copiedWebsiteId, setCopiedWebsiteId] = useState(false);
+  const [analyticsDays, setAnalyticsDays] = useState(30);
+  const [gscFlash, setGscFlash] = useState<string | null>(null);
+  const [onboardingHidden, setOnboardingHidden] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
   const [webDetailsExpanded, setWebDetailsExpanded] = useState(true);
   const [llmDetailsExpanded, setLlmDetailsExpanded] = useState(true);
   const [pagesDetailsExpanded, setPagesDetailsExpanded] = useState(false);
 
   useEffect(() => {
+    // "webAnalytics"/"llmAnalytics" were merged into one Analytics tab; map
+    // a tab remembered from before that so it doesn't land on a blank page.
     const savedTab = sessionStorage.getItem("dashTab");
-    if (savedTab) setActiveTab(savedTab as Tab);
+    if (savedTab === "llmAnalytics") { setActiveTab("analytics"); setAnalyticsView("ai"); }
+    else if (savedTab === "webAnalytics") setActiveTab("analytics");
+    else if (savedTab) setActiveTab(savedTab as Tab);
 
     createSupabaseBrowserClient()
       .auth.getUser()
@@ -1230,12 +1242,13 @@ function DashboardPage() {
       router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
     }
 
-    // First-ever dashboard load for this browser — walk the user across
-    // every tab once. Gated purely on localStorage so it fires for every
-    // account (new or existing) exactly once, then never again.
+    // First-ever dashboard load for this browser — open the guided welcome
+    // (what RankOnGeo does, how to set it up, what to expect) once; it can
+    // hand off to the quick tab tour. Gated purely on localStorage so it fires
+    // for every account (new or existing) exactly once, then never again.
     if (localStorage.getItem("dashboardTourSeen") !== "1") {
       localStorage.setItem("dashboardTourSeen", "1");
-      setTourStepIndex(0);
+      setShowGuide(true);
     }
 
     // A pending banner set during a prior visit's checkout poll (below) is
@@ -1508,33 +1521,92 @@ function DashboardPage() {
     loadPromptSuggestions();
   }, [activeTab, brand, promptSuggestionsLoaded]);
 
-  // Load web analytics when the tab opens, the date range changes, or a test event was sent
+  // Load everything the Analytics tab shows when it opens, the date range
+  // changes, or a test event / newly-detected visit bumps the refresh key.
   useEffect(() => {
-    if (activeTab !== "webAnalytics" || !brand) return;
+    if (activeTab !== "analytics" || !brand) return;
     setWebAnalyticsFetching(true);
-    fetch(`/api/analytics/web?brandId=${brand.id}&days=${webAnalyticsDays}`)
+    setLlmAnalyticsFetching(true);
+    fetch(`/api/analytics/web?brandId=${brand.id}&days=${analyticsDays}`)
       .then((r) => r.json())
       .then((d) => { if (d.stats) setWebAnalyticsData(d); })
       .finally(() => { setWebAnalyticsLoaded(true); setWebAnalyticsFetching(false); });
-  }, [activeTab, brand, webAnalyticsDays, webAnalyticsRefreshKey]);
-
-  // Load LLM (AI bot) analytics when the tab opens, the date range changes, or a test event was sent
-  useEffect(() => {
-    if (activeTab !== "llmAnalytics" || !brand) return;
-    setLlmAnalyticsFetching(true);
-    fetch(`/api/analytics/bot?brandId=${brand.id}&days=${llmAnalyticsDays}`)
+    fetch(`/api/analytics/bot?brandId=${brand.id}&days=${analyticsDays}`)
       .then((r) => r.json())
       .then((d) => { if (d.stats) setLlmAnalyticsData(d); })
       .finally(() => { setLlmAnalyticsLoaded(true); setLlmAnalyticsFetching(false); });
-  }, [activeTab, brand, llmAnalyticsDays, llmAnalyticsRefreshKey]);
-
-  // Combined Web+LLM Analytics usage-vs-quota, shown on both analytics tabs
-  useEffect(() => {
-    if ((activeTab !== "webAnalytics" && activeTab !== "llmAnalytics") || !brand) return;
+    // Combined Web+AI-crawler usage-vs-quota (one shared monthly quota)
     fetch(`/api/analytics/usage?brandId=${brand.id}`)
       .then((r) => r.json())
       .then((d) => { if (typeof d.quota === "number") setAnalyticsUsage(d); });
-  }, [activeTab, brand, webAnalyticsRefreshKey, llmAnalyticsRefreshKey]);
+    fetch(`/api/analytics/status?brandId=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.web) { analyticsStatusRef.current = d; setAnalyticsStatus(d); } });
+  }, [activeTab, brand, analyticsDays, analyticsRefreshKey]);
+
+  // Onboarding checklist: what's already set up for this brand, and whether
+  // the user has hidden the card. Hidden until known, so it never flashes.
+  useEffect(() => {
+    if (!brand?.id) return;
+    try { setOnboardingHidden(localStorage.getItem(`onboardingHidden:${brand.id}`) === "1"); } catch { setOnboardingHidden(false); }
+    fetch(`/api/analytics/status?brandId=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.web) { analyticsStatusRef.current = d; setAnalyticsStatus(d); } })
+      .catch(() => {});
+  }, [brand?.id]);
+
+  // A different brand has a different install — forget the previous one's
+  // status so the Setup dot and default sub-view don't show stale state.
+  const prevAnalyticsBrandId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevAnalyticsBrandId.current;
+    prevAnalyticsBrandId.current = brand?.id;
+    if (!prev || prev === brand?.id) return;
+    analyticsStatusRef.current = null;
+    setAnalyticsStatus(null);
+    setAnalyticsView(null);
+  }, [brand?.id]);
+
+  // Returning from Google's consent screen lands on /dashboard?gsc=<result>:
+  // open Analytics → Search and say how it went.
+  useEffect(() => {
+    const flag = searchParams.get("gsc");
+    if (!flag) return;
+    setActiveTab("analytics");
+    setAnalyticsView("search");
+    setGscFlash(flag);
+    sessionStorage.setItem("dashTab", "analytics");
+    const params = new URLSearchParams(window.location.search);
+    params.delete("gsc");
+    const qs = params.toString();
+    router.replace(window.location.pathname + (qs ? `?${qs}` : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Switching sub-views (or jumping to Traffic after a test event fired from
+  // the bottom of Setup) should land at the top, not mid-page.
+  useEffect(() => {
+    if (activeTab === "analytics") document.getElementById("analytics-top")?.scrollIntoView({ block: "start" });
+    // The "connected / denied" notice only belongs to the Search view it was raised for.
+    // (null = not chosen yet, e.g. the first render before the ?gsc= redirect is applied.)
+    if (analyticsView && analyticsView !== "search") setGscFlash(null);
+  }, [activeTab, analyticsView]);
+
+  // Polled by the Setup screen. When the first real visit arrives, reload the
+  // analytics data as well so the charts fill in without a manual refresh.
+  async function refreshAnalyticsStatus() {
+    if (!brand) return;
+    try {
+      const d = await fetch(`/api/analytics/status?brandId=${brand.id}`).then((r) => r.json());
+      if (!d.web) return;
+      const prev = analyticsStatusRef.current;
+      analyticsStatusRef.current = d;
+      setAnalyticsStatus(d);
+      if (prev && ((!prev.web.connected && d.web.connected) || (!prev.bot.connected && d.bot.connected))) {
+        setAnalyticsRefreshKey((k) => k + 1);
+      }
+    } catch {}
+  }
 
   // Show citations onboarding dialog + fetch citation history when tab opens
   useEffect(() => {
@@ -1727,6 +1799,163 @@ function DashboardPage() {
       setDraftReply("");
     } finally { setPostingReply(false); }
   }
+
+  // Loads whatever was found last time with zero AI/Reddit calls — used on
+  // first landing on the tab (or a page reload) so it never looks like a
+  // blank slate when real results already exist.
+  async function loadCachedRedditMarketing(brandId: string) {
+    setRedditMarketingCachedForBrandId(brandId);
+    setRedditMarketingCacheChecking(true);
+    try {
+      const res = await fetch(`/api/reddit/opportunities?brandId=${brandId}`);
+      const d = await res.json();
+      if (!res.ok || !d.cached) {
+        // No scan on file for this brand yet (e.g. it never went through the
+        // setup wizard's Reddit step, or that scan came up empty) — run one
+        // automatically so the tab isn't a dead "click Scan Reddit" prompt on
+        // first visit. Only fires once: the scan gets cached server-side, so
+        // every later visit finds d.cached true and skips this branch.
+        // redditMarketingLoading (set inside scanRedditMarketing) takes over
+        // as the loading signal from here.
+        scanRedditMarketing();
+        return;
+      }
+      setRedditMarketingThreads(d.threads ?? []);
+      setRedditMarketingSuggested(d.suggestedPosts ?? []);
+      setRedditMarketingTotalFound(d.totalFound ?? 0);
+      setRedditMarketingScannedAt(d.scannedAt ?? null);
+      setRedditMarketingScanned(true);
+    } catch {
+    } finally {
+      setRedditMarketingCacheChecking(false);
+    }
+  }
+
+  async function scanRedditMarketing() {
+    if (!brand?.id) return;
+    setRedditMarketingLoading(true);
+    setRedditMarketingError("");
+    try {
+      const res = await fetch("/api/reddit/opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "Something went wrong");
+      setRedditMarketingThreads(d.threads ?? []);
+      setRedditMarketingSuggested(d.suggestedPosts ?? []);
+      setRedditMarketingTotalFound(d.totalFound ?? 0);
+      setRedditMarketingScannedAt(d.scannedAt ?? new Date().toISOString());
+      setRedditMarketingScanned(true);
+    } catch (err) {
+      setRedditMarketingError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setRedditMarketingLoading(false);
+    }
+  }
+
+  // Reuses the same AI drafting the Citations tab's reply flow already uses
+  // — /api/reddit/draft needs a reddit_threads.id, which findRedditOpportunities
+  // already persisted and attached to each thread as `id`.
+  async function openCommentRequest(thread: RedditOpportunityThread) {
+    setRedditRequestError("");
+    setRedditRequest({ kind: "comment", thread, text: "", drafting: true, bonusUpvotes: 0 });
+    if (!thread.id || !brand?.id) {
+      setRedditRequest({ kind: "comment", thread, text: "", drafting: false, bonusUpvotes: 0 });
+      return;
+    }
+    try {
+      const res = await fetch("/api/reddit/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: thread.id, brandId: brand.id }),
+      });
+      const d = await res.json();
+      setRedditRequest({ kind: "comment", thread, text: d.reply ?? "", drafting: false, bonusUpvotes: 0 });
+    } catch {
+      setRedditRequest({ kind: "comment", thread, text: "", drafting: false, bonusUpvotes: 0 });
+    }
+  }
+
+  function openPostRequest(suggestion: SuggestedRedditPost) {
+    setRedditRequestError("");
+    setRedditRequest({ kind: "post", suggestion, subreddit: suggestion.subreddit, title: suggestion.title, body: "", mediaUrl: "", bonusUpvotes: 0 });
+  }
+
+  function openCustomPostRequest() {
+    setRedditRequestError("");
+    setRedditRequest({ kind: "post", suggestion: null, subreddit: "", title: "", body: "", mediaUrl: "", bonusUpvotes: 0 });
+  }
+
+  async function confirmRedditRequest() {
+    if (!redditRequest || !brand?.id) return;
+    if (redditRequest.kind === "comment" && !redditRequest.text.trim()) {
+      setRedditRequestError("Enter the comment text to post");
+      return;
+    }
+    if (redditRequest.kind === "post") {
+      if (!/^[A-Za-z0-9_]{3,21}$/.test(redditRequest.subreddit.trim().replace(/^r\//i, ""))) {
+        setRedditRequestError("Enter a valid subreddit name (letters, numbers, underscores, 3-21 characters)");
+        return;
+      }
+      if (!redditRequest.title.trim()) {
+        setRedditRequestError("Enter a title for the post");
+        return;
+      }
+    }
+    setRedditRequestSubmitting(true);
+    setRedditRequestError("");
+    try {
+      const body =
+        redditRequest.kind === "comment"
+          ? { brandId: brand.id, serviceType: "custom_comments", url: redditRequest.thread.url, commentText: redditRequest.text.trim(), bonusUpvotes: redditRequest.bonusUpvotes || undefined }
+          : {
+              brandId: brand.id,
+              serviceType: "create_post",
+              subreddit: redditRequest.subreddit.trim().replace(/^r\//i, ""),
+              postTitle: redditRequest.title.trim(),
+              commentText: redditRequest.body.trim() || undefined,
+              mediaUrl: redditRequest.mediaUrl.trim() || undefined,
+              bonusUpvotes: redditRequest.bonusUpvotes || undefined,
+            };
+      const res = await fetch("/api/reddit-orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) {
+        if (res.status === 402) {
+          setRedditRequestError(d.error ?? "");
+          if (d.reason === "insufficient_credits") {
+            setShowBuyCreditsModal(true);
+          } else {
+            openPaywall();
+          }
+          return;
+        }
+        setRedditRequestError(d.error ?? "Failed to submit request");
+        return;
+      }
+      const baseCost = redditRequest.kind === "comment" ? REDDIT_SERVICE_META.custom_comments.creditsPerUnit : REDDIT_SERVICE_META.create_post.creditsPerUnit;
+      const bonusCost = redditRequest.bonusUpvotes * (redditRequest.kind === "comment" ? REDDIT_SERVICE_META.comment_upvote.creditsPerUnit : REDDIT_SERVICE_META.post_upvote.creditsPerUnit);
+      const spent = baseCost + bonusCost;
+      setCredits((prev) => (prev ? { ...prev, balance: Math.max(0, prev.balance - spent) } : prev));
+      setRedditRequestedKeys((prev) => {
+        const next = new Set(prev);
+        next.add(redditRequest.kind === "comment" ? `comment:${redditRequest.thread.redditId}` : `post:${redditRequest.subreddit}:${redditRequest.title}`);
+        return next;
+      });
+      setRedditRequest(null);
+    } catch {
+      setRedditRequestError("Failed to submit request. Try again.");
+    } finally {
+      setRedditRequestSubmitting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "redditMarketing" || !brand?.id) return;
+    if (redditMarketingCachedForBrandId !== brand.id) loadCachedRedditMarketing(brand.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, brand?.id]);
 
   async function disconnectReddit() {
     await fetch("/api/reddit/connection", { method: "DELETE" });
@@ -1949,6 +2178,48 @@ function DashboardPage() {
     sessionStorage.setItem("dashTab", tab);
   }
 
+  // The setup steps shown both in the Overview checklist and the first-run
+  // guide. Status comes from /api/analytics/status; until that has loaded
+  // every step simply reads as not done yet.
+  const onboardingItems: OnboardingItem[] = (() => {
+    const openAnalytics = (view: AnalyticsView) => { navTo("analytics"); setAnalyticsView(view); };
+    return [
+      {
+        id: "tracking",
+        title: "Connect your site",
+        body: "One step — a single script tag, or one copy-paste prompt for custom-built sites. Unlocks your traffic, the visitors coming from ChatGPT and other AI answers, and which AI crawlers read your pages.",
+        done: !!analyticsStatus?.web.connected,
+        cta: "Connect",
+        onClick: () => (isFreeTier ? openPaywall() : openAnalytics("setup")),
+      },
+      ...(analyticsStatus?.gsc?.configured === false ? [] : [{
+        id: "gsc",
+        title: "Connect Google Search Console",
+        body: "See the searches that bring people to your site, right next to your AI visibility — and let Autopilot judge which posts to improve.",
+        done: !!analyticsStatus?.gsc?.connected,
+        cta: "Connect",
+        onClick: () => openAnalytics("search"),
+      }]),
+      {
+        id: "autopilot",
+        title: "Turn on Autopilot for your blog",
+        body: "RankOnGeo writes high-quality, SEO-optimised articles for your niche and publishes them to your site automatically after setup — then rewrites the ones that don't perform.",
+        done: !!analyticsStatus?.autopilot?.enabled,
+        cta: "Set up",
+        onClick: () => (isFreeTier ? openPaywall() : navTo("publishing")),
+      },
+      {
+        id: "reddit",
+        title: "Build trust on Reddit yourself",
+        body: "You can also market on Reddit manually — real comments and posts in the threads AI engines cite build the trust and authority that get you recommended.",
+        done: engageTasks.length > 0,
+        cta: "Explore",
+        onClick: () => navTo("redditMarketing"),
+        optional: true,
+      },
+    ];
+  })();
+
   function tourNext() {
     if (tourStepIndex === null) return;
     if (tourStepIndex >= TOUR_STEPS.length - 1) {
@@ -2026,8 +2297,8 @@ function DashboardPage() {
         body: JSON.stringify({ brandId: brand.id, type }),
       });
       if (res.ok) {
-        if (type === "web") setWebAnalyticsRefreshKey((k) => k + 1);
-        else setLlmAnalyticsRefreshKey((k) => k + 1);
+        setAnalyticsRefreshKey((k) => k + 1);
+        setAnalyticsView(type === "web" ? "traffic" : "ai");
       } else {
         const d = await res.json().catch(() => ({}));
         setTestEventError(d.error ?? "Failed to send test event");
@@ -2171,6 +2442,28 @@ function DashboardPage() {
     });
   }
 
+  // Same link-insertion behavior as insertBodyLink() above, adapted to the
+  // Reddit Marketing tab's request modal (redditRequest.body) instead of the
+  // standalone Tasks-tab order form's redditOrderComment.
+  function insertRedditRequestBodyLink() {
+    if (redditRequest?.kind !== "post") return;
+    const el = redditRequestBodyRef.current;
+    if (!el) return;
+    const body = redditRequest.body;
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const selected = body.slice(start, end) || "link text";
+    const insertion = `[${selected}](https://)`;
+    const next = body.slice(0, start) + insertion + body.slice(end);
+    setRedditRequest({ ...redditRequest, body: next });
+    requestAnimationFrame(() => {
+      const urlStart = start + selected.length + 3; // "[" + selected + "]("
+      const urlEnd = urlStart + "https://".length;
+      el.focus();
+      el.setSelectionRange(urlStart, urlEnd);
+    });
+  }
+
   async function uploadTaskMedia(file: File) {
     if (!brand?.id) return;
     setRedditOrderMediaUploadError("");
@@ -2190,6 +2483,28 @@ function DashboardPage() {
       setRedditOrderMediaUploadError("Upload failed. Try again.");
     } finally {
       setRedditOrderMediaUploading(false);
+    }
+  }
+
+  async function uploadRedditRequestMedia(file: File) {
+    if (!brand?.id || redditRequest?.kind !== "post") return;
+    setRedditRequestMediaUploadError("");
+    setRedditRequestMediaUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("brandId", brand.id);
+      const res = await fetch("/api/tasks/upload-media", { method: "POST", body: form });
+      const d = await res.json();
+      if (res.ok && d.mediaUrl) {
+        setRedditRequest((prev) => (prev?.kind === "post" ? { ...prev, mediaUrl: d.mediaUrl } : prev));
+      } else {
+        setRedditRequestMediaUploadError(d.error ?? "Upload failed");
+      }
+    } catch {
+      setRedditRequestMediaUploadError("Upload failed. Try again.");
+    } finally {
+      setRedditRequestMediaUploading(false);
     }
   }
 
@@ -2242,13 +2557,20 @@ function DashboardPage() {
       if (res.ok) {
         if (d.task) setEngageTasks((prev) => [mapEngageTask(d.task), ...prev]);
         const spent = REDDIT_SERVICE_META[redditOrderService].creditsPerUnit * (redditOrderService === "custom_comments" || isCreatePost ? 1 : redditOrderQty);
-        setCredits((prev) => (prev ? { ...prev, balance: prev.balance - spent } : prev));
+        setCredits((prev) => (prev ? { ...prev, balance: Math.max(0, prev.balance - spent) } : prev));
         setRedditOrderSuccess(d.queued ? "High demand for this link right now — we'll submit your order automatically." : "Order submitted.");
         setRedditOrderUrl("");
         setRedditOrderComment("");
         setRedditOrderSubreddit("");
         setRedditOrderPostTitle("");
         setRedditOrderMediaUrl("");
+      } else if (res.status === 402) {
+        setRedditOrderError(d.error ?? "");
+        if (d.reason === "insufficient_credits") {
+          setShowBuyCreditsModal(true);
+        } else {
+          openPaywall();
+        }
       } else {
         setRedditOrderError(d.error ?? "Failed to submit order");
       }
@@ -2548,8 +2870,7 @@ function DashboardPage() {
               <NavItem label="Prompts" active={activeTab === "results"} onClick={() => navTo("results")} />
               <NavItem label="Citations" active={activeTab === "citations"} onClick={() => navTo("citations")} badge={engagementOpportunityCount || undefined} />
               <NavItem label="Competitors" active={activeTab === "competitors"} onClick={() => navTo("competitors")} />
-              <NavItem label="Web Analytics" active={activeTab === "webAnalytics"} onClick={() => navTo("webAnalytics")} />
-              <NavItem label="LLM Analytics" active={activeTab === "llmAnalytics"} onClick={() => navTo("llmAnalytics")} />
+              <NavItem label="Analytics" active={activeTab === "analytics"} onClick={() => navTo("analytics")} />
             </div>
           </div>
 
@@ -2559,6 +2880,7 @@ function DashboardPage() {
               <NavItem label="Research" active={activeTab === "gaps"} onClick={() => navTo("gaps")} badge={gaps.length || undefined} />
               <NavItem label="Articles" active={activeTab === "articles"} onClick={() => navTo("articles")} badge={draftCount || undefined} />
               <NavItem label="Tasks" active={activeTab === "tasks"} onClick={() => navTo("tasks")} badge={engageTasks.filter(t => t.status === "pending" || t.status === "queued" || t.status === "running").length || undefined} />
+              <NavItem label="Reddit Marketing" active={activeTab === "redditMarketing"} onClick={() => navTo("redditMarketing")} badge={redditMarketingThreads.length || undefined} />
             </div>
           </div>
 
@@ -2817,6 +3139,16 @@ function DashboardPage() {
           {/* OVERVIEW */}
           {activeTab === "overview" && (
             <>
+              {analyticsStatus && !onboardingHidden && !onboardingItems.filter((i) => !i.optional).every((i) => i.done) && (
+                <OnboardingChecklist
+                  items={onboardingItems}
+                  onOpenGuide={() => setShowGuide(true)}
+                  onDismiss={() => {
+                    setOnboardingHidden(true);
+                    try { localStorage.setItem(`onboardingHidden:${brand.id}`, "1"); } catch {}
+                  }}
+                />
+              )}
               {!scanned && !scanning && loadingResults ? (
                 <div className="flex items-center justify-center py-32"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
               ) : !scanned && !scanning ? (
@@ -4695,16 +5027,17 @@ function DashboardPage() {
             </>
           )}
 
-          {/* WEB ANALYTICS TAB */}
-          {activeTab === "webAnalytics" && (() => {
-            const webBody = !webAnalyticsLoaded ? (
-              <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-            ) : (
+          {/* ANALYTICS TAB — traffic, AI answers, AI crawlers, Search Console and setup in one place */}
+          {activeTab === "analytics" && (() => {
+            const view: AnalyticsView = analyticsView ?? (analyticsStatus && !analyticsStatus.web.connected && !analyticsStatus.bot.connected ? "setup" : "traffic");
+            const spinner = <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>;
+            const locked = <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock>;
+            const webConnected = !!analyticsStatus?.web.connected;
+
+            const trafficBody = !webAnalyticsLoaded ? spinner : (
               <div className={webAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                <div className="grid grid-cols-3 gap-3 mb-5">
                   <StatCard label="Live Visitors" value={webAnalyticsData?.stats.liveVisitors ?? 0} sub="last 5 min" />
-                  <StatCard label="Unique Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
-                  <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
                   <StatCard label="Visit Duration" value={`${webAnalyticsData?.stats.avgDurationSeconds ?? 0}s`} />
                   <StatCard label="Bounce Rate" value={`${webAnalyticsData?.stats.bounceRate ?? 0}%`} />
                 </div>
@@ -4725,7 +5058,26 @@ function DashboardPage() {
                   </div>
                 )}
 
-                {renderAnalyticsUsageBar()}
+                {!!webAnalyticsData?.aiReferralBreakdown?.length && (
+                  <div className="panel rounded-xl p-5 mb-5">
+                    <div className="flex items-center gap-1 mb-1">
+                      <p className="text-sm font-semibold text-[var(--ink)]">People arriving from AI answers</p>
+                      <InfoTooltip text="Real visitors who clicked through from ChatGPT, Perplexity, Claude, Gemini and similar. Detected from the referrer, or the utm_source ChatGPT appends to links it shows." />
+                    </div>
+                    <p className="text-xs text-[var(--ink-faint)] mb-3">The clearest proof that being cited by AI turns into traffic.</p>
+                    <div className="space-y-2">
+                      {webAnalyticsData.aiReferralBreakdown.map((e) => (
+                        <div key={e.label} className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--ink)]/80 font-medium w-28 shrink-0 truncate">{e.label}</span>
+                          <div className="flex-1 h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--rust)] rounded-full" style={{ width: `${Math.round((e.count / webAnalyticsData.aiReferralBreakdown[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--ink)] w-10 text-right shrink-0">{e.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="panel rounded-xl overflow-hidden mb-5">
                   <button
@@ -4809,16 +5161,20 @@ function DashboardPage() {
 
                 {!!webAnalyticsData?.pagesBreakdown.length && (
                   <div className="panel rounded-xl overflow-hidden mb-5">
-                    <button
+                    {/* div, not button — InfoTooltip renders its own button and nested buttons are invalid HTML */}
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setPagesDetailsExpanded((v) => !v)}
-                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors"
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPagesDetailsExpanded((v) => !v); } }}
+                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--line-soft)] transition-colors cursor-pointer"
                     >
                       <span className="flex items-center gap-1">
-                        <p className="text-sm font-semibold text-[var(--ink)]">Page Performance</p>
+                        <span className="text-sm font-semibold text-[var(--ink)]">Page Performance</span>
                         <InfoTooltip text="Bounce rate and duration here are measured for sessions that started on each page — not total time spent on that one page across a session." />
                       </span>
                       <svg className={`w-4 h-4 text-[var(--ink-faint)] transition-transform ${pagesDetailsExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                    </button>
+                    </div>
                     {pagesDetailsExpanded && (
                       <div className="border-t border-[var(--line)] overflow-x-auto">
                         <table className="w-full text-xs">
@@ -4917,114 +5273,26 @@ function DashboardPage() {
                 )}
 
                 {webAnalyticsData?.stats.pageviews === 0 && (
-                  <div className="flex flex-col items-center text-center py-10 mb-2">
-                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No Analytics Data Yet</p>
-                    <p className="text-sm text-[var(--ink-faint)] mb-5">Start tracking your website visitors by adding the tracking script below.</p>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      {[
-                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2-7 4 14 2-7h4" />, label: "Real-time visitor tracking" },
-                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10M12 20V4M20 20v-6" />, label: "Detailed traffic analytics" },
-                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />, label: "Privacy-focused insights" },
-                      ].map((f) => (
-                        <div key={f.label} className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
-                          <span className="w-6 h-6 rounded-lg bg-[var(--rust-wash)] flex items-center justify-center shrink-0">
-                            <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{f.icon}</svg>
-                          </span>
-                          {f.label}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="panel rounded-xl p-6 text-center">
+                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No visits recorded yet</p>
+                    <p className="text-sm text-[var(--ink-faint)] mb-4">
+                      {webConnected ? "Your site is connected — visits from the selected period will appear here." : "Connect your site and your first visit shows up here within seconds."}
+                    </p>
+                    {!webConnected && (
+                      <button onClick={() => setAnalyticsView("setup")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                        Connect your site
+                      </button>
+                    )}
                   </div>
                 )}
-
-                <div className="panel rounded-xl p-5">
-                  <p className="text-sm font-semibold text-[var(--ink)] mb-3">Add this script to the &lt;head&gt; section of your website:</p>
-                  <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 mb-3 bg-[var(--line-soft)]">
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" /></svg>
-                    <span className="truncate">{webAnalyticsData?.domain ? `https://${webAnalyticsData.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}/` : ""}</span>
-                  </div>
-                  <div className="relative bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 pr-24 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3">
-                    {`<script src="https://www.rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(`<script src="https://www.rankongeo.com/track.js" data-site="${webAnalyticsData?.siteKey ?? ""}" defer></script>`);
-                          setCopiedSnippet(true);
-                          setTimeout(() => setCopiedSnippet(false), 2000);
-                        }}
-                        title="Copy"
-                        className="w-7 h-7 rounded-md border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line)] transition-colors"
-                      >
-                        {copiedSnippet ? (
-                          <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="11" height="11" rx="1.5" /><path d="M5 15V5a2 2 0 012-2h10" /></svg>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => sendTestEvent("web")}
-                        disabled={sendingTestEvent}
-                        className="h-7 px-2.5 rounded-md bg-[var(--ink)] text-[var(--surface)] text-[11px] font-semibold flex items-center gap-1 hover:opacity-90 disabled:opacity-50 transition-opacity"
-                      >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                        {sendingTestEvent ? "…" : "Test"}
-                      </button>
-                    </div>
-                  </div>
-                  {testEventError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{testEventError}</p>}
-                  <a href="/docs/web-analytics" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--rust)] hover:underline inline-flex items-center gap-1">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
-                    Read Documentation
-                  </a>
-                </div>
               </div>
             );
 
-            return (
-              <div className="max-w-4xl mx-auto w-full">
-                <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-[var(--ink)] inline-flex items-center">
-                      Web Analytics
-                      <InfoTooltip text="Real human visitors to your site — including people who clicked through from an AI answer (shown under Top Referrers, e.g. chatgpt.com). Different from LLM Analytics, which tracks AI bots crawling your content, not people." />
-                    </h2>
-                    <p className="text-sm text-[var(--ink-soft)] mt-0.5">Privacy first analytics for your website</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={webAnalyticsDays}
-                      onChange={(e) => setWebAnalyticsDays(Number(e.target.value))}
-                      className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
-                    >
-                      <option value={1}>Last 24 Hours</option>
-                      <option value={7}>Last 7 Days</option>
-                      <option value={30}>Last 30 Days</option>
-                      <option value={90}>Last 90 Days</option>
-                    </select>
-                    <button
-                      onClick={() => setWebsiteIdModal("web")}
-                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
-                    >
-                      Get Website Id
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                    </button>
-                  </div>
-                </div>
-                {isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock> : webBody}
-              </div>
-            );
-          })()}
-
-          {/* LLM ANALYTICS TAB */}
-          {activeTab === "llmAnalytics" && (() => {
-            const llmBody = !llmAnalyticsLoaded ? (
-              <div className="flex items-center justify-center py-24"><span className="w-6 h-6 border-2 border-[var(--line)] border-t-[var(--rust)] rounded-full animate-spin" /></div>
-            ) : (
+            const aiBody = !llmAnalyticsLoaded ? spinner : (
               <div className={llmAnalyticsFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  <StatCard label="Live Bots" value={llmAnalyticsData?.stats.liveBots ?? 0} sub="last 5 min" />
-                  <StatCard label="Bot Pageviews" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
-                </div>
+                <p className="text-xs text-[var(--ink-faint)] mb-4">
+                  AI crawlers such as GPTBot, ClaudeBot and PerplexityBot fetching your pages. This shows whether AI models can even see your content — it is not human traffic.
+                </p>
 
                 {!!llmAnalyticsData?.series.length && (
                   <div className="panel rounded-xl p-5 mb-5">
@@ -5032,8 +5300,6 @@ function DashboardPage() {
                     <AnalyticsSeriesChart series={llmAnalyticsData.series} />
                   </div>
                 )}
-
-                {renderAnalyticsUsageBar()}
 
                 <div className="panel rounded-xl overflow-hidden mb-5">
                   <button
@@ -5097,79 +5363,54 @@ function DashboardPage() {
                 )}
 
                 {llmAnalyticsData?.stats.botPageviews === 0 && (
-                  <div className="flex flex-col items-center text-center py-10 mb-2">
-                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No AI Bot Data Yet</p>
-                    <p className="text-sm text-[var(--ink-faint)] mb-5">Start tracking AI bots and crawlers by setting up server-side middleware.</p>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      {[
-                        { icon: <><rect x="6" y="6" width="12" height="12" rx="2" /><path strokeLinecap="round" d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" /></>, label: "AI bot detection" },
-                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2-7 4 14 2-7h4" />, label: "Real-time AI crawler tracking" },
-                        { icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10M12 20V4M20 20v-6" />, label: "Detailed bot analytics" },
-                      ].map((f) => (
-                        <div key={f.label} className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
-                          <span className="w-6 h-6 rounded-lg bg-[var(--rust-wash)] flex items-center justify-center shrink-0">
-                            <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{f.icon}</svg>
-                          </span>
-                          {f.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="panel rounded-xl p-5">
-                  <p className="text-sm font-semibold text-[var(--ink)] mb-1">Set up server-side middleware to track AI bots and crawlers</p>
-                  <p className="text-xs text-[var(--ink-faint)] mb-3">
-                    AI crawlers mostly don&apos;t run JavaScript, so this needs a server-side call from your own middleware — see the docs for a ready-to-paste Next.js example.
-                  </p>
-                  <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-3 py-2.5 font-mono text-[11px] text-[var(--ink)]/90 overflow-x-auto mb-3 whitespace-pre">
-{`curl -X POST https://www.rankongeo.com/api/track/bot \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "siteKey": "${llmAnalyticsData?.siteKey ?? ""}",
-    "path": "/",
-    "userAgent": "GPTBot/1.0",
-    "referrer": ""
-  }'`}
-                  </div>
-                  {testEventError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{testEventError}</p>}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <a
-                      href="/docs/llm-analytics"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
-                      Read Documentation
-                    </a>
-                    <button
-                      onClick={() => sendTestEvent("bot")}
-                      disabled={sendingTestEvent}
-                      className="text-xs font-semibold border border-[var(--line)] px-3 py-2 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="6" y="6" width="12" height="12" rx="2" /><path strokeLinecap="round" d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" /></svg>
-                      {sendingTestEvent ? "Sending…" : "Test AI Tracker"}
+                  <div className="panel rounded-xl p-6 text-center">
+                    <p className="text-base font-semibold text-[var(--ink)] mb-1">No AI crawler visits yet</p>
+                    <p className="text-sm text-[var(--ink-faint)] mb-4">
+                      Crawlers don&apos;t run JavaScript, so tracking them needs a small server-side step. The Setup tab gives you one prompt that does it for you.
+                    </p>
+                    <button onClick={() => setAnalyticsView("setup")} className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3.5 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                      Set up AI-crawler tracking
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             );
 
+            const setupBody = !webAnalyticsLoaded ? spinner : webAnalyticsData?.siteKey ? (
+              <AnalyticsSetup
+                siteKey={webAnalyticsData.siteKey}
+                domain={webAnalyticsData.domain}
+                status={analyticsStatus}
+                onTest={sendTestEvent}
+                testing={sendingTestEvent}
+                testError={testEventError}
+                onRefreshStatus={refreshAnalyticsStatus}
+              />
+            ) : (
+              <p className="text-sm text-[var(--ink-soft)]">Couldn&apos;t load your website ID. Reload the page and try again.</p>
+            );
+
+            const views: { id: AnalyticsView; label: string }[] = [
+              { id: "traffic", label: "Traffic" },
+              { id: "ai", label: "AI crawlers" },
+              { id: "search", label: "Search" },
+              { id: "setup", label: "Setup" },
+            ];
+
             return (
-              <div className="max-w-4xl mx-auto w-full">
+              <div id="analytics-top" className="max-w-4xl mx-auto w-full">
                 <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
                   <div>
                     <h2 className="text-lg font-semibold text-[var(--ink)] inline-flex items-center">
-                      LLM Analytics
-                      <InfoTooltip text="AI bots and crawlers (GPTBot, ClaudeBot, PerplexityBot, etc.) fetching your pages to ingest content — not human visitors. This tells you whether AI models can even see your content. For real people clicking through from an AI answer, see Web Analytics → Top Referrers instead." />
+                      Analytics
+                      <InfoTooltip text="Everything about how your site is being found, in one place: human visitors (including people who click through from an AI answer), AI crawlers reading your pages, and your Google Search performance." />
                     </h2>
-                    <p className="text-sm text-[var(--ink-soft)] mt-0.5">AI and bot traffic analytics</p>
+                    <p className="text-sm text-[var(--ink-soft)] mt-0.5">Traffic, AI answers and search performance, privacy first</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {view !== "setup" && (
                     <select
-                      value={llmAnalyticsDays}
-                      onChange={(e) => setLlmAnalyticsDays(Number(e.target.value))}
+                      value={analyticsDays}
+                      onChange={(e) => setAnalyticsDays(Number(e.target.value))}
                       className="text-xs font-semibold border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--ink)]/80 focus:outline-none focus:ring-1 focus:ring-[var(--rust)]/30"
                     >
                       <option value={1}>Last 24 Hours</option>
@@ -5177,73 +5418,69 @@ function DashboardPage() {
                       <option value={30}>Last 30 Days</option>
                       <option value={90}>Last 90 Days</option>
                     </select>
-                    <button
-                      onClick={() => setWebsiteIdModal("bot")}
-                      className="text-xs font-semibold bg-[var(--ink)] text-[var(--surface)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
-                    >
-                      Get Website Id
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                    </button>
-                  </div>
+                  )}
                 </div>
-                {isFreeTier ? <BlurBlock onUnlock={openPaywall}><LockedSkeleton rows={7} /></BlurBlock> : llmBody}
+
+                <div className="flex gap-1 border-b border-[var(--line)] mb-5 overflow-x-auto">
+                  {views.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setAnalyticsView(v.id)}
+                      className={`px-3.5 py-2 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5 transition-colors ${
+                        view === v.id ? "border-[var(--rust)] text-[var(--rust-deep)]" : "border-transparent text-[var(--ink-faint)] hover:text-[var(--ink-soft)]"
+                      }`}
+                    >
+                      {v.label}
+                      {v.id === "setup" && analyticsStatus && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${webConnected ? "bg-[var(--olive)]" : "bg-[var(--rust)]"}`} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {gscFlash && view === "search" && (() => {
+                  const msg: Record<string, [string, boolean]> = {
+                    connected: ["Google Search Console connected.", true],
+                    pick_site: ["Google Search Console connected — now choose which property is this site.", true],
+                    denied: ["Google didn't grant access, so nothing was connected. Make sure the Search Console box stays ticked on the consent screen.", false],
+                    unavailable: ["Search Console connection isn't available yet.", false],
+                    error: ["Something went wrong connecting Search Console. Please try again.", false],
+                  };
+                  const [text, ok] = msg[gscFlash] ?? msg.error;
+                  return (
+                    <div className={`flex items-start justify-between gap-3 text-xs rounded-lg px-3 py-2.5 mb-4 ${ok ? "bg-[var(--olive)]/10 text-[var(--olive)]" : "bg-red-500/10 text-red-700"}`}>
+                      <span>{text}</span>
+                      <button onClick={() => setGscFlash(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">✕</button>
+                    </div>
+                  );
+                })()}
+
+                {!isFreeTier && (view === "traffic" || view === "ai") && (
+                  <>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                      <StatCard label="Visitors" value={webAnalyticsData?.stats.visitors ?? 0} />
+                      <StatCard label="Pageviews" value={webAnalyticsData?.stats.pageviews ?? 0} />
+                      <StatCard label="From AI answers" value={webAnalyticsData?.stats.aiReferrals ?? 0} sub="ChatGPT, Perplexity…" />
+                      <StatCard label="AI crawler visits" value={llmAnalyticsData?.stats.botPageviews ?? 0} />
+                    </div>
+                    {renderAnalyticsUsageBar()}
+                  </>
+                )}
+
+                {view === "search" ? (
+                  <SearchConsolePanel brandId={brand?.id ?? ""} domain={webAnalyticsData?.domain ?? ""} days={analyticsDays} onOpenSetup={() => setAnalyticsView("setup")} />
+                ) : isFreeTier ? (
+                  locked
+                ) : view === "traffic" ? (
+                  trafficBody
+                ) : view === "ai" ? (
+                  aiBody
+                ) : (
+                  setupBody
+                )}
               </div>
             );
           })()}
-
-          {/* Website ID modal — shared between Web & LLM Analytics */}
-          {websiteIdModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setWebsiteIdModal(null)}>
-              <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-start justify-between mb-1">
-                  <p className="text-base font-semibold text-[var(--ink)]">Website ID</p>
-                  <button onClick={() => setWebsiteIdModal(null)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-                <p className="text-xs text-[var(--ink-faint)] mb-4">Copy your website ID for integration</p>
-
-                <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 mb-3 bg-[var(--line-soft)]">
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" /></svg>
-                  <span className="truncate">
-                    {(() => {
-                      const domain = websiteIdModal === "web" ? webAnalyticsData?.domain : llmAnalyticsData?.domain;
-                      return domain ? `https://${domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}/` : "";
-                    })()}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2 border border-[var(--line)] rounded-lg px-3 py-2 mb-4">
-                  <span className="text-xs text-[var(--ink-soft)]">Website ID: <span className="font-mono font-semibold text-[var(--ink)]">{websiteIdModal === "web" ? webAnalyticsData?.siteKey : llmAnalyticsData?.siteKey}</span></span>
-                  <button
-                    onClick={() => {
-                      const siteKey = (websiteIdModal === "web" ? webAnalyticsData?.siteKey : llmAnalyticsData?.siteKey) ?? "";
-                      navigator.clipboard.writeText(siteKey);
-                      setCopiedWebsiteId(true);
-                      setTimeout(() => setCopiedWebsiteId(false), 2000);
-                    }}
-                    className="w-7 h-7 rounded-md border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors shrink-0"
-                  >
-                    {copiedWebsiteId ? (
-                      <svg className="w-3.5 h-3.5 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="11" height="11" rx="1.5" /><path d="M5 15V5a2 2 0 012-2h10" /></svg>
-                    )}
-                  </button>
-                </div>
-
-                <a
-                  href={websiteIdModal === "web" ? "/docs/web-analytics" : "/docs/llm-analytics"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold border border-[var(--line)] px-3 py-2 rounded-lg text-[var(--ink-soft)] hover:bg-[var(--line-soft)] transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
-                  Learn to Setup Analytics →
-                </a>
-              </div>
-            </div>
-          )}
 
           {/* Delete brand modal — irreversible, requires typing the domain to confirm */}
           {deleteBrandTarget && (
@@ -5374,7 +5611,7 @@ function DashboardPage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
-                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per 100,000 Web/LLM Analytics events, added to your balance on top of your plan&apos;s monthly quota. 1,000,000-event minimum purchase. Never expires, rolls over indefinitely.</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-5">$1 per 100,000 Analytics events, added to your balance on top of your plan&apos;s monthly quota. 1,000,000-event minimum purchase. Never expires, rolls over indefinitely.</p>
 
                 <div className="text-center mb-3">
                   <span className="font-signal-mono text-3xl font-bold text-[var(--ink)]">{(buyEventsUnits * 100000).toLocaleString()}</span>
@@ -5815,6 +6052,16 @@ function DashboardPage() {
                     <a href="/docs/autopublish" target="_blank" rel="noopener noreferrer" className="text-[var(--rust)] font-medium hover:underline">Full setup guide →</a>
                   </p>
                 </div>
+
+                {brand.id && (
+                  <AutopilotPanel
+                    brandId={brand.id}
+                    isFreeTier={isFreeTier}
+                    onUpgrade={openPaywall}
+                    onAddChannel={openAddChannel}
+                    channelCount={publishingChannels.length}
+                  />
+                )}
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                   <StatCard label="Published / Mo" value={publishedThisMonth} sub={`${publishingLog.filter(e => e.status === "published").length} total`} />
@@ -6601,6 +6848,227 @@ function DashboardPage() {
             </div>
           )}
 
+          {/* REDDIT MARKETING TAB */}
+          {activeTab === "redditMarketing" && (
+            <div className="max-w-3xl mx-auto w-full">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-[var(--ink)]">Reddit Marketing</h2>
+                <p className="text-sm text-[var(--ink-soft)] mt-0.5">
+                  Live threads from people actively looking for something like {brand.name} — high-intent buyers, not casual browsers.
+                </p>
+              </div>
+
+              <div className="panel rounded-xl p-4 mb-6 flex items-center justify-between gap-4 border border-[var(--rust)]/25 bg-[var(--rust-wash)]">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink)]">Want this done for you by experts?</p>
+                  <p className="text-xs text-[var(--ink-soft)] mt-0.5">
+                    Book a call and our team will run your entire Reddit marketing for you, with guaranteed results.
+                  </p>
+                </div>
+                <a
+                  href="https://cal.com/vaibhav-kandpal/15min"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-sm font-semibold bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] px-4 py-2.5 rounded-lg transition-colors"
+                >
+                  Book a call
+                </a>
+              </div>
+
+              <div className="panel rounded-xl p-4 mb-6">
+                <p className="text-sm font-semibold text-[var(--ink)] mb-1">Keywords</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-3">
+                  Search terms Reddit gets searched for directly, on top of what&apos;s auto-generated — e.g. &ldquo;send money to India reddit&rdquo; or &ldquo;Wise alternative Pakistan.&rdquo;
+                </p>
+                {socialKeywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {socialKeywords.map((k) => (
+                      <span key={k.id} className="flex items-center gap-1.5 text-xs bg-[var(--rust-wash)] text-[var(--rust-deep)] px-2.5 py-1.5 rounded-lg max-w-full">
+                        <span className="min-w-0">{k.keyword}</span>
+                        <button onClick={() => removeKeyword(k.id)} className="text-[var(--rust-deep)]/60 hover:text-[var(--rust-deep)] shrink-0 leading-none">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    value={newKeyword}
+                    onChange={(e) => setNewKeyword(e.target.value.slice(0, 200))}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(); } }}
+                    placeholder="e.g. send money to India reddit"
+                    className="flex-1 text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                  />
+                  <button
+                    onClick={addKeyword}
+                    disabled={!newKeyword.trim()}
+                    className="shrink-0 text-xs font-semibold bg-[var(--rust)] text-[var(--surface)] px-3 py-2 rounded-lg hover:bg-[var(--rust-deep)] disabled:opacity-50 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div className="panel rounded-xl p-4 mb-6 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink)]">
+                    {redditMarketingCacheChecking
+                      ? "Checking for saved results…"
+                      : redditMarketingScanned
+                        ? `${redditMarketingThreads.length} live thread${redditMarketingThreads.length === 1 ? "" : "s"} found`
+                        : "Scan Reddit for opportunities"}
+                  </p>
+                  <p className="text-xs text-[var(--ink-faint)] mt-0.5">
+                    {redditMarketingCacheChecking
+                      ? "One moment…"
+                      : redditMarketingScanned
+                        ? `${redditMarketingScannedAt ? `Last scanned ${formatTimeAgo(redditMarketingScannedAt)}. ` : ""}Refresh to see new posts and comment opportunities.`
+                        : "Searches Reddit for threads where people are asking for alternatives or recommendations in your space."}
+                  </p>
+                </div>
+                {redditMarketingCacheChecking ? (
+                  <span className="shrink-0 w-3.5 h-3.5 border-2 border-[var(--ink-faint)]/50 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <button
+                    onClick={scanRedditMarketing}
+                    disabled={redditMarketingLoading}
+                    className="shrink-0 flex items-center gap-2 text-sm font-semibold bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] px-4 py-2.5 rounded-lg transition-colors"
+                  >
+                    {redditMarketingLoading && <span className="w-3.5 h-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />}
+                    {redditMarketingLoading ? "Scanning…" : redditMarketingScanned ? "Refresh — see new posts" : "Scan Reddit"}
+                  </button>
+                )}
+              </div>
+
+              {redditMarketingError && (
+                <p className="text-sm text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3 mb-6">{redditMarketingError}</p>
+              )}
+
+              {redditMarketingScanned && !redditMarketingLoading && redditMarketingThreads.length === 0 && !redditMarketingError && (
+                <EmptyState label="No live threads found this time" sub="Reddit's results shift constantly — rescan in a while, or add a few keywords above to search for directly." />
+              )}
+
+              {redditMarketingThreads.length > 0 && (
+                <p className="text-[11px] text-[var(--ink-faint)] italic mb-3">
+                  These people are already searching for a solution like yours — that means an exceptionally high conversion rate if they see your comment or post.
+                </p>
+              )}
+
+              {redditMarketingThreads.length > 0 && (
+                <div className="space-y-3 mb-8">
+                  {redditMarketingThreads.map((t) => {
+                    const key = `comment:${t.redditId}`;
+                    const requested = redditRequestedKeys.has(key);
+                    return (
+                      <div key={t.redditId} className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-3.5">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <a
+                            href={t.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[11px] font-semibold text-orange-700 bg-orange-500/10 px-2 py-0.5 rounded-full hover:bg-orange-500/20 transition-colors"
+                          >
+                            r/{t.subreddit}
+                          </a>
+                          {!!t.subredditSubscribers && <span className="text-[11px] text-[var(--ink-faint)]">{formatCompactNumber(t.subredditSubscribers)} members</span>}
+                        </div>
+                        <a href={t.url} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-[var(--ink)]/90 mb-2 leading-snug hover:underline">
+                          {t.title}
+                        </a>
+                        <div className="flex items-center gap-2 flex-wrap mb-3">
+                          <span className="text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--line-soft)] px-2 py-0.5 rounded-full">↑ {t.score}</span>
+                          <span className="text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--line-soft)] px-2 py-0.5 rounded-full">💬 {t.numComments}</span>
+                          <span className="text-[11px] font-semibold text-[var(--rust-deep)] bg-[var(--rust-wash)] px-2 py-0.5 rounded-full">~{formatCompactNumber(t.estimatedViews)} views</span>
+                          <span className="text-[11px] font-semibold text-[var(--olive)] bg-[var(--olive-wash)] px-2 py-0.5 rounded-full">
+                            ~{t.estimatedClientsLow}–{t.estimatedClientsHigh} potential clients
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => openCommentRequest(t)}
+                          disabled={requested}
+                          className="text-xs font-semibold bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 disabled:bg-[var(--olive)] text-[var(--surface)] px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          {requested ? "Requested ✓" : `Request comment — ${REDDIT_SERVICE_META.custom_comments.creditsPerUnit} credits`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {redditMarketingTotalFound > redditMarketingThreads.length && (
+                    <p className="text-xs text-[var(--ink-faint)]">
+                      +{redditMarketingTotalFound - redditMarketingThreads.length} more threads seen in this scan — rescan to see if a fresh set surfaces higher.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {redditMarketingSuggested.length > 0 && (
+                <div className="mb-8">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-1">Suggested posts to make</p>
+                  <p className="text-xs text-[var(--ink-faint)] mb-3">Starting your own thread in the right subreddit works even better than commenting on someone else&apos;s.</p>
+                  <div className="space-y-2.5">
+                    {redditMarketingSuggested.map((p) => {
+                      const key = `post:${p.subreddit}:${p.title}`;
+                      const requested = redditRequestedKeys.has(key);
+                      return (
+                        <div key={key} className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-3.5">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-[11px] font-semibold text-orange-700 bg-orange-500/10 px-2 py-0.5 rounded-full">r/{p.subreddit}</span>
+                            {!!p.subscribers && <span className="text-[11px] text-[var(--ink-faint)]">{formatCompactNumber(p.subscribers)} members</span>}
+                          </div>
+                          <p className="text-sm text-[var(--ink)]/90 mb-2">&ldquo;{p.title}&rdquo;</p>
+                          <div className="flex items-center gap-2 flex-wrap mb-3">
+                            <span className="text-[11px] font-semibold text-[var(--rust-deep)] bg-[var(--rust-wash)] px-2 py-0.5 rounded-full">
+                              ~{formatCompactNumber(p.estimatedViewsLow)}–{formatCompactNumber(p.estimatedViewsHigh)} views
+                            </span>
+                            <span className="text-[11px] font-semibold text-[var(--olive)] bg-[var(--olive-wash)] px-2 py-0.5 rounded-full">
+                              ~{p.estimatedClientsLow}–{p.estimatedClientsHigh} potential clients
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => openPostRequest(p)}
+                            disabled={requested}
+                            className="text-xs font-semibold bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 disabled:bg-[var(--olive)] text-[var(--surface)] px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            {requested ? "Requested ✓" : `Request post — ${REDDIT_SERVICE_META.create_post.creditsPerUnit} credits`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      onClick={openCustomPostRequest}
+                      className="w-full text-left border border-dashed border-[var(--line)] hover:border-[var(--rust)]/40 rounded-lg px-4 py-3.5 transition-colors"
+                    >
+                      <p className="text-sm font-medium text-[var(--ink)]/90">+ Write your own post</p>
+                      <p className="text-xs text-[var(--ink-faint)] mt-0.5">Pick the subreddit and write the title/body yourself, then submit it the same way.</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(redditMarketingThreads.length > 0 || redditMarketingSuggested.length > 0) && (
+                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-5 py-5">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-3">How a request gets fulfilled</p>
+                  <ol className="space-y-2.5 text-xs text-[var(--ink-soft)]">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                      <span>Request a comment or post — it lands in your <strong className="text-[var(--ink)]">Tasks tab</strong>, ready to go.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                      <span>From there it&apos;s sent to our Discord for the team to review and fulfill.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                      <span>Posted within <strong className="text-[var(--ink)]">24 hours</strong> through one of our established, high-karma Reddit accounts — not a fresh throwaway that gets auto-filtered.</span>
+                    </li>
+                  </ol>
+                  <p className="text-[11px] text-[var(--ink-faint)] mt-4 pt-4 border-t border-[var(--line)]">
+                    Want more upvotes on a comment after it&apos;s posted? Order those from the Tasks tab — 2 credits each.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ADMIN TAB */}
           {activeTab === "admin" && isAdmin && (
             <div className="lg:h-full flex flex-col gap-4">
@@ -7332,6 +7800,189 @@ Body: {
           </div>
         </div>
       )}
+      {/* Reddit Marketing request confirm modal */}
+      {redditRequest && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => (redditRequestSubmitting ? null : setRedditRequest(null))}>
+          <div className="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1 pr-4">
+                  <p className="text-xs font-semibold text-[var(--ink-faint)] uppercase tracking-wide mb-1">
+                    {redditRequest.kind === "comment" ? "Request a comment" : "Request a new post"}
+                  </p>
+                  {redditRequest.kind === "comment" ? (
+                    <>
+                      <p className="text-xs text-orange-700 mb-1">r/{redditRequest.thread.subreddit}</p>
+                      <h3 className="text-sm font-semibold text-[var(--ink)]">{redditRequest.thread.title}</h3>
+                    </>
+                  ) : redditRequest.suggestion ? (
+                    <p className="text-xs text-orange-700">r/{redditRequest.suggestion.subreddit}</p>
+                  ) : (
+                    <p className="text-xs text-[var(--ink-faint)]">Write your own — pick the subreddit and the post</p>
+                  )}
+                </div>
+                <button onClick={() => setRedditRequest(null)} className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)] text-xl leading-none">×</button>
+              </div>
+
+              {redditRequest.kind === "comment" ? (
+                <div>
+                  <p className="text-xs font-semibold text-[var(--ink)]/80 uppercase tracking-wide mb-2">AI-drafted reply — edit before submitting</p>
+                  {redditRequest.drafting ? (
+                    <div className="flex items-center gap-2 py-6 justify-center">
+                      <span className="w-4 h-4 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-[var(--ink-soft)]">Drafting reply…</span>
+                    </div>
+                  ) : (
+                    <textarea
+                      value={redditRequest.text}
+                      onChange={(e) => setRedditRequest({ ...redditRequest, text: e.target.value })}
+                      rows={5}
+                      maxLength={1000}
+                      className="w-full border border-[var(--line)] rounded-lg px-3 py-2.5 text-sm text-[var(--ink)]/90 outline-none focus:ring-2 focus:ring-[var(--rust)]/40 resize-none"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {!redditRequest.suggestion && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Subreddit</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-[var(--ink-faint)] shrink-0">r/</span>
+                        <input
+                          value={redditRequest.subreddit}
+                          onChange={(e) => setRedditRequest({ ...redditRequest, subreddit: e.target.value.replace(/^r\//i, "") })}
+                          placeholder="subreddit"
+                          className="flex-1 text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Post title</p>
+                    <input
+                      value={redditRequest.title}
+                      onChange={(e) => setRedditRequest({ ...redditRequest, title: e.target.value.slice(0, 300) })}
+                      className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] font-semibold text-[var(--ink-soft)]">Post body</p>
+                      <button
+                        type="button"
+                        onClick={insertRedditRequestBodyLink}
+                        className="text-[10px] font-medium text-[var(--rust)] hover:text-[var(--rust-deep)]"
+                      >
+                        🔗 Link
+                      </button>
+                    </div>
+                    <textarea
+                      ref={redditRequestBodyRef}
+                      value={redditRequest.body}
+                      onChange={(e) => setRedditRequest({ ...redditRequest, body: e.target.value.slice(0, 10000) })}
+                      rows={4}
+                      placeholder="Leave blank and our team will write one that fits the subreddit…"
+                      className="w-full text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40 resize-y"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-[var(--ink-soft)] mb-1.5">Photo or video (optional)</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={redditRequest.mediaUrl}
+                        onChange={(e) => setRedditRequest({ ...redditRequest, mediaUrl: e.target.value })}
+                        placeholder="Image or video URL"
+                        className="flex-1 text-sm border border-[var(--line)] bg-[var(--cream)] rounded-lg px-3 py-2 outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:ring-2 focus:ring-[var(--rust)]/40"
+                      />
+                      <input
+                        ref={redditRequestMediaInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                        className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRedditRequestMedia(f); e.target.value = ""; }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => redditRequestMediaInputRef.current?.click()}
+                        disabled={redditRequestMediaUploading}
+                        className="shrink-0 text-xs font-medium text-[var(--ink-soft)] border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+                      >
+                        {redditRequestMediaUploading ? "Uploading…" : "Upload"}
+                      </button>
+                    </div>
+                    {redditRequestMediaUploadError && <p className="text-[10px] text-red-700 mt-1">{redditRequestMediaUploadError}</p>}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] text-[var(--ink-faint)] mt-2">No NSFW, explicit, hateful, or illegal content — requests that violate this are rejected before any credits are charged.</p>
+
+              {(() => {
+                const upvoteCost = redditRequest.kind === "comment" ? REDDIT_SERVICE_META.comment_upvote.creditsPerUnit : REDDIT_SERVICE_META.post_upvote.creditsPerUnit;
+                return (
+                  <div className="flex items-center justify-between gap-3 mt-3 bg-[var(--line-soft)] rounded-lg px-3 py-2.5">
+                    <div>
+                      <p className="text-xs font-medium text-[var(--ink)]/90">Boost with upvotes once posted</p>
+                      <p className="text-[10px] text-[var(--ink-faint)]">{upvoteCost} credits each — applied by the same fulfiller after it goes live.</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setRedditRequest({ ...redditRequest, bonusUpvotes: Math.max(0, redditRequest.bonusUpvotes - 10) })}
+                        className="w-7 h-7 rounded-lg border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--surface)] font-medium text-sm"
+                      >
+                        −
+                      </button>
+                      <span className="text-sm font-semibold text-[var(--ink)] w-8 text-center">{redditRequest.bonusUpvotes}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRedditRequest({ ...redditRequest, bonusUpvotes: Math.min(1000, redditRequest.bonusUpvotes + 10) })}
+                        className="w-7 h-7 rounded-lg border border-[var(--line)] flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--surface)] font-medium text-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-between text-[10px] text-[var(--ink-faint)] bg-[var(--line-soft)] rounded-lg px-3 py-2 mt-3 mb-3">
+                <span>Posted within 24 hours via a high-karma Reddit account, from your Tasks tab.</span>
+                <span className="font-semibold text-[var(--ink)]/80 shrink-0 ml-2">
+                  {(redditRequest.kind === "comment" ? REDDIT_SERVICE_META.custom_comments.creditsPerUnit : REDDIT_SERVICE_META.create_post.creditsPerUnit) +
+                    redditRequest.bonusUpvotes * (redditRequest.kind === "comment" ? REDDIT_SERVICE_META.comment_upvote.creditsPerUnit : REDDIT_SERVICE_META.post_upvote.creditsPerUnit)}{" "}
+                  credits
+                </span>
+              </div>
+
+              {redditRequestError && <p className="text-xs text-red-700 bg-red-500/10 rounded-lg px-3 py-2 mb-3">{redditRequestError}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setRedditRequest(null)}
+                  disabled={redditRequestSubmitting}
+                  className="px-4 py-2.5 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmRedditRequest}
+                  disabled={redditRequestSubmitting || (redditRequest.kind === "comment" && redditRequest.drafting)}
+                  className="flex-1 text-sm font-semibold bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-2.5 rounded-lg transition-colors"
+                >
+                  {redditRequestSubmitting
+                    ? "Submitting…"
+                    : `Confirm — ${
+                        (redditRequest.kind === "comment" ? REDDIT_SERVICE_META.custom_comments.creditsPerUnit : REDDIT_SERVICE_META.create_post.creditsPerUnit) +
+                        redditRequest.bonusUpvotes * (redditRequest.kind === "comment" ? REDDIT_SERVICE_META.comment_upvote.creditsPerUnit : REDDIT_SERVICE_META.post_upvote.creditsPerUnit)
+                      } credits`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showPaywallModal && <PaywallModal onClose={() => setShowPaywallModal(false)} />}
       {confirmingSubscription && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 bg-[var(--surface)] border border-[var(--rust)]/25 rounded-full pl-3 pr-4 py-2 shadow-lg">
@@ -7339,6 +7990,13 @@ Body: {
           <span className="text-sm font-medium text-[var(--ink)]">Confirming your subscription…</span>
         </div>
       )}
+      <OnboardingGuide
+        open={showGuide}
+        onClose={() => setShowGuide(false)}
+        onStartTour={() => setTourStepIndex(0)}
+        items={onboardingItems}
+        domain={brand?.domain ?? ""}
+      />
       {tourStepIndex !== null && (() => {
         const step = TOUR_STEPS[tourStepIndex];
         return (

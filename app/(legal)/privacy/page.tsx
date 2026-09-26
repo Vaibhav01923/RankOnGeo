@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const LAST_UPDATED = "July 14, 2026";
+const LAST_UPDATED = "September 26, 2026";
 
 const CONTENT = `
 RankOnGeo ("RankOnGeo," "we," "us," or "our") provides a platform that helps businesses track and improve their visibility in AI-powered search and chat products (like ChatGPT, Claude, Gemini, and Perplexity), generate SEO content, and monitor related social and web activity (the "Service"). This Privacy Policy explains what information we collect, how we use it, and the choices you have.
@@ -25,7 +25,9 @@ By using the Service, you agree to the collection and use of information as desc
 
 **AI engine scan results.** To measure your visibility, we send your tracked prompts to third-party AI providers (see "Third-Party Service Providers" below) and store their responses, including whether your brand was mentioned, its position in the response, competitor mentions, and any cited sources.
 
-**Website analytics (Web + LLM Analytics feature).** If you enable this feature, we collect visit data from your own website's visitors — page paths, referrers, session identifiers, and whether a visit came from a known AI crawler/bot (e.g. GPTBot, ClaudeBot). We do not knowingly collect end-visitor names, emails, or other directly identifying information through this feature; visitor and session identifiers are pseudonymous. If your website's visitors are individuals located in the EEA, UK, or California, you (the RankOnGeo customer) are responsible for your own visitor-facing privacy notice, and we act as a data processor on your behalf for this data.
+**Website analytics (Analytics feature).** If you enable this feature, we collect visit data from your own website's visitors — page paths, referrers, session identifiers, and whether a visit came from a known AI crawler/bot (e.g. GPTBot, ClaudeBot). We do not knowingly collect end-visitor names, emails, or other directly identifying information through this feature; visitor and session identifiers are pseudonymous. If your website's visitors are individuals located in the EEA, UK, or California, you (the RankOnGeo customer) are responsible for your own visitor-facing privacy notice, and we act as a data processor on your behalf for this data.
+
+**Google Search Console.** If you connect Google Search Console, we ask Google for read-only access to your Search Console data and store the resulting OAuth refresh token, encrypted, along with the Google account's email address. We use it only to show you your own search performance (queries, pages, clicks, impressions, average position) inside RankOnGeo and, if you turn on Autopilot, to decide which of your posts to improve. We never modify anything in your Search Console. You can disconnect at any time from the Analytics tab, which deletes the token and revokes our access at Google. RankOnGeo's use and transfer of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
 
 **Reddit integration.** If you connect a Reddit account, we store the OAuth access and refresh tokens needed to act on your behalf and your Reddit username. You can disconnect this at any time.
 

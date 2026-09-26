@@ -3,18 +3,16 @@ import DodoPayments from "dodopayments";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyDiscordOfTask } from "@/lib/reddit-task-discord";
+import { isTrialPendingConversion } from "@/lib/plan-limits";
 import type { RedditServiceType } from "@/lib/types";
 
-// Kept at the same rate as when these were fulfilled via a paid provider
-// (BuyUpvotes) — tasks are now routed to Discord for a human to fulfill
-// instead, but the pricing was left unchanged.
 const CREDIT_COST: Record<RedditServiceType, number> = {
   post_upvote: 0.5,
   post_downvote: 0.5,
-  comment_upvote: 1,
+  comment_upvote: 2,
   comment_downvote: 1,
-  custom_comments: 5,
-  create_post: 25,
+  custom_comments: 10,
+  create_post: 50,
 };
 
 // Reddit's own subreddit name rules: 3-21 chars, letters/digits/underscore.
@@ -84,11 +82,20 @@ export type PlaceRedditOrderParams = {
   subreddit?: string;
   postTitle?: string;
   mediaUrl?: string;
+  // custom_comments / create_post only — upvotes to apply once the human
+  // fulfiller has actually posted it (there's no comment/post to upvote yet
+  // at request time, so this rides along on the same task rather than being
+  // its own comment_upvote/post_upvote order against a URL that doesn't
+  // exist). Priced per-unit the same as the matching standalone service.
+  bonusUpvotes?: number;
 };
 
 export type PlaceRedditOrderResult =
   | { ok: true; task: Record<string, unknown>; queued: boolean }
-  | { ok: false; status: number; error: string };
+  // reason lets the client tell "not subscribed"/"trial not converted" (both
+  // want the subscription paywall) apart from "insufficient_credits" (wants
+  // the buy-credits flow instead) without fragile matching on error text.
+  | { ok: false; status: number; error: string; reason?: "no_plan" | "trial_pending" | "insufficient_credits" };
 
 // Basic http(s) URL check — the actual media (image or video) is fetched
 // and attached by whoever fulfills the task in Discord, not by us.
@@ -112,6 +119,18 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
   let trimmedTitle = "";
   let trimmedSubreddit = "";
   let trimmedMediaUrl = "";
+
+  let bonusUpvotes = 0;
+  if (serviceType === "custom_comments" || serviceType === "create_post") {
+    const requested = params.bonusUpvotes ?? 0;
+    if (requested) {
+      if (!Number.isInteger(requested) || requested < 0 || requested > 1000) {
+        return { ok: false, status: 400, error: "Bonus upvotes must be between 0 and 1000" };
+      }
+      bonusUpvotes = requested;
+    }
+  }
+  const bonusUpvoteCost = bonusUpvotes * CREDIT_COST[serviceType === "create_post" ? "post_upvote" : "comment_upvote"];
 
   if (serviceType === "create_post") {
     trimmedSubreddit = (subreddit ?? "").trim().replace(/^r\//i, "");
@@ -140,7 +159,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
 
     url = `https://www.reddit.com/r/${trimmedSubreddit}/`;
     effectiveQuantity = 1;
-    creditsNeeded = CREDIT_COST.create_post;
+    creditsNeeded = CREDIT_COST.create_post + bonusUpvoteCost;
   } else {
     url = params.url ?? "";
     if (!/^https?:\/\/(www\.)?reddit\.com\//i.test(url)) {
@@ -163,7 +182,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       }
 
       effectiveQuantity = 1;
-      creditsNeeded = CREDIT_COST.custom_comments;
+      creditsNeeded = CREDIT_COST.custom_comments + bonusUpvoteCost;
     } else {
       const limits = QUANTITY_LIMITS[serviceType];
       const qty = quantity ?? 0;
@@ -196,11 +215,44 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       error: billingUserId === userId
         ? "Subscribe to a plan to order Reddit engagement"
         : "This workspace has no active plan",
+      reason: "no_plan",
+    };
+  }
+
+  if (await isTrialPendingConversion(db, billingUserId)) {
+    return {
+      ok: false,
+      status: 402,
+      error: "Your trial credits unlock once your subscription converts to paid — subscribe now to use them.",
+      reason: "trial_pending",
     };
   }
 
   const taskId = randomUUID();
   const dodo = getDodo();
+
+  // Dodo's own credit-entitlement ledger does NOT reject a debit that would
+  // take the balance negative by default (it's built for metered/overage
+  // billing, not a strict prepaid wallet) — this code used to rely on Dodo
+  // throwing on an insufficient-balance debit, which it never does, so a
+  // request costing more than the customer's balance silently succeeded and
+  // left them negative. Check the actual balance ourselves first.
+  try {
+    const balance = await dodo.creditEntitlements.balances.retrieve(customerId, {
+      credit_entitlement_id: process.env.DODO_CREDIT_ENTITLEMENT_ID!,
+    });
+    if (Number(balance.balance) < creditsNeeded) {
+      return {
+        ok: false,
+        status: 402,
+        error: `Not enough credits — this needs ${creditsNeeded}, you have ${Number(balance.balance)}`,
+        reason: "insufficient_credits",
+      };
+    }
+  } catch (e) {
+    console.error("[reddit-order] balance check failed", { customerId, error: e instanceof Error ? e.message : e });
+    return { ok: false, status: 500, error: "Failed to check your credit balance — try again" };
+  }
 
   try {
     await dodo.creditEntitlements.balances.createLedgerEntry(customerId, {
@@ -213,7 +265,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     });
   } catch (e) {
     console.error("[reddit-order] credit debit failed", { taskId, url, serviceType, creditsNeeded, error: e instanceof Error ? e.message : e });
-    return { ok: false, status: 402, error: "Not enough credits" };
+    return { ok: false, status: 402, error: "Not enough credits", reason: "insufficient_credits" };
   }
 
   const refund = (reason: string) => refundRedditOrderCredits({ customerId, taskId, amount: creditsNeeded, url, serviceType, reason });
@@ -231,7 +283,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
       reply_text: serviceType === "custom_comments" || serviceType === "create_post" ? trimmedComment || null : null,
       post_title: serviceType === "create_post" ? trimmedTitle : null,
       media_url: serviceType === "create_post" ? trimmedMediaUrl || null : null,
-      upvotes_ordered: serviceType === "custom_comments" || serviceType === "create_post" ? 0 : effectiveQuantity,
+      upvotes_ordered: serviceType === "custom_comments" || serviceType === "create_post" ? bonusUpvotes : effectiveQuantity,
       delivery_speed: speed ?? "normal",
       service_type: serviceType,
       credits_charged: creditsNeeded,
@@ -265,6 +317,7 @@ export async function placeRedditOrder(params: PlaceRedditOrderParams): Promise<
     subreddit: serviceType === "create_post" ? trimmedSubreddit : null,
     postTitle: serviceType === "create_post" ? trimmedTitle : null,
     mediaUrl: serviceType === "create_post" ? trimmedMediaUrl || null : null,
+    bonusUpvotes: bonusUpvotes || null,
   });
 
   if (!notified) {

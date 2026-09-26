@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
     brandRows,
     userPlanRows,
     sourceByDomainRows,
+    stepRowsAllTime,
+    stepRows30d,
     { data: authUsers },
   ] = await Promise.all([
     Promise.all(
@@ -57,6 +59,10 @@ export async function GET(req: NextRequest) {
       .eq("event_type", "acquisition_source")
       .not("domain", "is", null)
       .order("created_at", { ascending: false }),
+    // /setup wizard step-reach funnel (see app/api/track/step) — one row per
+    // visitor per step, deduped client-side per page load.
+    db.from("funnel_events").select("metadata").eq("event_type", "setup_step_reached"),
+    db.from("funnel_events").select("metadata").eq("event_type", "setup_step_reached").gte("created_at", since30d),
     db.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
@@ -93,6 +99,21 @@ export async function GET(req: NextRequest) {
   const series = Array.from(buckets.entries()).map(([date, counts]) => ({ date, ...counts }));
 
   const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
+
+  // Step-reach counts, 1-indexed to match the wizard (1 url, 2 brand info,
+  // 3 prompts, 4 reddit opportunities, 5 trial signup).
+  function countBySteps(rows: { metadata: unknown }[]): number[] {
+    const counts = [0, 0, 0, 0, 0];
+    for (const row of rows) {
+      const step = (row.metadata as { step?: number } | null)?.step;
+      if (typeof step === "number" && step >= 1 && step <= 5) counts[step - 1]++;
+    }
+    return counts;
+  }
+  const stepFunnel = {
+    allTime: countBySteps(stepRowsAllTime.data ?? []),
+    last30d: countBySteps(stepRows30d.data ?? []),
+  };
 
   const emailByUserId = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email ?? null]));
   // Every signup gets a user_plans row defaulting to plan:"starter" even before
@@ -135,6 +156,7 @@ export async function GET(req: NextRequest) {
       startedToConvertedPct: rate(allTime.trial_converted, allTime.trial_started),
       domainToConvertedPct: rate(allTime.trial_converted, allTime.domain_submitted),
     },
+    stepFunnel,
     domains,
   });
 }

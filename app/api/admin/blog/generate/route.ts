@@ -29,11 +29,11 @@ GAP → ARTICLE: one click on a gap generates a ~1,800-word article that directl
 
 PUBLISHING: WordPress gets true one-click auto-publish via the WordPress REST API. Discord and generic Webhooks also auto-publish (Discord as a rich embed; webhooks POST the full article as JSON to any URL). Other CMSs are copy-paste from the article editor today — do not claim one-click/auto-publish to Shopify or Framer, that's not built.
 
-WEB + LLM ANALYTICS: a snippet on the customer's own site tracks human visitors (pageviews, sessions, referrers) client-side. Separately, a server-side endpoint the customer's backend calls on every request recognizes real AI crawler user-agents — GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, and others — and logs when those bots actually crawl the site, distinct from human traffic. Included event volume: 20,000/mo on Pro, 100,000/mo on Business, 500,000/mo on Scale.
+WEB + LLM ANALYTICS: a snippet on the customer's own site tracks human visitors (pageviews, sessions, referrers) client-side. Separately, a server-side endpoint the customer's backend calls on every request recognizes real AI crawler user-agents — GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, and others — and logs when those bots actually crawl the site, distinct from human traffic. Included event volume: 20,000/mo.
 
 REDDIT ENGAGEMENT: paid credits buy real engagement through a third-party delivery network — post upvotes/downvotes, comment upvotes/downvotes, and posting new comments on a given thread (comments pass through moderation before going out). This is a visibility/distribution lever, not a core GEO mechanic — mention it only when a topic is specifically about community/Reddit visibility, not as a default feature callout.
 
-Plans: Pro $49/mo (solo founders), Business $99/mo (teams — most popular), Scale $149/mo (agencies & multi-brand portfolios), each with more tracked prompts, more websites, and more analytics volume at the higher tiers. Annual billing is 17% off. Early-access backers get a flat 50% off every plan at https://www.rankongeo.com/early.
+Plan: Pro, $40/mo — one plan, everything included (10 tracked prompts × 5 AI engines, 1 website, 20,000 analytics events/mo, 40 Reddit engagement credits). Annual billing is 17% off. Early-access backers get a flat 50% off at https://www.rankongeo.com/early.
 
 Free: the visibility scan at https://www.rankongeo.com/setup — no credit card, a real brand snapshot plus keyword gaps in ~60 seconds (a free account is needed to see the live dashboard after).
 

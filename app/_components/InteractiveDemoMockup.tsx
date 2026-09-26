@@ -923,8 +923,8 @@ function WebAnalyticsContent() {
   ];
   return (
     <div className="p-5" style={{ animation: "fadeUp 0.3s ease forwards" }}>
-      <h2 className="mb-0.5 text-lg font-semibold text-[var(--ink)]">Web Analytics</h2>
-      <p className="mb-4 text-xs text-[var(--ink-faint)]">Privacy first analytics for your website</p>
+      <h2 className="mb-0.5 text-lg font-semibold text-[var(--ink)]">Analytics</h2>
+      <p className="mb-4 text-xs text-[var(--ink-faint)]">Traffic, AI answers and search performance, privacy first</p>
 
       <div className="mb-3 grid grid-cols-5 gap-2.5">
         {stats.map((s) => (
@@ -1006,8 +1006,8 @@ function LLMAnalyticsContent() {
   const total = breakdown.reduce((s, b) => s + b.count, 0);
   return (
     <div className="p-5" style={{ animation: "fadeUp 0.3s ease forwards" }}>
-      <h2 className="mb-0.5 text-lg font-semibold text-[var(--ink)]">LLM Analytics</h2>
-      <p className="mb-4 text-xs text-[var(--ink-faint)]">AI and bot traffic analytics</p>
+      <h2 className="mb-0.5 text-lg font-semibold text-[var(--ink)]">AI crawlers</h2>
+      <p className="mb-4 text-xs text-[var(--ink-faint)]">AI bots reading your pages</p>
 
       <div className="mb-3 grid grid-cols-2 gap-2.5">
         {stats.map((s) => (
@@ -1220,7 +1220,7 @@ export function InteractiveDemoMockup() {
             <div className="flex flex-1 flex-col gap-0.5 overflow-hidden px-2 py-2">
               {navItem("Agent")}
               {sectionLabel("Measure")}
-              {["Overview", "Engines", "Prompts", "Citations", "Competitors", "Web Analytics", "LLM Analytics"].map((t) => navItem(t))}
+              {["Overview", "Engines", "Prompts", "Citations", "Competitors", "Analytics"].map((t) => navItem(t))}
               {sectionLabel("Create")}
               {navItem("Research", 20)}
               {navItem("Articles")}
@@ -1270,8 +1270,12 @@ export function InteractiveDemoMockup() {
               {activeTab === "Research" && <ResearchContent />}
               {activeTab === "Articles" && <ArticlesContent />}
               {activeTab === "Tasks" && <TasksContent />}
-              {activeTab === "Web Analytics" && <WebAnalyticsContent />}
-              {activeTab === "LLM Analytics" && <LLMAnalyticsContent />}
+              {activeTab === "Analytics" && (
+                <>
+                  <WebAnalyticsContent />
+                  <LLMAnalyticsContent />
+                </>
+              )}
               {["Publishing", "Agent", "Alerts"].includes(activeTab) && (
                 <div className="flex h-full items-center justify-center p-5">
                   <div className="text-center">

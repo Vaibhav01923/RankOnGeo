@@ -4,10 +4,11 @@ import { scheduledScanAll, scanBrand, manualScanBrand } from "@/inngest/function
 import { reconcileDodoSubscriptions } from "@/inngest/functions/reconcile-subscriptions";
 import { meterAnalyticsUsage } from "@/inngest/functions/analytics-billing";
 import { cleanupAbandonedBrandDrafts } from "@/inngest/functions/cleanup";
+import { scheduledAutopilot, autopilotBrand } from "@/inngest/functions/autopilot";
 
 export const maxDuration = 300;
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scheduledScanAll, scanBrand, manualScanBrand, reconcileDodoSubscriptions, meterAnalyticsUsage, cleanupAbandonedBrandDrafts],
+  functions: [scheduledScanAll, scanBrand, manualScanBrand, reconcileDodoSubscriptions, meterAnalyticsUsage, cleanupAbandonedBrandDrafts, scheduledAutopilot, autopilotBrand],
 });

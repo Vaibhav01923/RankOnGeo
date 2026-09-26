@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
 
   const { data: brands, error } = await db
     .from("brands")
-    .select("id, name, domain, niche, description, target_audience, competitors");
+    .select("id, name, domain, niche, description, target_audience, competitors")
+    .not("user_id", "is", null);
 
   if (error || !brands?.length) {
     return NextResponse.json({ scanned: 0, error: error?.message ?? "No brands found" });

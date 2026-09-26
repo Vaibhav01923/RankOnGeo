@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { serverClient } from "@/lib/supabase";
-import { slugify } from "@/lib/blog";
+import { SITE_URL, slugify } from "@/lib/blog";
 
 // Strips common markdown syntax down to plain text for blog_posts.description
 // (meta description / listing excerpt) — content itself stays as markdown.
@@ -53,6 +53,34 @@ export async function POST(req: NextRequest) {
     : excerptFromMarkdown(content);
   const imageUrl = typeof body?.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null;
 
+  // Autopilot's rewrite pass re-sends a post it published earlier. Update it
+  // in place — same slug/URL, same publish date — instead of adding a
+  // duplicate, so whatever ranking the URL has earned is kept.
+  const externalId = typeof body?.external_id === "string" ? body.external_id : "";
+  if (body?.action === "update" && externalId) {
+    const db = serverClient();
+    const { data: updated, error: updateError } = await db
+      .from("blog_posts")
+      .update({
+        title,
+        description,
+        content,
+        tags,
+        ...(imageUrl ? { cover_image_url: imageUrl } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", externalId)
+      .select("id, slug")
+      .maybeSingle();
+    if (updateError || !updated) {
+      return NextResponse.json({ error: updateError?.message ?? "Post to update not found" }, { status: updateError ? 500 : 404 });
+    }
+    revalidatePath("/blog");
+    revalidatePath(`/blog/${updated.slug}`);
+    revalidatePath("/sitemap.xml");
+    return NextResponse.json({ ok: true, id: updated.id, url: `${SITE_URL}/blog/${updated.slug}` });
+  }
+
   const baseSlug = slugify(title);
   if (!baseSlug) return NextResponse.json({ error: "slug could not be derived from title" }, { status: 400 });
 
@@ -89,5 +117,6 @@ export async function POST(req: NextRequest) {
   revalidatePath(`/blog/${data.slug}`);
   revalidatePath("/sitemap.xml");
 
-  return NextResponse.json({ ok: true });
+  // id + url let RankOnGeo track this post and update it in place later.
+  return NextResponse.json({ ok: true, id: data.id, url: `${SITE_URL}/blog/${data.slug}` });
 }

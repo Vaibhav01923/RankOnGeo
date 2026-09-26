@@ -28,14 +28,55 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
-type Step = "url" | "brand" | "prompts" | "trial";
+type Step = "url" | "brand" | "prompts" | "reddit" | "trial";
+const STEP_NUMBERS: Record<Step, number> = { url: 1, brand: 2, prompts: 3, reddit: 4, trial: 5 };
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "url", label: "Your website" },
   { key: "brand", label: "Brand info" },
   { key: "prompts", label: "Tracked prompts" },
+  { key: "reddit", label: "Reddit opportunities" },
   { key: "trial", label: "Start free trial" },
 ];
+
+type RedditOpportunityThread = {
+  keyword: string;
+  redditId: string;
+  subreddit: string;
+  title: string;
+  url: string;
+  body: string;
+  score: number;
+  numComments: number;
+  createdAt: string | null;
+  subredditSubscribers: number | null;
+  estimatedViews: number;
+};
+
+type SuggestedRedditPost = {
+  subreddit: string;
+  subscribers: number | null;
+  title: string;
+  estimatedViewsLow: number;
+  estimatedViewsHigh: number;
+};
+
+function formatCompactNumber(n: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+function formatTimeAgo(iso: string | null): string {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days <= 0) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years === 1 ? "" : "s"} ago`;
+}
 
 // Anonymous visitors going through the trial funnel aren't capped at a
 // specific plan's limit while selecting prompts in step 3 — instead, step 4
@@ -44,13 +85,21 @@ const STEPS: { key: Step; label: string }[] = [
 // This is the platform-wide ceiling on how many they can select at all.
 const ANONYMOUS_TRIAL_BROWSE_CAP = Math.max(...Object.values(PLAN_PROMPT_LIMITS));
 
-function recommendedPlanFor(promptCount: number): string {
-  if (promptCount > (PLAN_PROMPT_LIMITS.growth ?? 20)) return "enterprise";
-  if (promptCount > (PLAN_PROMPT_LIMITS.starter ?? 10)) return "growth";
+function recommendedPlanFor(_promptCount: number): string {
   return "starter";
 }
 
-const SOURCE_OPTIONS = ["Twitter / X", "Google search", "Referral", "LinkedIn", "Product Hunt", "Blog / Article", "Reddit", "Other"];
+const SOURCE_OPTIONS = ["Twitter / X", "Google search", "Referral", "LinkedIn", "Product Hunt", "Blog / Article", "Reddit", "Email", "Other"];
+
+// Cycled behind the Reddit opportunities intro card so the wait (the search
+// runs in the background regardless of whether the intro's been dismissed)
+// reads as real progress instead of a static message.
+const REDDIT_SCAN_MESSAGES = [
+  "Scanning Reddit for live conversations…",
+  "Finding people actively asking for alternatives…",
+  "Filtering for genuine high-intent buying signals…",
+  "Ranking threads by real reach and relevance…",
+];
 
 function SetupContent() {
   const router = useRouter();
@@ -61,6 +110,25 @@ function SetupContent() {
 
   // Step 1 fields
   const [domain, setDomain] = useState(searchParams.get("domain") ?? "");
+
+  // Funnel-reach tracking for /admin/stats — one event per step a visitor
+  // actually reaches. Deduped per page load (stepsLoggedRef) so clicking
+  // Back and forward again doesn't double-count; fire-and-forget, never
+  // blocks the wizard.
+  const stepsLoggedRef = useRef<Set<Step>>(new Set());
+  function trackStep(s: Step) {
+    if (stepsLoggedRef.current.has(s)) return;
+    stepsLoggedRef.current.add(s);
+    fetch("/api/track/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: STEP_NUMBERS[s], stepName: s, domain: domain.trim() }),
+    }).catch(() => {});
+  }
+  useEffect(() => {
+    trackStep("url");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Optional "how did you hear about us" — pops up once analysis starts and
   // stays up (a closable corner card, not tied to the loading spinner) across
@@ -149,7 +217,60 @@ function SetupContent() {
   const [saving, setSaving] = useState(false);
   const addPromptRef = useRef<HTMLDivElement>(null);
 
-  // Step 4: trial signup
+  // Step 4: Reddit opportunities (live threads + suggested posts)
+  const [redditLoading, setRedditLoading] = useState(false);
+  const [redditError, setRedditError] = useState("");
+  const [redditThreads, setRedditThreads] = useState<RedditOpportunityThread[]>([]);
+  const [redditSuggestedPosts, setRedditSuggestedPosts] = useState<SuggestedRedditPost[]>([]);
+  const [redditTotalFound, setRedditTotalFound] = useState(0);
+  const [redditFetchedForBrandId, setRedditFetchedForBrandId] = useState<string | null>(null);
+  // The search runs as soon as the step is reached regardless of this — it
+  // only gates whether the intro card or the actual results are on screen,
+  // so nothing is wasted if they click through before the fetch finishes.
+  const [redditIntroAcknowledged, setRedditIntroAcknowledged] = useState(false);
+  const [redditScanMessageIndex, setRedditScanMessageIndex] = useState(0);
+
+  async function fetchRedditOpportunities(brandId: string) {
+    setRedditLoading(true);
+    setRedditError("");
+    try {
+      const res = await fetch("/api/setup/reddit-opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Something went wrong");
+      setRedditThreads(data.threads ?? []);
+      setRedditSuggestedPosts(data.suggestedPosts ?? []);
+      setRedditTotalFound(data.totalFound ?? 0);
+      setRedditFetchedForBrandId(brandId);
+    } catch (err) {
+      setRedditError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setRedditLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (step === "reddit" && brand?.id && redditFetchedForBrandId !== brand.id) {
+      fetchRedditOpportunities(brand.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, brand?.id]);
+
+  // Cycles the status line under the intro card's button while the search
+  // is still running in the background — stops once they've moved past the
+  // intro (the real loading spinner takes over from there).
+  useEffect(() => {
+    if (step !== "reddit" || redditIntroAcknowledged) return;
+    const interval = setInterval(() => {
+      setRedditScanMessageIndex((i) => (i + 1) % REDDIT_SCAN_MESSAGES.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [step, redditIntroAcknowledged]);
+
+  // Step 5: trial signup
   const [trialEmail, setTrialEmail] = useState("");
   const [trialPlan, setTrialPlan] = useState(PRICING[0].planKey);
   const [trialPlanTouched, setTrialPlanTouched] = useState(false);
@@ -197,6 +318,7 @@ function SetupContent() {
       setEditedAudience(data.targetAudience ?? []);
       setDeselectedIds(new Set());
       setPrompts(data.trackedPrompts);
+      trackStep("brand");
       setStep("brand");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -225,6 +347,7 @@ function SetupContent() {
   function handleBrandNext() {
     if (!brand) return;
     setBrand({ ...brand, name: editedName, niche: editedNiche, competitors: editedCompetitors, targetAudience: editedAudience });
+    trackStep("prompts");
     setStep("prompts");
   }
 
@@ -282,7 +405,15 @@ function SetupContent() {
     };
   }
 
-  async function handleStart() {
+  // Prompts step's "Continue" — just advances to the Reddit opportunities
+  // step now; the actual save-and-redirect (or move to trial signup) happens
+  // once they're done there, in finishSetup.
+  function handleContinueFromPrompts() {
+    trackStep("reddit");
+    setStep("reddit");
+  }
+
+  async function finishSetup() {
     if (!brand?.id) return;
     const { data: { user } } = await createSupabaseBrowserClient().auth.getUser();
 
@@ -302,6 +433,7 @@ function SetupContent() {
     // inline gate. The anonymous brand row stays put (RLS blocks writing to
     // it directly); its edits get stashed right before the trial checkout
     // redirect in handleClaimTrial.
+    trackStep("trial");
     setStep("trial");
   }
 
@@ -671,19 +803,245 @@ function SetupContent() {
                 ← Back
               </button>
               <button
-                onClick={handleStart}
-                disabled={saving || prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
+                onClick={handleContinueFromPrompts}
+                disabled={prompts.filter((p) => !deselectedIds.has(p.id)).length === 0}
                 className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
               >
-                {saving ? "Saving…" : "Continue"}
+                Continue
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Trial signup */}
+        {/* Step 4: Reddit opportunities */}
+        {step === "reddit" && brand && (
+          <div>
+            <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">Where you can get mentioned right now</h1>
+            <p className="text-[var(--ink-soft)] text-sm mb-8">
+              We searched Reddit for live threads where people in your space are comparing options, asking for
+              alternatives, or looking for recommendations — a well-placed comment in one of these gets seen.
+            </p>
+
+            {!redditIntroAcknowledged && (
+              <div>
+                <div className="flex items-center justify-center mb-5">
+                  <div className="relative w-16 h-16 rounded-full bg-[var(--rust-wash)] flex items-center justify-center">
+                    <span className="absolute inset-0 rounded-full bg-[var(--rust)]/20 animate-ping" />
+                    <svg className="relative w-7 h-7 text-[var(--rust)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <h2 className="text-center text-xl font-bold text-[var(--ink)] mb-2">These aren&apos;t random threads</h2>
+                <p className="text-center text-sm text-[var(--ink-soft)] max-w-md mx-auto mb-6">
+                  Every thread we&apos;re about to show you is from someone actively comparing options, asking for
+                  alternatives, or looking for a recommendation in your exact category — not casual browsers, but
+                  high-intent buyers already looking for something like {brand.name}. Your ideal customers.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-7">
+                  <div className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-4 text-center">
+                    <p className="text-lg mb-1">🎯</p>
+                    <p className="text-xs font-semibold text-[var(--ink)] mb-1">High intent</p>
+                    <p className="text-[11px] text-[var(--ink-faint)]">Actively searching, not casually scrolling</p>
+                  </div>
+                  <div className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-4 text-center">
+                    <p className="text-lg mb-1">🧑‍💼</p>
+                    <p className="text-xs font-semibold text-[var(--ink)] mb-1">Your ideal customer</p>
+                    <p className="text-[11px] text-[var(--ink-faint)]">Matches exactly who you&apos;re trying to reach</p>
+                  </div>
+                  <div className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-4 text-center">
+                    <p className="text-lg mb-1">📈</p>
+                    <p className="text-xs font-semibold text-[var(--ink)] mb-1">Built to convert</p>
+                    <p className="text-[11px] text-[var(--ink-faint)]">People this close to deciding convert best</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRedditIntroAcknowledged(true)}
+                    className="px-8 py-3 bg-[var(--rust)] hover:bg-[var(--rust-deep)] text-[var(--surface)] rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    Show me the threads →
+                  </button>
+                  <p className="text-xs text-[var(--ink-faint)] flex items-center gap-1.5 min-h-[1rem]">
+                    {redditLoading ? (
+                      <>
+                        <span className="w-3 h-3 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin shrink-0" />
+                        {REDDIT_SCAN_MESSAGES[redditScanMessageIndex]}
+                      </>
+                    ) : (
+                      <>✓ Ready — searching finished in the background</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {redditIntroAcknowledged && (
+              <>
+            {redditLoading && (
+              <div className="flex flex-col items-center py-16 gap-4">
+                <span className="w-8 h-8 border-2 border-[var(--rust)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-[var(--ink-soft)]">Scanning Reddit for live conversations…</p>
+                <p className="text-xs text-[var(--ink-faint)] max-w-xs text-center">
+                  Searching for threads where people ask for alternatives, comparisons, and recommendations near &ldquo;{brand.niche}&rdquo;.
+                </p>
+              </div>
+            )}
+
+            {!redditLoading && redditError && (
+              <p className="text-sm text-red-700 bg-red-500/10 border border-red-500/25 rounded-lg px-4 py-3 mb-6">{redditError}</p>
+            )}
+
+            {!redditLoading && !redditError && redditThreads.length === 0 && (
+              <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-4 py-4 mb-8">
+                <p className="text-sm text-[var(--ink-soft)]">
+                  No live threads turned up for this exact niche yet — RankOnGeo keeps monitoring Reddit after
+                  you&apos;re set up, and you can add your own keywords anytime from the dashboard.
+                </p>
+              </div>
+            )}
+
+            {!redditLoading && redditThreads.length > 0 && (
+              <>
+                <p className="text-sm font-semibold text-[var(--olive)] mb-4">
+                  {redditThreads.length} live thread{redditThreads.length === 1 ? "" : "s"} found
+                </p>
+
+                <div className="space-y-3 mb-4">
+                  {redditThreads.map((t) => (
+                    <a
+                      key={t.redditId}
+                      href={t.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--rust)]/30 rounded-lg px-4 py-3.5 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-orange-700 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                          <svg viewBox="0 0 20 20" className="w-3 h-3 fill-[#FF4500]" aria-hidden="true">
+                            <path d="M16.67 10a1.46 1.46 0 00-2.47-1 7.12 7.12 0 00-3.85-1.23l.65-3.07 2.13.45a1 1 0 101.07-1 1 1 0 00-.96.68l-2.38-.5a.19.19 0 00-.22.14l-.73 3.44a7.14 7.14 0 00-3.89 1.23 1.46 1.46 0 10-1.61 2.39 2.87 2.87 0 000 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 000-.44 1.46 1.46 0 00.51-1.53zM7.27 11a1 1 0 111 1 1 1 0 01-1-1zm5.58 2.65a3.55 3.55 0 01-2.85.86 3.55 3.55 0 01-2.85-.86.19.19 0 01.27-.27 3.16 3.16 0 002.58.65 3.16 3.16 0 002.58-.65.19.19 0 01.27.27zm-.17-1.65a1 1 0 111-1 1 1 0 01-1 1z" />
+                          </svg>
+                          r/{t.subreddit}
+                        </span>
+                        {!!t.subredditSubscribers && (
+                          <span className="text-[11px] text-[var(--ink-faint)]">{formatCompactNumber(t.subredditSubscribers)} members</span>
+                        )}
+                        {t.createdAt && <span className="text-[11px] text-[var(--ink-faint)]">· {formatTimeAgo(t.createdAt)}</span>}
+                      </div>
+                      <p className="text-sm font-medium text-[var(--ink)]/90 mb-2 leading-snug">{t.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--line-soft)] px-2 py-0.5 rounded-full">↑ {t.score}</span>
+                        <span className="text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--line-soft)] px-2 py-0.5 rounded-full">💬 {t.numComments}</span>
+                        <span className="text-[11px] font-semibold text-[var(--rust-deep)] bg-[var(--rust-wash)] px-2 py-0.5 rounded-full">
+                          ~{formatCompactNumber(t.estimatedViews)} views
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+
+                {redditTotalFound > redditThreads.length && (
+                  <p className="text-xs text-[var(--ink-faint)] mb-8">
+                    +{redditTotalFound - redditThreads.length} more relevant thread{redditTotalFound - redditThreads.length === 1 ? "" : "s"} found —
+                    see the full list and submit comments from your dashboard.
+                  </p>
+                )}
+
+                <div className="bg-[var(--line-soft)] border border-[var(--line)] rounded-lg px-5 py-5 mb-8">
+                  <p className="text-sm font-semibold text-[var(--ink)] mb-3">How a comment gets posted through RankOnGeo</p>
+                  <ol className="space-y-2.5 text-xs text-[var(--ink-soft)]">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                      <span>Pick a thread — we draft a natural, genuinely helpful reply that mentions {brand.name} only where it fits.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                      <span>Submit it — it lands in your <strong className="text-[var(--ink)]">Tasks tab</strong>, ready to go.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                      <span>Posted within <strong className="text-[var(--ink)]">24 hours</strong> through one of our established, high-karma Reddit accounts — not a fresh throwaway that gets auto-filtered.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-[var(--rust)] text-[var(--surface)] text-[10px] font-bold flex items-center justify-center mt-0.5">4</span>
+                      <span>Because it&apos;s a real, aged account replying inside an already-active discussion, it survives Reddit&apos;s spam filters and tends to earn genuine upvotes.</span>
+                    </li>
+                  </ol>
+                  {(() => {
+                    const views = redditThreads.map((t) => t.estimatedViews);
+                    const min = Math.min(...views);
+                    const max = Math.max(...views);
+                    return (
+                      <p className="text-xs font-medium text-[var(--ink)]/90 mt-4 pt-4 border-t border-[var(--line)]">
+                        Based on the threads above, a comment posted here typically gets seen by{" "}
+                        {min === max ? `~${formatCompactNumber(min)} people` : `~${formatCompactNumber(min)}–${formatCompactNumber(max)} people`}
+                        {" "}who are actively looking for a service like {brand.name} — genuine high-intent buyers, not casual scrollers.
+                      </p>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+
+            {!redditLoading && redditSuggestedPosts.length > 0 && (
+              <div className="mb-8">
+                <p className="text-sm font-semibold text-[var(--ink)] mb-1">Suggested posts to make</p>
+                <p className="text-xs text-[var(--ink-faint)] mb-3">
+                  Starting your own thread in the right subreddit works even better than commenting on someone else&apos;s.
+                </p>
+                <div className="space-y-2.5">
+                  {redditSuggestedPosts.map((p) => (
+                    <div key={p.subreddit} className="bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 py-3.5">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[11px] font-semibold text-orange-700 bg-orange-500/10 px-2 py-0.5 rounded-full">r/{p.subreddit}</span>
+                        {!!p.subscribers && <span className="text-[11px] text-[var(--ink-faint)]">{formatCompactNumber(p.subscribers)} members</span>}
+                      </div>
+                      <p className="text-sm text-[var(--ink)]/90 mb-1.5">&ldquo;{p.title}&rdquo;</p>
+                      <p className="text-xs text-[var(--ink-soft)]">
+                        Typically ~{formatCompactNumber(p.estimatedViewsLow)}–{formatCompactNumber(p.estimatedViewsHigh)} views and steady upvotes when it resonates.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--ink-faint)] mt-3">More subreddits and posting options are available in your dashboard.</p>
+              </div>
+            )}
+              </>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("prompts")}
+                disabled={saving}
+                className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
+              >
+                ← Back
+              </button>
+              {redditIntroAcknowledged && (
+                <button
+                  onClick={finishSetup}
+                  disabled={saving}
+                  className="flex-1 bg-[var(--rust)] hover:bg-[var(--rust-deep)] disabled:opacity-50 text-[var(--surface)] py-3 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {saving ? "Saving…" : "Continue"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Trial signup */}
         {step === "trial" && (
           <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--olive-wash)] px-3 py-1 text-xs font-medium text-[var(--olive)] mb-3">
+              <span>✓</span>
+              <span>Free trial granted specially for {editedName || brand?.name || "your brand"}</span>
+            </div>
             <h1 className="font-signal-serif text-3xl text-[var(--ink)] mb-2">See what AI says about you — free</h1>
             <p className="text-[var(--ink-soft)] text-sm mb-8">
               ChatGPT, Gemini, Google AI Search, Perplexity, and Claude — we&apos;ll show you exactly what each one
@@ -692,29 +1050,18 @@ function SetupContent() {
             </p>
 
             <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--ink)] mb-2">
-                Choose your plan
-                {!trialPlanTouched && (
-                  <span className="text-[var(--ink-faint)] font-normal"> — picked to fit your {prompts.filter((p) => !deselectedIds.has(p.id)).length} selected prompts</span>
-                )}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PRICING.map((p) => (
-                  <button
-                    key={p.planKey}
-                    type="button"
-                    onClick={() => { setTrialPlan(p.planKey); setTrialPlanTouched(true); }}
-                    className={`text-left rounded-lg border px-4 py-3 transition-colors ${
-                      trialPlan === p.planKey
-                        ? "border-[var(--rust)] bg-[var(--rust-wash)]"
-                        : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--rust)]/30"
-                    }`}
-                  >
-                    <p className="text-sm font-semibold text-[var(--ink)]">{p.name}</p>
-                    <p className="text-xs text-[var(--ink-soft)] mt-0.5">${p.price}/mo after trial</p>
-                    <p className="text-xs text-[var(--ink-faint)] mt-0.5">Room for {PLAN_PROMPT_LIMITS[p.planKey] ?? FREE_PROMPT_LIMIT} tracked prompts</p>
-                  </button>
-                ))}
+              <p className="text-sm font-medium text-[var(--ink)] mb-2">Your plan</p>
+              <div className="rounded-lg border border-[var(--rust)] bg-[var(--rust-wash)] px-4 py-3.5">
+                <p className="text-sm font-semibold text-[var(--ink)]">
+                  {PRICING[0].name} — ${PRICING[0].price}/mo after trial
+                </p>
+                <p className="text-xs text-[var(--ink-soft)] mt-1">
+                  Get access to the app, your AI visibility report, and Reddit marketing for your brand.
+                </p>
+                <p className="text-xs text-[var(--ink-faint)] mt-2">
+                  We&apos;ve run Reddit marketing for Cluely, Tsenta, Affogato AI, and Interview Coder, and helped
+                  them grow.
+                </p>
               </div>
             </div>
 
@@ -743,7 +1090,7 @@ function SetupContent() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep("prompts")}
+                  onClick={() => setStep("reddit")}
                   disabled={trialSubmitting}
                   className="px-5 py-3 border border-[var(--line)] text-[var(--ink-soft)] rounded-lg text-sm font-medium hover:bg-[var(--line-soft)] disabled:opacity-50 transition-colors"
                 >
