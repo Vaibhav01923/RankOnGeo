@@ -9,7 +9,7 @@ export const PRICING = [
     name: "Pro",
     planKey: "starter",
     desc: "Everything RankOnGeo does, one plan.",
-    price: 40,
+    price: 29.99, // keep in step with the "RankOnGeo Pro" product price in Dodo, which is what checkout charges
     highlight: true,
     features: [
       "40 credits for Reddit upvotes, comments, comment upvotes & more",

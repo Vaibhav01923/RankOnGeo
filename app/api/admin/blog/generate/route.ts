@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { requireAdmin } from "@/lib/admin";
 import { parseArticleMeta, stripMarkdownLinkSyntax } from "@/lib/article-meta";
 import { slugify } from "@/lib/blog";
+import { PRICING, formatPlanPrice } from "@/lib/pricing";
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -33,7 +34,7 @@ WEB + LLM ANALYTICS: a snippet on the customer's own site tracks human visitors 
 
 REDDIT ENGAGEMENT: paid credits buy real engagement through a third-party delivery network — post upvotes/downvotes, comment upvotes/downvotes, and posting new comments on a given thread (comments pass through moderation before going out). This is a visibility/distribution lever, not a core GEO mechanic — mention it only when a topic is specifically about community/Reddit visibility, not as a default feature callout.
 
-Plan: Pro, $40/mo — one plan, everything included (10 tracked prompts × 5 AI engines, 1 website, 20,000 analytics events/mo, 40 Reddit engagement credits). Annual billing is 17% off. Early-access backers get a flat 50% off at https://www.rankongeo.com/early.
+Plan: Pro, ${formatPlanPrice(PRICING[0].price)}/mo — one plan, everything included (10 tracked prompts × 5 AI engines, 1 website, 20,000 analytics events/mo, 40 Reddit engagement credits). Annual billing is 17% off. Early-access backers get a flat 50% off at https://www.rankongeo.com/early.
 
 Free: the visibility scan at https://www.rankongeo.com/setup — no credit card, a real brand snapshot plus keyword gaps in ~60 seconds (a free account is needed to see the live dashboard after).
 
