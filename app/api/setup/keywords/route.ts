@@ -12,7 +12,7 @@ const COLUMNS = "id, name, niche, description, competitors, target_audience";
 // limit below stops one person; this stops a crowd (or a bug) from draining the
 // account, since the same balance also pays for AI-engine scans. Once the day's
 // budget is used, the step falls back to keywords without volumes.
-const DAILY_LOOKUP_CAP = Number(process.env.KEYWORD_LOOKUPS_PER_DAY) || 100;
+const DAILY_LOOKUP_CAP = Number(process.env.KEYWORD_LOOKUPS_PER_DAY) || 30;
 
 // Wizard step "keywords": what high-intent buyers in this niche search for, with
 // approximate monthly volume. Runs before signup for anonymous visitors (brand
