@@ -100,13 +100,16 @@ export async function GET(req: NextRequest) {
 
   const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
 
-  // Step-reach counts, 1-indexed to match the wizard (1 url, 2 brand info,
-  // 3 prompts, 4 reddit opportunities, 5 trial signup).
+  // Step-reach counts in wizard order. Counted by step NAME, not number: the
+  // wizard grew from 5 to 8 steps, so an old row's number no longer means the
+  // same step, but "prompts", "reddit" and "trial" still do.
+  const STEP_ORDER = ["url", "brand", "keywords", "blogs", "prompts", "reddit", "offer", "trial"];
   function countBySteps(rows: { metadata: unknown }[]): number[] {
-    const counts = [0, 0, 0, 0, 0];
+    const counts = STEP_ORDER.map(() => 0);
     for (const row of rows) {
-      const step = (row.metadata as { step?: number } | null)?.step;
-      if (typeof step === "number" && step >= 1 && step <= 5) counts[step - 1]++;
+      const name = (row.metadata as { stepName?: string } | null)?.stepName;
+      const i = name ? STEP_ORDER.indexOf(name) : -1;
+      if (i >= 0) counts[i]++;
     }
     return counts;
   }

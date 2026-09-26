@@ -32,7 +32,7 @@ type Stats = {
   domains: DomainRow[];
 };
 
-const WIZARD_STEP_LABELS = ["Website", "Brand info", "Prompts", "Reddit", "Trial"];
+const WIZARD_STEP_LABELS = ["Website", "Brand info", "Keywords", "Blogs", "GEO prompts", "Reddit", "Offer", "Trial"];
 
 function KpiTile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -236,7 +236,7 @@ export default function AdminStatsPage() {
               })}
             </div>
             <p className="mt-4 text-xs text-[var(--ink-faint)]">
-              How many visitors reach each step of the /setup wizard — step 1 (enter a domain) through step 5 (trial signup).
+              How many visitors reach each step of the /setup wizard — step 1 (enter a domain) through step 8 (trial signup).
             </p>
           </div>
 
