@@ -116,8 +116,8 @@ export function PagesTable({ ours, google, highlightPaths }: { ours: OwnPage[] |
             {showOwn && <th className="py-2 font-medium text-right">Pageviews</th>}
             {showOwn && <th className="py-2 font-medium text-right">Bounce</th>}
             {showGoogle && <th className="py-2 font-medium text-right">Google clicks<br /><span className="font-normal text-[10px]">{GOOGLE_DELAY_NOTE}</span></th>}
-            {showGoogle && <th className="py-2 font-medium text-right">Impressions<br /><span className="font-normal text-[10px]">{GOOGLE_DELAY_NOTE}</span></th>}
-            {showGoogle && <th className="py-2 font-medium text-right">Position<br /><span className="font-normal text-[10px]">{GOOGLE_DELAY_NOTE}</span></th>}
+            {showGoogle && <th className="py-2 font-medium text-right">Google impressions<br /><span className="font-normal text-[10px]">{GOOGLE_DELAY_NOTE}</span></th>}
+            {showGoogle && <th className="py-2 font-medium text-right">Google position<br /><span className="font-normal text-[10px]">{GOOGLE_DELAY_NOTE}</span></th>}
           </tr>
         </thead>
         <tbody>
