@@ -152,6 +152,10 @@ export function ConnectionsModal({
                       {gsc.data?.reconnect && <a href={connectHref} className={primary}>Reconnect</a>}
                       {!gsc.data?.reconnect && g.linked && !g.connected && <button onClick={onChooseSite} className={primary}>Choose site</button>}
                       {!g.linked && <a href={connectHref} className={primary}>Connect</a>}
+                      {/* Every brand can be on a different Google account (an agency running
+                          several clients' Search Console, say) — this switches just this
+                          brand's connection without touching any other brand's. */}
+                      {g.linked && <a href={`${connectHref}&switchAccount=1`} className={secondary}>Change account</a>}
                       {g.linked && <button onClick={disconnectGoogle} disabled={gsc.busy} className={danger}>Disconnect</button>}
                     </>
                   }
