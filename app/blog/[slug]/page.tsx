@@ -147,8 +147,6 @@ export default async function BlogPostPage({ params }: Props) {
         priority
       />
 
-      <TableOfContents content={post.content} />
-
       <header className="mb-10">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-faint)]">
           <time dateTime={post.published_at ?? undefined}>{formatDate(post.published_at)}</time>
@@ -173,6 +171,8 @@ export default async function BlogPostPage({ params }: Props) {
           </div>
         )}
       </header>
+
+      <TableOfContents content={post.content} />
 
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-8 py-9 sm:px-10">
         <MarkdownArticle content={post.content} />
