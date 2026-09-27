@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { BlogCover } from "../../_components/BlogCover";
 import { DomainForm } from "../../_components/DomainForm";
 import { MarkdownArticle } from "../../_components/MarkdownArticle";
+import { TableOfContents } from "../../_components/TableOfContents";
 import { getPublishedPostBySlug, getPublishedPosts, readingTimeMinutes, SITE_URL } from "@/lib/blog";
 import { DEMO_CALL_URL } from "@/lib/links";
 import { ORGANIZATION } from "../../_components/WebPageJsonLd";
+import { extractFaqPairs } from "@/lib/article-meta";
 
 // See app/sitemap.ts for why this dropped from 3600 to 60 — on-demand
 // revalidatePath calls at publish time aren't reliably refreshing routes in
@@ -99,8 +101,20 @@ export default async function BlogPostPage({ params }: Props) {
     ],
   };
 
+  // The article's own "## FAQ" section, already written for every post (see
+  // the writer prompts) — surfaced as schema too, the same way the homepage's
+  // visible FAQ accordion is (app/page.tsx), instead of only existing as text.
+  const faqPairs = extractFaqPairs(post.content);
+  const faqLd = faqPairs.length
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqPairs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+      }
+    : null;
+
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-6xl">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
@@ -109,12 +123,21 @@ export default async function BlogPostPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c") }}
       />
+      {faqLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd).replace(/</g, "\\u003c") }}
+        />
+      )}
 
       <nav aria-label="Breadcrumb" className="mb-8 text-xs text-[var(--ink-faint)]">
         <Link href="/blog" className="rounded text-[var(--rust)] transition-colors hover:text-[var(--rust-deep)]">
           ← All posts
         </Link>
       </nav>
+
+      <div className="lg:grid lg:grid-cols-[minmax(0,48rem)_260px] lg:items-start lg:gap-10">
+      <div className="max-w-3xl">
 
       <BlogCover
         slug={post.slug}
@@ -123,6 +146,8 @@ export default async function BlogPostPage({ params }: Props) {
         className="mb-10 aspect-[21/9] rounded-2xl border border-[var(--line)]"
         priority
       />
+
+      <TableOfContents content={post.content} />
 
       <header className="mb-10">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-faint)]">
@@ -192,6 +217,36 @@ export default async function BlogPostPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      </div>
+
+      {/* Sticky rail — desktop only. The competitor pattern this mirrors is a
+          persistent lead-gen card next to the article (not just one at the
+          end you only see after finishing); ours points at the same free
+          scan as the existing end-of-article CTA above, not a separate offer. */}
+      <aside className="hidden lg:sticky lg:top-24 lg:block">
+        <div className="rounded-2xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] px-5 py-6">
+          <p className="font-signal-serif text-lg leading-snug text-[var(--ink)]">
+            Is your brand the answer when AI gets asked?
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--ink-soft)]">
+            Free AI visibility score for your site — no credit card.
+          </p>
+          <div className="mt-4">
+            <DomainForm variant="cta" />
+          </div>
+          <a
+            href={DEMO_CALL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 block text-center text-xs font-medium text-[var(--rust)] underline underline-offset-2 transition-colors hover:text-[var(--rust-deep)]"
+          >
+            or book a 15-min demo →
+          </a>
+        </div>
+      </aside>
+
+      </div>
     </div>
   );
 }

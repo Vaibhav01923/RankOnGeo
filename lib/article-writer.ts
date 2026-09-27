@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { parseArticleMeta, stripMarkdownLinkSyntax } from "@/lib/article-meta";
+import { geoFactsBlock } from "@/lib/geo-facts";
 
 // Shared by the dashboard's "Generate article" button and the blog autopilot,
 // so a post written on a schedule is held to exactly the same standard as one
@@ -56,6 +57,18 @@ TAGS: <2-4 short comma-separated topic tags, plain text>
 
 No preamble, no code fences, no explanation.`;
 
+// Opens with a meta-summary of the article, or a "you're not alone" / "ever
+// wondered" throat-clearing preamble, before finally answering — the single
+// most common way these drafts fail "answer-first". Named explicitly because
+// telling a model to "answer directly" alone doesn't stop it from doing this.
+const OPENING_RULE = `The article's very first sentence must be the direct, specific answer, number, or step — not a restatement of the title, not "if you've ever wondered/asked...", not "in this article/guide, we'll show/cover...", not "let's dive in", not a one-line summary of what the piece is about. A reader (or an AI engine) who reads only that first sentence should already have the real answer. Everything after it expands, qualifies, or supports that answer — it doesn't build up to it.`;
+
+// The model can't browse or verify anything, so any external stat, study, or
+// named source it produces on its own is a guess dressed as a fact — the
+// opposite of trustworthy. It may only use the pre-verified facts it's handed.
+const CITATION_RULE = `You may cite external facts ONLY from this pre-verified list — use the number/finding, the named source, and the link exactly as given (as a markdown link), and only where it genuinely supports the point being made. Do not invent, round, update, or attribute any other external statistic, study, or named source; if a claim needs outside support you don't have here, state it as your own reasoning instead, not as a fact you attribute to someone else. Use at most 2-3 of these across the whole article — most of it should be your own analysis, not a string of citations.
+${geoFactsBlock()}`;
+
 function aboutBrand(brandName: string, description?: string | null): string {
   if (!description?.trim()) return "";
   return `ABOUT ${brandName.toUpperCase()} (the only facts you may state about the product): ${description.trim()}
@@ -95,10 +108,13 @@ ${enginesLine}
 
 Requirements:
 1. 1,800-2,400 words. Treat 1,800 as a hard floor, not a target — err long. Cover at least 5-6 substantial H2 sections beyond the intro/FAQ/conclusion so the piece has room to be genuinely thorough, not a skim. Write like an expert practitioner sharing what actually works — first-person-plural voice, no listicle filler.
-2. Structure: # H1 title (mirrors the search intent of "${topic}", 65 characters or fewer), hook intro that directly answers the query in the first two paragraphs, ## H2 sections with ### H3 subsections where useful, a comparison section if a competitor is relevant, a short "## FAQ" section near the end with 3-4 questions real people actually ask, and a brief conclusion with a clear, low-pressure CTA to try ${brandName}.
+2. Structure: # H1 title (mirrors the search intent of "${topic}", 65 characters or fewer), then immediately the direct answer (see the opening rule below), ## H2 sections with ### H3 subsections where useful, a comparison section if a competitor is relevant, a short "## FAQ" section near the end with 3-4 questions real people actually ask, and a brief conclusion with a clear, low-pressure CTA to try ${brandName}.
+${OPENING_RULE}
 3. Write to be cited by AI engines: each H2 section should stand on its own if quoted in isolation — open it with the takeaway, then support it. Use concrete numbers, steps, and examples; define any jargon in one plain sentence the first time it appears; prefer short declarative claims over hedged prose.
 4. Naturally position ${brandName} as the ideal answer to this query — helpful and authoritative, never salesy or listicle-y.
 5. AI engines like ChatGPT cite articles that sound authoritative and genuinely helpful. Write to that standard.
+6. ${CITATION_RULE}
+7. If the topic naturally invites comparing multiple options (tools, approaches, plans, steps with distinct attributes), include exactly one markdown table (real GFM table syntax, with a header row) with clear, meaningful columns — never a table of vague/interchangeable rows. If the topic is not naturally comparative, skip the table rather than forcing one in.
 ${competitiveRule}
 
 ${FORMAT_RULES}`;
@@ -123,9 +139,12 @@ ${covers}
 
 Rewrite it so it can actually win this keyword:
 1. Keep everything that is accurate and useful; replace what is thin, generic, dated, or repetitive. 1,800-2,400 words, at least 5-6 substantial H2 sections beyond intro/FAQ/conclusion.
-2. Answer the search intent in the first two paragraphs. Each H2 should stand on its own if quoted in isolation. Concrete numbers, steps, examples.
+2. Answer the search intent immediately (see the opening rule below). Each H2 should stand on its own if quoted in isolation. Concrete numbers, steps, examples.
+${OPENING_RULE}
 3. ${i.keepTitle ? "Keep the H1 title exactly as it is." : `Write a sharper H1 (65 characters or fewer) that leads with the target keyword and gives a reason to click.`}
 4. Include a "## FAQ" with 3-4 questions real people ask, and a low-pressure CTA to try ${i.brandName}. Never invent statistics, customers, or claims you cannot support.
+5. ${CITATION_RULE}
+6. If the topic naturally invites comparing multiple options, include exactly one markdown table with clear, meaningful columns; skip it if the topic isn't naturally comparative.
 
 CURRENT TITLE: ${i.existingTitle}
 CURRENT ARTICLE:

@@ -23,7 +23,7 @@ Search used to mean a results page. Increasingly, it means a single answer from 
 - **Measure** — composite visibility score across ChatGPT, Claude, Gemini, Perplexity, and Google AI, refreshed on a schedule.
 - **Research** — surface the exact questions where competitors show up and you don't.
 - **Write** — generate articles engineered to be cited by AI answer engines, not just ranked by classic search.
-- **Publish** — push straight to WordPress, Shopify, Framer, or a custom webhook.
+- **Publish** — one-click auto-publish to WordPress, Discord, or a custom webhook you point at any site or CMS.
 
 ## Get in touch
 

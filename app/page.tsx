@@ -4,6 +4,7 @@ import { DomainForm } from "./_components/DomainForm";
 import { PricingSection } from "./_components/PricingSection";
 import { PRICING } from "@/lib/pricing";
 import { FAQSection } from "./_components/FAQSection";
+import { FAQS } from "@/lib/faqs";
 import { SiteNav } from "./_components/SiteNav";
 import { ScrollReveal } from "./_components/ScrollReveal";
 // Commented out — not pulling its weight on the landing page. Component
@@ -60,6 +61,14 @@ const structuredData = {
       name: "RankOnGeo",
       url: "https://www.rankongeo.com",
       publisher: { "@id": "https://www.rankongeo.com/#organization" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQS.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
     },
     {
       "@type": "SoftwareApplication",

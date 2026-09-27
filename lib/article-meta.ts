@@ -39,3 +39,30 @@ export function parseArticleMeta(raw: string): { description: string; tags: stri
 export function stripMarkdownLinkSyntax(s: string): string {
   return s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
 }
+
+// Pulls the article's own "## FAQ" (or "## Frequently Asked Questions")
+// section into Q/A pairs for FAQPage schema — see app/blog/[slug]/page.tsx.
+// Every writer prompt already asks for this section as "### question" +
+// answer paragraph(s); this only reads what's already there, no extra
+// generation. Returns [] if the article has no FAQ section.
+export function extractFaqPairs(markdown: string): { q: string; a: string }[] {
+  const start = markdown.match(/^##\s+(?:FAQ|Frequently Asked Questions)\s*$/im);
+  if (!start?.index && start?.index !== 0) return [];
+  const from = start.index! + start[0].length;
+  const nextH2 = markdown.slice(from).search(/^##\s+/m);
+  const section = nextH2 >= 0 ? markdown.slice(from, from + nextH2) : markdown.slice(from);
+
+  const pairs: { q: string; a: string }[] = [];
+  const items = section.split(/^###\s+/m).slice(1);
+  for (const item of items) {
+    const nl = item.indexOf("\n");
+    const q = (nl >= 0 ? item.slice(0, nl) : item).trim();
+    const a = (nl >= 0 ? item.slice(nl + 1) : "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/[*_]{1,2}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (q && a) pairs.push({ q, a });
+  }
+  return pairs;
+}

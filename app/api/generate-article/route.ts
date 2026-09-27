@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientFromRequest } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeArticle } from "@/lib/article-writer";
+import { illustrateArticle } from "@/lib/article-images";
+
+// Text generation plus up to 4 image generations (cover + 3 inline, run in
+// parallel) comfortably clears the platform's unconfigured default.
+export const maxDuration = 90;
 
 export async function POST(req: NextRequest) {
   const { data: { user } } = await clientFromRequest(req).auth.getUser();
@@ -18,5 +23,6 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await writeArticle({ topic: gapPrompt, brandName, niche, topCompetitor, missingEngines });
-  return NextResponse.json(result);
+  const illustrated = await illustrateArticle("article-images", `${brandName}-${gapPrompt}`, result);
+  return NextResponse.json({ ...result, article: illustrated.article, coverImageUrl: illustrated.coverImageUrl });
 }
