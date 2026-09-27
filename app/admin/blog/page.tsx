@@ -302,14 +302,18 @@ export default function AdminBlogPage() {
         slug: draft.slug,
         description: draft.description,
         tags: (draft.tags as string[]).join(", "),
-        coverImageUrl: "",
+        coverImageUrl: draft.coverImageUrl ?? "",
         content: draft.content,
         status: "draft",
       });
       setSlugTouched(true);
       setPreview(true);
       setImagePrompt("");
-      flash(`Generated ~${draft.wordCount} words — review, edit, then publish`);
+      flash(
+        draft.coverImageUrl
+          ? `Generated ~${draft.wordCount} words with a cover and inline images — review, edit, then publish`
+          : `Generated ~${draft.wordCount} words — review, edit, then publish (image generation failed; use "Generate thumbnail" to try again)`
+      );
     } finally {
       setBusy(null);
     }

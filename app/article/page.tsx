@@ -140,9 +140,10 @@ function ArticleContent() {
     const cacheKey = `article:${gapPrompt}:${brandName}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
-      const { article: a, title: t, wordCount: w, articleId: aid } = JSON.parse(cached);
+      const { article: a, title: t, wordCount: w, articleId: aid, imageUrl: img } = JSON.parse(cached);
       setArticle(a); setTitle(t); setWordCount(w);
       if (aid && !articleIdParam) setArticleId(aid);
+      if (img) setImageUrl(img);
       setLoading(false);
       return;
     }
@@ -167,24 +168,25 @@ function ArticleContent() {
         setArticle(data.article);
         setTitle(data.title);
         setWordCount(data.wordCount);
+        if (data.coverImageUrl) setImageUrl(data.coverImageUrl);
 
         if (brandId) {
           fetch("/api/articles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ brandId, title: data.title, content: data.article, keyword: gapPrompt, status: "draft", wordCount: data.wordCount, description: data.description, tags: data.tags }),
+            body: JSON.stringify({ brandId, title: data.title, content: data.article, keyword: gapPrompt, status: "draft", wordCount: data.wordCount, description: data.description, tags: data.tags, imageUrl: data.coverImageUrl ?? undefined }),
           })
             .then((r) => r.json())
             .then((d) => {
               const aid = d.article?.id ?? null;
               if (aid) setArticleId(aid);
-              sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount, articleId: aid }));
+              sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount, articleId: aid, imageUrl: data.coverImageUrl ?? null }));
             })
             .catch(() => {
-              sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount }));
+              sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount, imageUrl: data.coverImageUrl ?? null }));
             });
         } else {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount }));
+          sessionStorage.setItem(cacheKey, JSON.stringify({ article: data.article, title: data.title, wordCount: data.wordCount, imageUrl: data.coverImageUrl ?? null }));
         }
       })
       .catch((e) => { if (e.message !== "__redirecting__") setError(e.message); })

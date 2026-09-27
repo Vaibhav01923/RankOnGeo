@@ -114,6 +114,7 @@ ${OPENING_RULE}
 4. Naturally position ${brandName} as the ideal answer to this query — helpful and authoritative, never salesy or listicle-y.
 5. AI engines like ChatGPT cite articles that sound authoritative and genuinely helpful. Write to that standard.
 6. ${CITATION_RULE}
+7. If the topic naturally invites comparing multiple options (tools, approaches, plans, steps with distinct attributes), include exactly one markdown table (real GFM table syntax, with a header row) with clear, meaningful columns — never a table of vague/interchangeable rows. If the topic is not naturally comparative, skip the table rather than forcing one in.
 ${competitiveRule}
 
 ${FORMAT_RULES}`;
@@ -143,6 +144,7 @@ ${OPENING_RULE}
 3. ${i.keepTitle ? "Keep the H1 title exactly as it is." : `Write a sharper H1 (65 characters or fewer) that leads with the target keyword and gives a reason to click.`}
 4. Include a "## FAQ" with 3-4 questions real people ask, and a low-pressure CTA to try ${i.brandName}. Never invent statistics, customers, or claims you cannot support.
 5. ${CITATION_RULE}
+6. If the topic naturally invites comparing multiple options, include exactly one markdown table with clear, meaningful columns; skip it if the topic isn't naturally comparative.
 
 CURRENT TITLE: ${i.existingTitle}
 CURRENT ARTICLE:

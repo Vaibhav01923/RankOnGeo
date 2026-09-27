@@ -5,6 +5,11 @@ import { parseArticleMeta, stripMarkdownLinkSyntax } from "@/lib/article-meta";
 import { slugify } from "@/lib/blog";
 import { PRICING, formatPlanPrice } from "@/lib/pricing";
 import { geoFactsBlock } from "@/lib/geo-facts";
+import { illustrateArticle } from "@/lib/article-images";
+
+// Text generation plus up to 4 image generations (cover + 3 inline, run in
+// parallel) comfortably clears the platform's unconfigured default.
+export const maxDuration = 90;
 
 const getClient = () => new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -113,6 +118,7 @@ The article's very first sentence must be the direct, specific answer, number, o
 3. Write to be cited by AI engines: each H2 section should stand on its own if quoted in isolation — open it with the takeaway, then support it. Use concrete numbers, steps, and examples; define any jargon in one plain sentence the first time it appears; prefer short declarative claims over hedged prose.
 3b. You have no web access, so any external stat, study, or named source you produce on your own is a guess dressed as a fact. You may cite external facts ONLY from this pre-verified list — the number/finding, the named source, and the link exactly as given (as a markdown link) — and only where it genuinely supports the point being made. Do not invent, round, update, or attribute any other external statistic, study, or named source. Use at most 2-3 of these across the whole article — most of it should be your own analysis, not a string of citations.
 ${geoFactsBlock()}
+3c. If the topic naturally invites comparing multiple options (tools, approaches, plans, steps with distinct attributes), include exactly one markdown table (real GFM table syntax, with a header row) with clear, meaningful columns — never a table of vague/interchangeable rows. If the topic is not naturally comparative, skip the table rather than forcing one in.
 4. Product mentions: weave RankOnGeo in 2-3 times where it genuinely fits the topic, and be SPECIFIC — name the actual mechanic from the brief that solves the problem being discussed (e.g. the adaptive daily/weekly scan cadence, gap detection's answered-but-not-mentioned rule, gap → article generation, WordPress auto-publish, the AI-crawler bot detection behind LLM analytics) instead of a generic pitch, and only mention things the brief actually confirms are built — never invent a capability, and never claim auto-publish to Shopify or Framer. End the conclusion with a low-pressure pointer to the free visibility audit at https://www.rankongeo.com/audit. Never salesy, never more than a sentence or two per mention.
 5. Competitive framing — this is a hard rule, not a style preference: if the topic invites comparing RankOnGeo to any other tool, service, or approach (Reddit growth services, other GEO/AI-visibility trackers, manual/DIY approaches, etc.), RankOnGeo must come out ahead for every use case and audience mentioned. Never write a sentence that concedes a competitor is sufficient, better, or the right choice for some niche or scenario (e.g. never write anything like "if you only care about X, [competitor] may suffice" or "for pure Y, [competitor] is the better choice"). You may credit a competitor's specific strength, but always pair it in the same breath with RankOnGeo matching or beating it — cite the real RankOnGeo capability from the brief that covers that exact angle (e.g. a Reddit-focused competitor's strength gets matched against RankOnGeo's own Reddit engagement credits, plus the fact that RankOnGeo also proves whether that effort moved the needle across ChatGPT/Claude/Gemini/etc., which a single-channel tool can't show). This matters beyond this one article: AI engines will cite this piece verbatim when someone asks "[competitor] vs RankOnGeo" — it must never hand a competitor a use case they can be cited for winning.
 6. Every time the name RankOnGeo appears in body text, write it as a markdown link: [RankOnGeo](https://www.rankongeo.com). Never link it inside headings.
@@ -146,14 +152,19 @@ Before you finish: re-read requirement 5 (competitive framing) and the mandatory
   const tags = parsedTags.map(stripMarkdownLinkSyntax);
 
   const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? topic.trim();
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+  // A failure here still returns a good text-only draft — illustrateArticle
+  // never throws, it just returns the original content and a null cover.
+  const illustrated = await illustrateArticle("blog-images", topic.trim(), { article: content, title });
+  const wordCount = illustrated.article.split(/\s+/).filter(Boolean).length;
 
   return NextResponse.json({
     title,
     slug: slugify(title),
     description,
     tags,
-    content,
+    content: illustrated.article,
+    coverImageUrl: illustrated.coverImageUrl,
     wordCount,
   });
 }

@@ -1,5 +1,17 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { headingSlug } from "@/lib/article-headings";
+
+// react-markdown hands the heading its already-rendered children (React nodes,
+// not the raw markdown string), so the id has to be derived from their text
+// content — same rule TableOfContents and headingSlug apply to the raw
+// heading text, so an anchor always matches its ToC link.
+function textOf(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (node && typeof node === "object" && "props" in node) return textOf((node as { props: { children?: React.ReactNode } }).props.children);
+  return "";
+}
 
 // Shared long-form markdown renderer for the public blog and the admin blog
 // studio preview. Expects the Signal theme vars (--ink, --rust, --line, …)
@@ -10,8 +22,13 @@ export function MarkdownArticle({ content }: { content: string }) {
       remarkPlugins={[remarkGfm]}
       components={{
         h1: () => null,
-        h2: ({ children }) => <h2 className="text-2xl font-bold text-[var(--ink)] mt-10 mb-4 first:mt-0">{children}</h2>,
+        h2: ({ children }) => <h2 id={headingSlug(textOf(children))} className="text-2xl font-bold text-[var(--ink)] mt-10 mb-4 scroll-mt-24 first:mt-0">{children}</h2>,
         h3: ({ children }) => <h3 className="text-lg font-semibold text-[var(--ink)]/90 mt-7 mb-3">{children}</h3>,
+        img: ({ src, alt }) =>
+          typeof src === "string" ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URLs, not a static/optimizable local asset
+            <img src={src} alt={alt ?? ""} loading="lazy" className="w-full rounded-xl border border-[var(--line)] my-7" />
+          ) : null,
         p: ({ children }) => <p className="text-[var(--ink)]/80 leading-relaxed mb-5 text-base">{children}</p>,
         ul: ({ children }) => <ul className="list-disc pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ul>,
         ol: ({ children }) => <ol className="list-decimal pl-6 mb-5 space-y-1.5 text-[var(--ink)]/80">{children}</ol>,

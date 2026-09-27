@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { serverClient } from "@/lib/supabase";
 import { requiresPaywall } from "@/lib/plan-limits";
 import { qualityProblems, rewriteArticle, writeArticle, type WrittenArticle } from "@/lib/article-writer";
+import { illustrateArticle } from "@/lib/article-images";
 import { canUpdateInPlace, publishToChannel, type PublishChannel } from "@/lib/publish-article";
 import { isDueForReview, isNewPostDue, judgePerformance, normalizeKeyword, pickNextTopic, type Performance, type ReviewableArticle } from "@/lib/autopilot-rules";
 import { gapContext, syncGapTopics, syncResearchTopics } from "@/lib/keyword-research";
@@ -168,6 +169,11 @@ async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: 
     throw e;
   }
 
+  // A new post is worth illustrating; a failure here still leaves a good
+  // text-only article (illustrateArticle never throws).
+  const illustrated = await illustrateArticle("article-images", `${brand.name}-${topic.keyword}`, written);
+  written = { ...written, article: illustrated.article };
+
   const { data: article, error } = await db
     .from("articles")
     .insert({
@@ -182,6 +188,7 @@ async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: 
       tags: written.tags,
       source: "autopilot",
       channel_id: settings.channel_id,
+      image_url: illustrated.coverImageUrl,
     })
     .select("id")
     .single();
@@ -190,7 +197,7 @@ async function createPost(db: Db, brand: BrandRow, settings: Settings, channel: 
 
   if (settings.publish_mode === "draft" || !channel) return `Wrote a draft: "${written.title}"`;
 
-  const result = await publishToChannel(channel, { title: written.title, content: written.article, keyword: topic.keyword, description: written.description, tags: written.tags, image_url: null });
+  const result = await publishToChannel(channel, { title: written.title, content: written.article, keyword: topic.keyword, description: written.description, tags: written.tags, image_url: illustrated.coverImageUrl });
   await logPublish(db, brand.id, settings.channel_id, article.id, written.title, result.success, result.error);
   if (!result.success) throw new Error(`Wrote "${written.title}" but publishing failed: ${result.error}`);
   await Promise.all([
