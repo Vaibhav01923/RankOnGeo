@@ -225,24 +225,45 @@ export default async function BlogPostPage({ params }: Props) {
           end you only see after finishing); ours points at the same free
           scan as the existing end-of-article CTA above, not a separate offer. */}
       <aside className="hidden lg:sticky lg:top-24 lg:block">
-        <div className="rounded-2xl border border-[var(--rust)]/25 bg-[var(--rust-wash)] px-5 py-6">
-          <p className="font-signal-serif text-lg leading-snug text-[var(--ink)]">
-            Is your brand the answer when AI gets asked?
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-[var(--ink-soft)]">
-            Free AI visibility score for your site — no credit card.
-          </p>
-          <div className="mt-4">
-            <DomainForm variant="cta" />
+        <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_12px_32px_-18px_oklch(0.3_0.03_50_/_35%)]">
+          <div className="h-1 bg-[var(--rust)]" aria-hidden="true" />
+          <div className="p-5">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--rust)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--rust)]" aria-hidden="true" />
+              Free AI visibility check
+            </p>
+            <p className="mt-3 font-signal-serif text-xl leading-snug text-[var(--ink)]">
+              Is your brand the answer when AI gets asked?
+            </p>
+            <ul className="mt-4 space-y-2">
+              {[
+                "Your score in ChatGPT, Claude, Gemini, Perplexity & Google AI",
+                "The questions where competitors get named instead",
+                "Free, ready in about a minute",
+              ].map((item) => (
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-[var(--ink-soft)] [text-wrap:pretty]">
+                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--rust)]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M13 4.5L6.5 11 3 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5">
+              <DomainForm variant="cta" stacked idSuffix="-sidebar" />
+            </div>
+            <div className="mt-4 border-t border-[var(--line)] pt-3 text-center text-xs text-[var(--ink-faint)]">
+              <p>Prefer a walkthrough?</p>
+              <a
+                href={DEMO_CALL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 inline-block whitespace-nowrap font-medium text-[var(--rust)] transition-colors hover:text-[var(--rust-deep)]"
+              >
+                Book a 15-min demo →
+              </a>
+            </div>
           </div>
-          <a
-            href={DEMO_CALL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 block text-center text-xs font-medium text-[var(--rust)] underline underline-offset-2 transition-colors hover:text-[var(--rust-deep)]"
-          >
-            or book a 15-min demo →
-          </a>
         </div>
       </aside>
 
