@@ -9,6 +9,11 @@ const EVENT_TYPES: EventType[] = ["domain_submitted", "trial_checkout_started", 
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Stats were reset on this date: funnel_events was emptied (earlier rows were
+// mostly internal testing), and the Domains table only lists brands created
+// since then so it starts from zero too. Older brands are still in the DB.
+const STATS_START = "2026-09-28T17:35:00Z";
+
 function dayKey(iso: string): string {
   return iso.slice(0, 10); // "YYYY-MM-DD"
 }
@@ -68,7 +73,7 @@ export async function GET(req: NextRequest) {
       .select("event_type, created_at")
       .in("event_type", ["domain_submitted", "trial_started", "trial_converted"])
       .gte("created_at", since30d),
-    db.from("brands").select("id, name, domain, user_id, created_at").order("created_at", { ascending: false }).limit(200),
+    db.from("brands").select("id, name, domain, user_id, created_at").gte("created_at", STATS_START).order("created_at", { ascending: false }).limit(200),
     db.from("user_plans").select("user_id, plan, dodo_customer_id, dodo_subscription_id, payment_failed_at"),
     db
       .from("funnel_events")
