@@ -12,25 +12,28 @@ type Db = any;
 export async function syncResearchTopics(db: Db, brandId: string, keywords: KeywordOpportunity[]): Promise<number> {
   if (!keywords.length) return 0;
   const [{ data: topics }, { data: articles }] = await Promise.all([
-    db.from("autopilot_topics").select("id, keyword, status").eq("brand_id", brandId),
+    db.from("autopilot_topics").select("id, keyword, status, volume").eq("brand_id", brandId),
     db.from("articles").select("keyword").eq("brand_id", brandId),
   ]);
-  const topicByKeyword = new Map<string, { id: string; status: string }>((topics ?? []).map((t: { id: string; keyword: string; status: string }) => [normalizeKeyword(t.keyword), t]));
+  const topicByKeyword = new Map<string, { id: string; status: string; volume: number | null }>((topics ?? []).map((t: { id: string; keyword: string; status: string; volume: number | null }) => [normalizeKeyword(t.keyword), t]));
   const covered = new Set<string>((articles ?? []).map((a: { keyword: string | null }) => normalizeKeyword(a.keyword ?? "")).filter(Boolean));
 
   const inserts: { brand_id: string; keyword: string; source: string; volume: number | null }[] = [];
+  const volumeUpdates: PromiseLike<unknown>[] = [];
   for (const k of keywords) {
     const keyword = normalizeKeyword(k.keyword);
     if (keyword.length < 3 || keyword.length > 120) continue;
     const existing = topicByKeyword.get(keyword);
     if (existing) {
-      // Keep the volume current without touching a topic that's already been used or skipped.
-      if (k.volume !== null) await db.from("autopilot_topics").update({ volume: k.volume }).eq("id", existing.id);
+      // Keep the volume current, but only write when it changed: this runs every time the
+      // list is opened, and one write per topic made loading slow for a long queue.
+      if (k.volume !== null && k.volume !== existing.volume) volumeUpdates.push(db.from("autopilot_topics").update({ volume: k.volume }).eq("id", existing.id));
       continue;
     }
     if (covered.has(keyword)) continue;
     inserts.push({ brand_id: brandId, keyword, source: "research", volume: k.volume });
   }
+  await Promise.all(volumeUpdates);
   if (inserts.length) {
     const { error } = await db.from("autopilot_topics").upsert(inserts, { onConflict: "brand_id,keyword", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
