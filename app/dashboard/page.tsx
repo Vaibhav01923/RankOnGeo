@@ -24,6 +24,7 @@ import { PublishedArticles } from "./_components/PublishedArticles";
 import { RankOnGeoTraffic } from "./_components/RankOnGeoTraffic";
 import { useArticlePerformance } from "./_components/useArticlePerformance";
 import { promptLimitForPlan, BRAND_LIMITS, FREE_BRAND_LIMIT } from "@/lib/plan-limits";
+import { buildAutopublishPrompt } from "@/lib/autopublish-prompt";
 import type { RedditOpportunityThread, SuggestedRedditPost } from "@/lib/reddit-opportunities";
 
 const ENGINE_LABELS: Record<AIEngine, string> = {
@@ -614,55 +615,6 @@ function timeAgo(iso: string): string {
 const CHANNEL_ICONS: Record<string, string> = {
   wordpress: "📝", webflow: "🌊", webhook: "🔗", discord: "💬", framer: "🎨",
 };
-
-// A ready-to-paste prompt for an AI coding assistant (Claude Code, Cursor,
-// ChatGPT) to build the receiving endpoint on the user's own site/CMS —
-// this is what makes "any website or CMS" an auto-publish target without
-// RankOnGeo needing a dedicated integration for each one. The exact JSON
-// shape and header name here must stay in sync with the real request sent
-// in app/api/publishing/publish/route.ts's "webhook" branch.
-function buildAiSetupPrompt(secret: string, stack: string): string {
-  const stackLine = stack.trim() || "{describe your site/CMS/stack here}";
-  return `I want to receive blog posts automatically from RankOnGeo and publish them on my site.
-
-My site/stack: ${stackLine}
-
-RankOnGeo will POST to an endpoint I create whenever a new article is ready. Please help me:
-
-1. Create an API endpoint (in whatever way fits my stack above) that accepts POST requests with this JSON body:
-   {
-     "title": string,       // article headline
-     "content": string,     // full article body, as Markdown
-     "keyword": string,     // the target SEO keyword this article targets
-     "description": string, // optional — SEO meta description, may be empty
-     "tags": string[],      // optional — topic tags, may be empty
-     "image_url": string,   // optional — cover image URL, may be empty
-     "status": "publish",
-     "source": "rankongeo"
-   }
-
-2. Verify the request is really from RankOnGeo: reject (401) any request where the
-   \`X-RankOnGeo-Secret\` header doesn't exactly equal: ${secret}
-
-3. Use the title/content to create and publish a new post through my site's existing
-   content system (CMS API, database, static-file commit — whatever fits my stack above).
-   If my site doesn't have a blog section yet, create one: a listing page (e.g. /blog)
-   plus a page template for individual posts, so each new post gets its own indexable URL.
-
-4. Make sure each newly published post is actually discoverable by search engines: add
-   its URL to my site's XML sitemap (create one if it doesn't exist), and confirm nothing
-   in robots.txt or the page's meta tags blocks it from being indexed.
-
-5. Return { "ok": true } with a 200 status on success, and a clear error status/message
-   otherwise (RankOnGeo shows the response back to me if something fails).
-
-6. Once it's built (and deployed, if that's needed for it to be reachable), end your reply
-   with a clearly labeled "What to do next" section for me, spelling out:
-   - The exact endpoint URL to paste into RankOnGeo's "Your endpoint URL" field
-   - Any manual step I still need to do myself (deploy, set an env var, restart something, etc.)
-   Put this at the very end and make it stand out — I might not read back through
-   the rest of this prompt.`;
-}
 
 // Styling for the dark "full response" modal — not Tailwind Typography's
 // `prose` classes (not installed in this project; the div's `prose` classes
@@ -6908,7 +6860,7 @@ function DashboardPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => { navigator.clipboard.writeText(buildAiSetupPrompt(newChannel.apiKey, stackDescription)); setPromptCopied(true); setTimeout(() => setPromptCopied(false), 2000); }}
+                      onClick={() => { navigator.clipboard.writeText(buildAutopublishPrompt(newChannel.apiKey, stackDescription)); setPromptCopied(true); setTimeout(() => setPromptCopied(false), 2000); }}
                       className="w-full text-xs font-semibold bg-[var(--rust)] text-[var(--surface)] rounded-lg py-2.5 hover:bg-[var(--rust-deep)] transition-colors"
                     >
                       {promptCopied ? "Copied — paste it into your AI assistant →" : "📋 Copy AI setup prompt"}
@@ -6919,7 +6871,7 @@ function DashboardPage() {
 Header: X-RankOnGeo-Secret: ${newChannel.apiKey || "<secret>"}
 Body: {
   "title": string,
-  "content": string,     // Markdown
+  "content": string,     // GitHub-flavored Markdown (tables too), no title line
   "keyword": string,
   "description": string, // optional
   "tags": string[],      // optional
