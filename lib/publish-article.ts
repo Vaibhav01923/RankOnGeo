@@ -36,6 +36,14 @@ export function canUpdateInPlace(channelType: string, remoteId: string | null | 
   return !!remoteId && (channelType === "wordpress" || channelType === "webhook");
 }
 
+// Articles are stored with their "# Title" line on top: the writer reads the
+// title from it and its quality check requires it. Every destination shows the
+// title on its own (the webhook's "title" field, the WordPress post title, the
+// Discord embed title), so sending that line too printed the title twice.
+export function bodyWithoutTitle(content: string | null): string {
+  return (content ?? "").replace(/^\s*#[ \t]+[^\n]*(?:\n+|$)/, "");
+}
+
 function pick(json: unknown, keys: string[]): string | null {
   if (!json || typeof json !== "object") return null;
   for (const k of keys) {
@@ -48,6 +56,7 @@ function pick(json: unknown, keys: string[]): string | null {
 
 export async function publishToChannel(channel: PublishChannel, article: PublishableArticle, opts: PublishOptions = {}): Promise<PublishResult> {
   const fail = (error: string): PublishResult => ({ success: false, error, remoteId: null, publishedUrl: null });
+  const body = bodyWithoutTitle(article.content);
   try {
     if (channel.type === "webhook") {
       // api_key doubles as a shared secret for webhook channels (unused by
@@ -63,7 +72,7 @@ export async function publishToChannel(channel: PublishChannel, article: Publish
         },
         body: JSON.stringify({
           title: article.title,
-          content: article.content,
+          content: body,
           keyword: article.keyword,
           // Optional — receivers built before these existed can ignore them.
           description: article.description ?? "",
@@ -82,7 +91,7 @@ export async function publishToChannel(channel: PublishChannel, article: Publish
     }
 
     if (channel.type === "discord") {
-      const preview = article.content?.substring(0, 2000) ?? "";
+      const preview = body.substring(0, 2000);
       const res = await fetch(channel.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,7 +122,7 @@ export async function publishToChannel(channel: PublishChannel, article: Publish
         headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
         body: JSON.stringify({
           title: article.title,
-          content: article.content,
+          content: body,
           status: "publish",
           ...(article.description ? { excerpt: article.description } : {}),
         }),
