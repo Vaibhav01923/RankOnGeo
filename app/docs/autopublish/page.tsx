@@ -2,41 +2,12 @@
 
 import { useState } from "react";
 import { WebPageJsonLd, BreadcrumbJsonLd } from "../../_components/WebPageJsonLd";
+import { buildAutopublishPrompt } from "@/lib/autopublish-prompt";
 
-const AI_PROMPT = `I want to receive blog posts automatically from RankOnGeo and publish them on my site.
-
-My site/stack: {describe your site/CMS/stack here — e.g. "Next.js app router blog", "WordPress", "Webflow CMS collection", "custom Express + Postgres site"}
-
-RankOnGeo will POST to an endpoint I create whenever a new article is ready. Please help me:
-
-1. Create an API endpoint (in whatever way fits my stack above) that accepts POST requests with this JSON body:
-   {
-     "title": string,       // article headline
-     "content": string,     // full article body, as Markdown
-     "keyword": string,     // the target SEO keyword this article targets
-     "description": string, // optional — SEO meta description, may be empty
-     "tags": string[],      // optional — topic tags, may be empty
-     "image_url": string,   // optional — cover image URL, may be empty
-     "status": "publish",
-     "source": "rankongeo"
-   }
-
-2. Verify the request is really from RankOnGeo: reject (401) any request where the
-   \`X-RankOnGeo-Secret\` header doesn't exactly equal: {your secret — copy it from the
-   "Add channel" modal in your RankOnGeo dashboard when you create a webhook channel}
-
-3. Use the title/content to create and publish a new post through my site's existing
-   content system (CMS API, database, static-file commit — whatever fits my stack above).
-
-4. Return { "ok": true } with a 200 status on success, and a clear error status/message
-   otherwise (RankOnGeo shows the response back to me if something fails).
-
-5. Once it's built (and deployed, if that's needed for it to be reachable), end your reply
-   with a clearly labeled "What to do next" section for me, spelling out:
-   - The exact endpoint URL to paste into RankOnGeo's "Your endpoint URL" field
-   - Any manual step I still need to do myself (deploy, set an env var, restart something, etc.)
-   Put this at the very end and make it stand out — I might not read back through
-   the rest of this prompt.`;
+const AI_PROMPT = buildAutopublishPrompt(
+  `{your secret — copy it from the "Add channel" modal in your RankOnGeo dashboard when you create a webhook channel}`,
+  "",
+);
 
 const PAYLOAD_JSON = `POST <your endpoint URL>
 Header: X-RankOnGeo-Secret: <your secret>
@@ -44,14 +15,18 @@ Content-Type: application/json
 
 {
   "title": "string — article headline",
-  "content": "string — full article body, as Markdown",
+  "content": "string — full article body, as GitHub-flavored Markdown (may include tables); the title is not repeated in it",
   "keyword": "string — the target SEO keyword",
   "description": "string — optional, may be empty",
   "tags": "string[] — optional, may be empty",
   "image_url": "string — optional, may be empty",
   "status": "publish",
-  "source": "rankongeo"
-}`;
+  "source": "rankongeo",
+  "action": "update",          // only when replacing a post sent before
+  "external_id": "string"      // only with "action": "update" — the id you returned
+}
+
+Respond: 200 { "ok": true, "id": "<post id>", "url": "<public post URL>" }`;
 
 const TOC = [
   { href: "#how-it-works", label: "How it works" },
@@ -135,7 +110,7 @@ export default function AutopublishDocsPage() {
         <p className="text-sm text-[var(--ink-soft)] mb-3">If you&apos;d rather wire it up by hand, here&apos;s exactly what RankOnGeo sends:</p>
         <CodeBlock code={PAYLOAD_JSON} />
         <p className="text-xs text-[var(--ink-faint)] mb-10">
-          The secret is only sent for webhook channels (WordPress uses your application password; Discord doesn&apos;t need one). Respond with a 2xx status on success — anything else is logged as a failed delivery.
+          The secret is only sent for webhook channels (WordPress uses your application password; Discord doesn&apos;t need one). Respond with a 2xx status on success — anything else is logged as a failed delivery. Include the post&apos;s <code className="text-[var(--rust-deep)]">id</code> and public <code className="text-[var(--rust-deep)]">url</code> in the response: Autopilot uses them to measure the post and to send improved versions back as <code className="text-[var(--rust-deep)]">&quot;action&quot;: &quot;update&quot;</code>. And serve the post and your /blog list as server-rendered HTML — crawlers mostly don&apos;t run JavaScript, so a body loaded in the browser is invisible to them.
         </p>
 
         <h2 id="troubleshooting" className="text-lg font-semibold text-[var(--ink)] mb-3 scroll-mt-20">Troubleshooting</h2>
