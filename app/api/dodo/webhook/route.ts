@@ -30,6 +30,13 @@ const PRODUCT_ID_TO_PLAN: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function upsertPlanFromSubscription(db: SupabaseClient<any, any, any>, sub: WebhookPayload.Subscription, eventType: string) {
+  // Only an active subscription grants a plan. subscription.updated also fires
+  // when a subscription is cancelled, expires, goes on hold or is still
+  // pending: saving it then put a cancelled subscription back after
+  // subscription.cancelled had cleared it, and reset an on-hold account's
+  // failed-payment grace clock (payment_failed_at below).
+  if (sub.status !== "active") return;
+
   const plan = PRODUCT_ID_TO_PLAN[sub.product_id] ?? sub.metadata?.plan ?? "starter";
   let userId: string | undefined = sub.metadata?.userId;
 
