@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import { clientFromRequest } from "@/lib/supabase";
 import { isLapsedSubscriber, gracePeriodDaysLeft } from "@/lib/plan-limits";
+import { isDodoSubscriptionId } from "@/lib/subscription-guard";
 
 const getDodo = () =>
   new DodoPayments({
@@ -38,10 +39,12 @@ export async function GET(req: NextRequest) {
     cancelAtNextBillingDate: false,
   };
 
-  if (!userPlan?.dodo_subscription_id) return NextResponse.json(base);
+  // No subscription, or complimentary access (nothing to look up at Dodo).
+  const subscriptionId = userPlan?.dodo_subscription_id;
+  if (!isDodoSubscriptionId(subscriptionId)) return NextResponse.json(base);
 
   try {
-    const sub = await getDodo().subscriptions.retrieve(userPlan.dodo_subscription_id);
+    const sub = await getDodo().subscriptions.retrieve(subscriptionId);
     return NextResponse.json({
       ...base,
       status: sub.status,

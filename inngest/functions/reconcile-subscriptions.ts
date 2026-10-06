@@ -1,5 +1,6 @@
 import { inngest } from "@/inngest/client";
 import { serverClient } from "@/lib/supabase";
+import { isDodoSubscriptionId } from "@/lib/subscription-guard";
 import DodoPayments from "dodopayments";
 
 const getDodo = () =>
@@ -57,5 +58,59 @@ export const reconcileDodoSubscriptions = inngest.createFunction(
     });
 
     return result;
+  }
+);
+
+// The other direction: a subscription Dodo has cancelled or expired whose id we
+// still store, because subscription.cancelled/expired never arrived. Nothing
+// above can catch that (it only adds active subscriptions), so the account kept
+// full access and its brands kept getting scheduled scans. Found 2026-10-04: a
+// trial cancelled on 2026-09-30 and a plan that expired in August, both still
+// scanned every 3 days. Does what the webhook's cancelled/expired branch does.
+// Hourly is plenty, and each stored subscription is one free Dodo lookup.
+export const reconcileEndedSubscriptions = inngest.createFunction(
+  { id: "reconcile-ended-subscriptions", retries: 0, triggers: [{ cron: "25 * * * *" }] },
+  async ({ step }) => {
+    return step.run("clear-ended-subscriptions", async () => {
+      const db = serverClient();
+      const dodo = getDodo();
+
+      const { data: rows, error } = await db
+        .from("user_plans")
+        .select("user_id, dodo_subscription_id")
+        .not("dodo_subscription_id", "is", null);
+      if (error) throw new Error(error.message);
+
+      let checked = 0;
+      const cleared: string[] = [];
+
+      for (const row of rows ?? []) {
+        // Complimentary access isn't a Dodo subscription, so nothing can end it.
+        if (!isDodoSubscriptionId(row.dodo_subscription_id)) continue;
+        checked++;
+
+        let status: string;
+        try {
+          status = (await dodo.subscriptions.retrieve(row.dodo_subscription_id)).status;
+        } catch (e) {
+          // Can't tell (network, or an id from the other Dodo mode): leave it.
+          console.error("[reconcile-subscriptions] lookup failed", { subscriptionId: row.dodo_subscription_id, error: e instanceof Error ? e.message : e });
+          continue;
+        }
+        if (status !== "cancelled" && status !== "expired") continue;
+
+        // Matching on the old id too, so a customer who resubscribed in the
+        // meantime keeps their new subscription.
+        await db
+          .from("user_plans")
+          .update({ dodo_subscription_id: null, payment_failed_at: null })
+          .eq("user_id", row.user_id)
+          .eq("dodo_subscription_id", row.dodo_subscription_id);
+        cleared.push(row.dodo_subscription_id);
+        console.error("[reconcile-subscriptions] cleared ended subscription", { userId: row.user_id, subscriptionId: row.dodo_subscription_id, status });
+      }
+
+      return { checked, cleared };
+    });
   }
 );
