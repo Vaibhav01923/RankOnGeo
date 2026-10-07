@@ -11,6 +11,7 @@ import { ScrollReveal } from "./_components/ScrollReveal";
 // kept in place in case we want to bring it back.
 // import { InteractiveDemoMockup } from "./_components/InteractiveDemoMockup";
 import { NightSky } from "./_components/NightSky";
+import { HeroVideo } from "./_components/HeroVideo";
 import { GlobeViz } from "./_components/Scenery";
 import { DEMO_CALL_URL } from "@/lib/links";
 
@@ -501,6 +502,13 @@ export default function LandingPage() {
               </svg>
               Free visibility score in ~60 seconds &nbsp;·&nbsp; No credit card
             </p>
+          </div>
+
+          {/* PRODUCT WALKTHROUGH — a screen recording of the real dashboard. */}
+          <div className="rise relative z-[6] mx-auto mt-16 max-w-5xl px-6 max-md:mt-12" style={{ "--d": ".7s" } as React.CSSProperties}>
+            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl shadow-black/10">
+              <HeroVideo />
+            </div>
           </div>
 
           {/* INTERACTIVE DEMO — the real dashboard, click around.
